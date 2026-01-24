@@ -1,0 +1,109 @@
+services:
+  decidim:
+    container_name: decidim
+    image: git.octree.ch:4567/decidim/decidim-chatbot/decidim-nca/decidim-nca:latest
+    entrypoint: ""
+    command: sleep infinity
+    ports:
+      - 3001:3000
+      - 3036:3035
+    environment:
+      RAILS_ENV: development
+      NODE_ENV: development
+      DECIDIM_LOG_LEVEL: "debug"
+      DECIDIM_SYSTEM_EMAIL: "system@example.org"
+      DECIDIM_SYSTEM_PASSWORD: "my_insecure_password"
+      DECIDIM_AVAILABLE_LOCALES: "en"
+      SECRET_KEY_BASE: "9104c9c62f55e9222da3f2fe4a2f7470942ccf3f3ae7077c4a3a492e30c49cc2b0240dcd436d19da308c534991fa42e3826ae5bd1572469c57920fb690717286"
+      DATABASE_URL: "postgres://decidim:my_insecure_password@pg-decidim:5432/decidim"
+      REDIS_URL: "redis://default:my_insecure_password@redis:6379/1"
+      RAILS_SERVE_STATIC_FILES: "true"
+      DECIDIM_FORCE_SSL: "false"
+      SMTP_ADDRESS: "mailer"
+      SMTP_PORT: "25"
+      SMTP_AUTHENTICATION: "none"
+      PM2_RUN: decidim
+      QUEUE_ADAPTER: async
+      MEMCACHE_SERVERS: memcached:11211
+    depends_on:
+      pg-decidim:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailer:
+        condition: service_started
+      memcached:
+        condition: service_started
+    networks:
+      - private
+      - default
+
+  memcached:
+    image: memcached:1.6.16-alpine
+    networks:
+      - private
+    command:
+      - '--memory-limit=1024'
+
+  mailer:
+    image: tophfr/mailcatcher
+    ports:
+      # SMTP port is 25, webinterface is on 80
+      - 1080:80
+    networks:
+      - private
+      - default
+
+  pg-decidim:
+    image: postgres:16-alpine
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: "my_insecure_password"
+      POSTGRES_USER: "decidim"
+      POSTGRES_DB: "decidim"
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decidim -d decidim"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine3.18
+    command:
+      - 'redis-server'
+      - '--loglevel warning'
+      - '--appendonly yes' # AOF mode
+      - '--requirepass my_insecure_password' # min 64 chars in prod.
+    volumes:
+      - redis-data:/data
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "my_insecure_password", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  pg:
+    container_name: chat_platform_db
+    image: postgres:16-alpine
+    volumes:
+      - pg-chat-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=my_insecure_password
+      - POSTGRES_USER=my_user
+      - POSTGRES_DB=chat_platform
+
+volumes:
+  node_modules: {}
+  pg-data: {}
+  pg-chat-data: {}
+  redis-data: {}
+networks:
+  private:
+    internal: true
+

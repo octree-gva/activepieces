@@ -9,13 +9,14 @@ import { searchParticipatorySpace } from "./lib/actions/search-participatory-spa
 import { impersonate } from "./lib/actions/impersonate";
 import { meetingsReminder } from "./lib/triggers/meetings-reminder";
 import { proposalPublished } from "./lib/triggers/proposal-published";
+import { logoUrl } from "./logo";
 
 export const decidim = createPiece({
   displayName: "Decidim",
   description: "Decidim is a free open-source participatory democracy framework",
   auth: decidimAuth,
   minimumSupportedRelease: '0.36.1',
-  logoUrl: "https://decidim.org/images/decidim-symbol.svg",
+  logoUrl,
   authors: [],
   actions: [createMagicLink, blogCrud, participantCrud, proposalCrud, searchComponent, searchParticipatorySpace, impersonate
   ],

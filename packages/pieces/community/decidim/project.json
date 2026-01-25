@@ -30,6 +30,11 @@
             "input": "packages/pieces/community/decidim/src/i18n",
             "output": "./src/i18n",
             "glob": "**/!(i18n.json)"
+          },
+          {
+            "input": "packages/pieces/community/decidim/src",
+            "output": "./src",
+            "glob": "logo.svg"
           }
         ],
         "buildableProjectDepsInPackageJsonType": "dependencies",

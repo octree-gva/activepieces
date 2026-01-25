@@ -4,6 +4,8 @@ import {
   Property,
   PropertyContext,
 } from '@activepieces/pieces-framework';
+import { propsValidation } from '@activepieces/pieces-common';
+import { z } from 'zod';
 import { decidimAuth } from '../../decidimAuth';
 import { OAuthApi, PasswordGrantImpersonate, PasswordGrantImpersonateAuthTypeEnum, PasswordGrantImpersonateGrantTypeEnum, PasswordGrantImpersonateScopeEnum, ResourceDetails } from '@octree/decidim-sdk';
 import { DecidimAccessToken } from '../../types';
@@ -20,9 +22,11 @@ import { introspectToken } from '../utils/introspecToken';
 import { configuration } from '../utils/configuration';
 import { extractAuth } from '../utils/auth';
 import { response } from '../utils/response';
+import { assertProp } from '../utils/assertProp';
 
 export interface RegistrationOptions {
   userFullName?: string;
+  email?: string;
   sendConfirmationEmailOnRegister?: boolean;
 }
 
@@ -48,6 +52,7 @@ export function buildOAuthGrantParam(
       register_on_missing: registerOnMissing,
       skip_confirmation_on_register: !registrationOptions.sendConfirmationEmailOnRegister,
       name: registrationOptions.userFullName || undefined,
+      email: registrationOptions.email || undefined,
     },
     scope: PasswordGrantImpersonateScopeEnum.Oauth,
     client_id: clientId,
@@ -112,9 +117,9 @@ export const impersonate = createAction({
   description: 'Get an access token to do action as a participant',
 
   props: {
-    username: usernameProp,
-    fetchUserInfo: fetchUserInfoProp,
-    registerOnMissing: registerOnMissingProp,
+    username: usernameProp(true),
+    fetchUserInfo: fetchUserInfoProp(false),
+    registerOnMissing: registerOnMissingProp(false),
     registrationOptions: Property.DynamicProperties({
       displayName: 'Registration Options',
       description: 'Options for user registration',
@@ -126,22 +131,34 @@ export const impersonate = createAction({
           return {};
         }
         return {
-          userFullName: userFullNameProp,
-          sendConfirmationEmailOnRegister: sendConfirmationEmailOnRegisterProp,
+          userFullName: userFullNameProp(false),
+          sendConfirmationEmailOnRegister: sendConfirmationEmailOnRegisterProp(false),
         };
       },
     }),
   },
   async run(context) {
+    assertProp(context.propsValue.username, 'Username is required');
+    await propsValidation.validateZod(context.propsValue, {
+      username: z.string().min(5, 'Username must be at least 5 characters long'),
+      fetchUserInfo: z.boolean().optional(),
+      registerOnMissing: z.boolean().optional(),
+      registrationOptions: z.object({
+        userFullName: z.string().min(5, 'User Full Name must be at least 5 characters long').optional(),
+        sendConfirmationEmailOnRegister: z.boolean().optional(),
+      }).optional(),
+    });
+
     const { baseUrl, clientId, clientSecret } = extractAuth(context);
-    const fetchUserInfo = context.propsValue.fetchUserInfo;
-    const registerOnMissing = context.propsValue.registerOnMissing;
-    const registrationOptions: RegistrationOptions = context.propsValue.registrationOptions || {
+    const fetchUserInfo = context.propsValue.fetchUserInfo || false;
+    const registerOnMissing = context.propsValue.registerOnMissing || false;
+    const registrationOptions: RegistrationOptions = context.propsValue.registrationOptions as RegistrationOptions || {
       userFullName: undefined,
       sendConfirmationEmailOnRegister: false,
-    };
+    } as RegistrationOptions;
     const config = configuration({ baseUrl });
     const oauthApi = new OAuthApi(config);
+
 
     const oauthGrantParam = buildOAuthGrantParam(
       context.propsValue.username,

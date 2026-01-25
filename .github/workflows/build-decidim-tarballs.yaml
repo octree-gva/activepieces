@@ -58,7 +58,7 @@ jobs:
       - name: Locate built tgz
         id: tgz
         run: |
-          TGZ_PATH=$(ls -1 dist/**/activepieces-piece-decidim-*.tgz | head -n 1)
+          TGZ_PATH=$(find dist -name "activepieces-piece-decidim-*.tgz" -type f | head -n 1)
           if [ -z "$TGZ_PATH" ]; then
             echo "Could not find built tgz in dist/"
             exit 1

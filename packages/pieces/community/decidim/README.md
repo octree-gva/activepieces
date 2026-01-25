@@ -13,7 +13,7 @@ This piece interacts with [Decidim](https://github.com/decidim/decidim) using th
 
 ## Prerequisites
 
-Ensure you have the correct Node.js version installed. Run `nvm use .` to use the version specified in the project.
+Ensure you have the correct Node.js version installed. Run `nvm use` to use the version specified in the project ([see .nvmrc](../../../../.nvmrc)).
 
 ## Setup
 

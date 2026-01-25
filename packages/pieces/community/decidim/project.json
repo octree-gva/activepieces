@@ -66,6 +66,13 @@
         "{options.outputFile}"
       ]
     },
+    "pretest": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/pieces/community/decidim",
+        "command": "bun install --no-save --silent"
+      }
+    },
     "test": {
       "executor": "@nx/jest:jest",
       "outputs": [
@@ -73,7 +80,10 @@
       ],
       "options": {
         "jestConfig": "packages/pieces/community/decidim/jest.config.ts"
-      }
+      },
+      "dependsOn": [
+        "pretest"
+      ]
     }
   }
 }

@@ -7,7 +7,8 @@
     <a href="https://matrix.to/#/+decidim:matrix.org">Decidim Community (Matrix+Element.io)</a>
 </h4>
 
-# Decidim ActivePiece
+# Decidim ActivePiece 
+[![Release Activepieces piece: decidim](https://github.com/froger/activepieces/actions/workflows/build-decidim-tarballs.yaml/badge.svg?branch=release%2Fdecidim)](https://github.com/froger/activepieces/actions/workflows/build-decidim-tarballs.yaml)
 
 This piece interacts with [Decidim](https://github.com/decidim/decidim) using the [decidim-restfull module](ssh://git@git.octree.ch:6118/decidim/vocacity/decidim-modules/decidim-module-rest_full.git).
 

@@ -1,6 +1,7 @@
 name: "Release Activepieces piece: decidim"
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - "release/decidim"

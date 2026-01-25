@@ -5,9 +5,104 @@ import {
   PropertyContext,
 } from '@activepieces/pieces-framework';
 import { decidimAuth } from '../../decidimAuth';
-import { OAuthApi, Configuration } from '@octree/decidim-sdk';
+import { OAuthApi, PasswordGrantImpersonate, PasswordGrantImpersonateAuthTypeEnum, PasswordGrantImpersonateGrantTypeEnum, PasswordGrantImpersonateScopeEnum, ResourceDetails } from '@octree/decidim-sdk';
 import { DecidimAccessToken } from '../../types';
 import axios from 'axios';
+import {
+  usernameProp,
+  fetchUserInfoProp,
+  registerOnMissingProp,
+  userFullNameProp,
+  sendConfirmationEmailOnRegisterProp,
+} from '../props';
+import { systemAccessToken } from '../utils/systemAccessToken';
+import { introspectToken } from '../utils/introspecToken';
+import { configuration } from '../utils/configuration';
+import { extractAuth } from '../utils/auth';
+import { response } from '../utils/response';
+
+export interface RegistrationOptions {
+  userFullName?: string;
+  sendConfirmationEmailOnRegister?: boolean;
+}
+
+export interface ImpersonateProps {
+  username: string;
+  fetchUserInfo?: boolean;
+  registerOnMissing?: boolean;
+  registrationOptions?: RegistrationOptions;
+}
+
+export function buildOAuthGrantParam(
+  username: string,
+  clientId: string,
+  clientSecret: string,
+  registerOnMissing: boolean,
+  registrationOptions: RegistrationOptions
+): PasswordGrantImpersonate {
+  return {
+    grant_type: PasswordGrantImpersonateGrantTypeEnum.Password,
+    auth_type: PasswordGrantImpersonateAuthTypeEnum.Impersonate,
+    username,
+    meta: {
+      register_on_missing: registerOnMissing,
+      skip_confirmation_on_register: !registrationOptions.sendConfirmationEmailOnRegister,
+      name: registrationOptions.userFullName || undefined,
+    },
+    scope: PasswordGrantImpersonateScopeEnum.Oauth,
+    client_id: clientId,
+    client_secret: clientSecret,
+  };
+}
+
+export async function createImpersonateToken(
+  oauthApi: OAuthApi,
+  oauthGrantParam: PasswordGrantImpersonate
+): Promise<DecidimAccessToken> {
+  const tokenResponse = await oauthApi.createToken({ oauthGrantParam });
+  return tokenResponse.data as unknown as DecidimAccessToken;
+}
+
+export async function fetchUserInfoIfNeeded(
+  oauthApi: OAuthApi,
+  accessToken: DecidimAccessToken,
+  fetchUserInfo: boolean,
+  clientId: string,
+  clientSecret: string
+): Promise<{ token: DecidimAccessToken; user: ResourceDetails | null } | null> {
+  if (!fetchUserInfo) {
+    return { token: accessToken, user: null };
+  }
+
+  const systemAccessTokenValue = await systemAccessToken(oauthApi, clientId, clientSecret);
+  const userResponse = await introspectToken(
+    oauthApi,
+    accessToken.access_token,
+    systemAccessTokenValue
+  );
+
+  if (!userResponse) {
+    return null;
+  }
+
+  return { token: accessToken, user: userResponse.resource || null };
+}
+
+export function handleImpersonateError(
+  error: unknown,
+  registerOnMissing: boolean
+): { token: null; user: null; error: string } {
+  if (axios.isAxiosError(error)) {
+    const errorData = error.response?.data || error.message;
+    const status = error.response?.status;
+    if (status === 404 && !registerOnMissing) {
+      return { token: null, user: null, error: 'User not found' };
+    }
+    return { token: null, user: null, error: JSON.stringify(errorData) };
+  }
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  return { token: null, user: null, error: errorMessage };
+}
 
 export const impersonate = createAction({
   name: 'impersonate',
@@ -17,23 +112,9 @@ export const impersonate = createAction({
   description: 'Get an access token to do action as a participant',
 
   props: {
-    username: Property.ShortText({
-      displayName: 'Nickname',
-      required: true,
-      description: 'The nickname of the user to impersonate',
-    }),
-    fetchUserInfo: Property.Checkbox({
-      displayName: 'Fetch user info?',
-      required: false,
-      description: 'If enabled, the user info will be fetched from the Decidim API',
-      defaultValue: true,
-    }),
-    registerOnMissing: Property.Checkbox({
-      displayName: 'Register on missing?',
-      required: false,
-      description: 'If enabled, the user will be registered if they do not exist',
-      defaultValue: false,
-    }),
+    username: usernameProp,
+    fetchUserInfo: fetchUserInfoProp,
+    registerOnMissing: registerOnMissingProp,
     registrationOptions: Property.DynamicProperties({
       displayName: 'Registration Options',
       description: 'Options for user registration',
@@ -45,113 +126,49 @@ export const impersonate = createAction({
           return {};
         }
         return {
-          userFullName: Property.ShortText({
-            displayName: 'User Full Name',
-            required: false,
-            description:
-              'The name of the user to impersonate (used for registration)',
-          }),
-          sendConfirmationEmailOnRegister: Property.Checkbox({
-            displayName: 'Send confirmation email on registration?',
-            required: false,
-            description:
-              'If enabled, the user will be registered but will need to confirm their email address by clicking a link in an email',
-            defaultValue: false,
-          }),
+          userFullName: userFullNameProp,
+          sendConfirmationEmailOnRegister: sendConfirmationEmailOnRegisterProp,
         };
       },
     }),
   },
   async run(context) {
-    const typedAuth = context.auth as { clientId: string; clientSecret: string; baseUrl: string };
-    const {baseUrl, clientId, clientSecret} = typedAuth;
-    console.log("context.auth", JSON.stringify(context.auth, null, 2));
-    const contextPropsValue = context.propsValue as any;
-    const fetchUserInfo = contextPropsValue.fetchUserInfo as boolean;
-    if(!clientId) {
-      throw new Error('Client ID is required');
-    }
-    if(!clientSecret) {
-      throw new Error('Client Secret is required');
-    }
-    if(!baseUrl) {
-      throw new Error('Base URL is required');
-    }
-    const configuration: Configuration = {
-      basePath: `${baseUrl}/api/rest_full/v0.2`,
-      isJsonMime: () => true,
+    const { baseUrl, clientId, clientSecret } = extractAuth(context);
+    const fetchUserInfo = context.propsValue.fetchUserInfo;
+    const registerOnMissing = context.propsValue.registerOnMissing;
+    const registrationOptions: RegistrationOptions = context.propsValue.registrationOptions || {
+      userFullName: undefined,
+      sendConfirmationEmailOnRegister: false,
     };
+    const config = configuration({ baseUrl });
+    const oauthApi = new OAuthApi(config);
 
-    const oauthApi = new OAuthApi(configuration);
-
-    const registrationOptions = context.propsValue.registrationOptions || {};
-    const oauthGrantParam = {
-      grant_type: 'password' as const,
-      auth_type: 'impersonate' as const,
-      username: context.propsValue.username,
-      meta: {
-        register_on_missing: context.propsValue.registerOnMissing,
-        skip_confirmation_on_register: !registrationOptions['sendConfirmationEmailOnRegister'],
-        name: registrationOptions['userFullName'] || undefined,
-      },
-      scope: 'oauth' as const,
-      client_id: clientId,
-      client_secret: clientSecret,
-    };
+    const oauthGrantParam = buildOAuthGrantParam(
+      context.propsValue.username,
+      clientId,
+      clientSecret,
+      registerOnMissing || false,
+      registrationOptions
+    );
 
     try {
-      const tokenResponse = await oauthApi.createToken({ oauthGrantParam });
-      const accessToken = tokenResponse.data as unknown as DecidimAccessToken;
-      if (!fetchUserInfo) {
-        return {
-          ok: true,
-          token: accessToken,
-          user: null,
-          error: null,
-        };
+      const accessToken = await createImpersonateToken(oauthApi, oauthGrantParam);
+      const userInfoResult = await fetchUserInfoIfNeeded(
+        oauthApi,
+        accessToken,
+        fetchUserInfo || false,
+        clientId,
+        clientSecret
+      );
+
+      if (userInfoResult === null) {
+        return response({ token: null, user: null }, 'User not active');
       }
 
-      const systemAccessResponse = await oauthApi.createToken({
-        oauthGrantParam: { grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret, scope: 'oauth' } });
-        const systemAccessToken = systemAccessResponse.data as unknown as DecidimAccessToken;
-
-      const userResponse = await oauthApi.introspectToken({
-        introspectToken: { token: accessToken.access_token },
-      }, {
-        headers: {
-          Authorization: `Bearer ${systemAccessToken.access_token}`,
-        },
-      });
-
-      return {
-        token: accessToken,
-        user: userResponse.data.resource,
-      };
-    } catch (error: any) {
-      if (axios.isAxiosError(error)) {
-        const errorData = error.response?.data || error.message;
-        const status = error.response?.status;
-        if(status === 404 && !contextPropsValue.registerOnMissing) {
-          return {
-            ok: true,
-            token: null,
-            user: null,
-            error: "User not found",
-          };
-        }
-        throw new Error(JSON.stringify({
-          ok: false,
-          token: null,
-          user: null,
-          error: errorData,
-        }));
-      }
-      throw new Error(JSON.stringify({
-        ok: false,
-        token: null,
-        user: null,
-        error: error.message || String(error),
-      }));
+      return response(userInfoResult);
+    } catch (error) {
+      const errorResult = handleImpersonateError(error, registerOnMissing || false);
+      return response(errorResult, errorResult.error);
     }
   },
 });

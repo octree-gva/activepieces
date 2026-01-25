@@ -44,7 +44,6 @@ export function createMockActionContext<
       apiUrl: 'http://localhost:3000',
       publicUrl: 'http://localhost:4200',
     },
-    serverUrl: 'http://localhost:4200',
     run: {
       id: 'test-run-id',
       stop: jest.fn(),

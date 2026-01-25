@@ -30,7 +30,7 @@ import {
 import { MessageTooltip } from '@/components/ui/message-tooltip';
 import { flowRunUtils } from '@/features/flow-runs/lib/flow-run-utils';
 import { flowRunsApi } from '@/features/flow-runs/lib/flow-runs-api';
-import { flowsHooks } from '@/features/flows/lib/flows-hooks';
+import { flowHooks } from '@/features/flows/lib/flow-hooks';
 import { useAuthorization } from '@/hooks/authorization-hooks';
 import { authenticationSession } from '@/lib/authentication-session';
 import { useNewWindow } from '@/lib/navigation-utils';
@@ -80,17 +80,13 @@ export const RunsTable = () => {
       const createdBefore = searchParams.get('createdBefore');
       const archivedParam = searchParams.get('archivedAt');
 
-      let archived: boolean;
-      if (archivedParam === 'true') archived = true;
-      else archived = false;
-
       return flowRunsApi.list({
         status: status ?? undefined,
         projectId,
         flowId,
         cursor: cursor ?? undefined,
         limit,
-        archived,
+        includeArchived: archivedParam === 'true',
         createdAfter: createdAfter ?? undefined,
         createdBefore: createdBefore ?? undefined,
         failedStepName,
@@ -121,7 +117,7 @@ export const RunsTable = () => {
   });
 
   const navigate = useNavigate();
-  const { data: flowsData, isFetching: isFetchingFlows } = flowsHooks.useFlows({
+  const { data: flowsData, isFetching: isFetchingFlows } = flowHooks.useFlows({
     limit: 1000,
     cursor: undefined,
   });
@@ -277,6 +273,7 @@ export const RunsTable = () => {
                 disabled={isDisabled}
                 variant="outline"
                 className="h-9 w-full"
+                loading={archiveRuns.isPending}
                 onClick={() => {
                   archiveRuns.mutate({
                     runIds: selectedRows.map((row) => row.id),
@@ -327,6 +324,7 @@ export const RunsTable = () => {
                     disabled={isDisabled}
                     variant="outline"
                     className="h-9 w-full"
+                    loading={cancelRuns.isPending}
                     onClick={() => {
                       cancelRuns.mutate({
                         runIds: selectedRows.map((row) => row.id),
@@ -353,13 +351,11 @@ export const RunsTable = () => {
       },
       {
         render: (_, resetSelection) => {
-          const allSuccess = selectedRows.every(
-            (row) => !isFailedState(row.status),
+          const allFailed = selectedRows.every((row) =>
+            isFailedState(row.status),
           );
           const isDisabled =
-            selectedRows.length === 0 ||
-            !userHasPermissionToRetryRun ||
-            !allSuccess;
+            selectedRows.length === 0 || !userHasPermissionToRetryRun;
 
           return (
             <div onClick={(e) => e.stopPropagation()}>
@@ -368,7 +364,11 @@ export const RunsTable = () => {
               >
                 <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild disabled={isDisabled}>
-                    <Button disabled={isDisabled} className="h-9 w-full">
+                    <Button
+                      disabled={isDisabled}
+                      className="h-9 w-full"
+                      loading={retryRuns.isPending}
+                    >
                       <RotateCw className="size-4 mr-1" />
                       {selectedRows.length > 0
                         ? `${t('Retry')} ${
@@ -412,10 +412,10 @@ export const RunsTable = () => {
                         message={t(
                           'Only failed runs can be retried from failed step',
                         )}
-                        isDisabled={!allSuccess}
+                        isDisabled={!allFailed}
                       >
                         <DropdownMenuItem
-                          disabled={!userHasPermissionToRetryRun || !allSuccess}
+                          disabled={!userHasPermissionToRetryRun || !allFailed}
                           onClick={() => {
                             retryRuns.mutate({
                               runIds: selectedRows.map((row) => row.id),
@@ -450,6 +450,7 @@ export const RunsTable = () => {
       selectedRows,
       selectedAll,
       excludedRows,
+      cancelRuns,
     ],
   );
 

@@ -30,11 +30,8 @@ import { context, propagation, trace } from '@opentelemetry/api'
 import { FastifyBaseLogger } from 'fastify'
 import { StatusCodes } from 'http-status-codes'
 import pLimit from 'p-limit'
-import { In, IsNull, Not, Repository, SelectQueryBuilder } from 'typeorm'
+import { ArrayContains, In, IsNull, Not, Repository, SelectQueryBuilder } from 'typeorm'
 import { repoFactory } from '../../core/db/repo-factory'
-import {
-    APArrayContains,
-} from '../../database/database-connection'
 import { flowVersionService } from '../../flows/flow-version/flow-version.service'
 import { buildPaginator } from '../../helper/pagination/build-paginator'
 import { paginationHelper } from '../../helper/pagination/pagination-utils'
@@ -59,6 +56,13 @@ export const flowRunRepo = repoFactory<FlowRun>(FlowRunEntity)
 const USE_SIGNED_URL = system.getBoolean(AppSystemProp.S3_USE_SIGNED_URLS) ?? false
 
 export const flowRunService = (log: FastifyBaseLogger) => ({
+    async upsert({ id, projectId }: { id: FlowRunId, projectId: ProjectId }): Promise<FlowRun> {
+        const existingFlowRun = await flowRunRepo().findOneBy({ id, projectId })
+        if (isNil(existingFlowRun)) {
+            return flowRunRepo().save({ id, projectId })
+        }
+        return existingFlowRun
+    },
     async list(params: ListParams): Promise<SeekPage<FlowRun>> {
         const decodedCursor = paginationHelper.decodeCursor(params.cursor)
         const paginator = buildPaginator<FlowRun>({
@@ -78,9 +82,9 @@ export const flowRunService = (log: FastifyBaseLogger) => ({
             environment: RunEnvironment.PRODUCTION,
         })
 
-        if (!isNil(params.archived)) {
+        if (!params.includeArchived) {
             query = query.andWhere({
-                archivedAt: params.archived ? Not(IsNull()) : IsNull(),
+                archivedAt: IsNull(),
             })
         }
 
@@ -105,7 +109,7 @@ export const flowRunService = (log: FastifyBaseLogger) => ({
             })
         }
         if (params.tags) {
-            query = query.andWhere(APArrayContains('tags', params.tags))
+            query = query.andWhere({ tags: ArrayContains(params.tags) })
         }
 
         if (!isNil(params.failedStepName)) {
@@ -160,7 +164,7 @@ export const flowRunService = (log: FastifyBaseLogger) => ({
                     flowVersionId: latestFlowVersion.id,
                     projectId: oldFlowRun.projectId,
                     failParentOnFailure: oldFlowRun.failParentOnFailure,
-                    parentRunId: oldFlowRun.id,
+                    parentRunId: oldFlowRun.parentRunId,
                 })
             }
         }
@@ -317,7 +321,7 @@ export const flowRunService = (log: FastifyBaseLogger) => ({
         })
     },
 
-    async test({ projectId, flowVersionId, parentRunId, stepNameToTest }: TestParams): Promise<FlowRun> {
+    async test({ projectId, flowVersionId, parentRunId, stepNameToTest, triggeredBy }: TestParams): Promise<FlowRun> {
         const flowVersion = await flowVersionService(log).getOneOrThrow(flowVersionId)
 
         const triggerPayload = await sampleDataService(log).getOrReturnEmpty({
@@ -334,6 +338,7 @@ export const flowRunService = (log: FastifyBaseLogger) => ({
             parentRunId,
             failParentOnFailure: undefined,
             stepNameToTest,
+            triggeredBy,
         }, log)
         return addToQueue({
             flowRun,
@@ -345,6 +350,31 @@ export const flowRunService = (log: FastifyBaseLogger) => ({
             executeTrigger: false,
             progressUpdateType: ProgressUpdateType.TEST_FLOW,
             sampleData: !isNil(stepNameToTest) ? await sampleDataService(log).getSampleDataForFlow(projectId, flowVersion, SampleDataFileType.OUTPUT) : undefined,
+        }, log)
+    },
+    async startManualTrigger({ projectId, flowVersionId, triggeredBy }: StartManualTriggerParams): Promise<FlowRun> {
+        const flowVersion = await flowVersionService(log).getOneOrThrow(flowVersionId)
+        const triggerPayload = {}
+        const flowRun = await queueOrCreateInstantly({
+            projectId,
+            flowId: flowVersion.flowId,
+            flowVersionId: flowVersion.id,
+            environment: RunEnvironment.PRODUCTION,
+            parentRunId: undefined,
+            failParentOnFailure: undefined,
+            stepNameToTest: undefined,
+            triggeredBy,
+        }, log)
+        return addToQueue({
+            flowRun,
+            payload: triggerPayload,
+            executionType: ExecutionType.BEGIN,
+            synchronousHandlerId: undefined,
+            httpRequestId: undefined,
+            platformId: await projectService.getPlatformId(projectId),
+            executeTrigger: false,
+            progressUpdateType: ProgressUpdateType.TEST_FLOW,
+            sampleData: undefined,
         }, log)
     },
     async getOne(params: GetOneParams): Promise<FlowRun | null> {
@@ -386,7 +416,7 @@ export const flowRunService = (log: FastifyBaseLogger) => ({
             steps,
         }
     },
-    async handleSyncResumeFlow({ runId, payload, requestId }: { runId: string, payload: unknown, requestId: string }) {
+    async handleSyncResumeFlow({ runId, payload, requestId }: { runId: string, payload: unknown, requestId: string }): Promise<EngineHttpResponse> {
         const flowRun = await flowRunService(log).getOnePopulatedOrThrow({
             id: runId,
             projectId: undefined,
@@ -427,7 +457,7 @@ export const flowRunService = (log: FastifyBaseLogger) => ({
 })
 
 
-async function cancelSingleRun(log: FastifyBaseLogger, flowRun: FlowRun, platformId: string) {
+async function cancelSingleRun(log: FastifyBaseLogger, flowRun: FlowRun, platformId: string): Promise<void> {
     await jobQueue(log).removeOneTimeJob({
         jobId: flowRun.id,
         platformId,
@@ -461,10 +491,15 @@ async function getAllChildRuns(parentRunIds: string[]): Promise<FlowRun[]> {
             INNER JOIN descendants d ON f."parentRunId" = d.id
             WHERE f.status = ANY($2)
         )
-        SELECT * FROM descendants
+        SELECT * FROM descendants;
     `
 
-    const results = await flowRunRepo().query(query, [parentRunIds, CANCELLABLE_STATUSES])
+    const params = [
+        parentRunIds,
+        CANCELLABLE_STATUSES,
+    ]
+
+    const results = await flowRunRepo().query(query, params)
     return results as FlowRun[]
 }
 
@@ -601,7 +636,9 @@ async function queueOrCreateInstantly(params: CreateParams, log: FastifyBaseLogg
         stepNameToTest: params.stepNameToTest,
         created: now,
         updated: now,
+        tags: [],
         steps: {},
+        triggeredBy: params.triggeredBy,
     }
     switch (params.environment) {
         case RunEnvironment.TESTING:
@@ -613,9 +650,11 @@ async function queueOrCreateInstantly(params: CreateParams, log: FastifyBaseLogg
 }
 
 
+
 type CreateParams = {
     projectId: ProjectId
     flowVersionId: FlowVersionId
+    triggeredBy?: string
     parentRunId?: FlowRunId
     failParentOnFailure: boolean | undefined
     stepNameToTest?: string
@@ -634,7 +673,7 @@ type ListParams = {
     createdBefore?: string
     failedStepName?: string
     flowRunIds?: FlowRunId[]
-    archived?: boolean
+    includeArchived?: boolean
 }
 
 type GetOneParams = {
@@ -678,10 +717,16 @@ type StartParams = {
 type TestParams = {
     projectId: ProjectId
     flowVersionId: FlowVersionId
+    triggeredBy: string
     parentRunId?: FlowRunId
     stepNameToTest?: string
 }
 
+type StartManualTriggerParams = {
+    projectId: ProjectId
+    flowVersionId: FlowVersionId
+    triggeredBy: string
+}
 type RetryParams = {
     flowRunId: FlowRunId
     strategy: FlowRetryStrategy

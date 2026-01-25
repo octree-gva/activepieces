@@ -121,6 +121,7 @@ export const impersonate = createAction({
     fetchUserInfo: fetchUserInfoProp(false),
     registerOnMissing: registerOnMissingProp(false),
     registrationOptions: Property.DynamicProperties({
+      auth: decidimAuth,
       displayName: 'Registration Options',
       description: 'Options for user registration',
       required: false,

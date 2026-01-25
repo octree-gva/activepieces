@@ -96,7 +96,7 @@ export async function createParticipant(
     username: z.string().min(1, 'Username must not be empty'),
     userFullName: z.string().optional(),
     email: z.string().min(1, 'Email must not be empty').email('Invalid email format').optional(),
-    extendedData: z.record(z.any()).optional(),
+    extendedData: z.record(z.string(), z.any()).optional(),
   });
 
   const username = createOptions['username'] as string;
@@ -257,7 +257,7 @@ export async function updateParticipant(
 
   await propsValidation.validateZod(updateOptions, {
     userId: z.string().min(1, 'User ID must not be empty'),
-    extendedData: z.record(z.any()).refine(
+    extendedData: z.record(z.string(), z.any()).refine(
       (data) => data && typeof data === 'object' && Object.keys(data).length > 0,
       'Extended Data must be a non-empty object with at least one key-value pair'
     ),
@@ -303,6 +303,7 @@ export const participantCrud = createAction({
       },
     }),
     searchOptions: Property.DynamicProperties({
+      auth: decidimAuth,
       displayName: 'Search Options',
       description: 'Options for searching participants',
       required: false,
@@ -318,6 +319,7 @@ export const participantCrud = createAction({
       },
     }),
     createOptions: Property.DynamicProperties({
+      auth: decidimAuth,
       displayName: 'Create Options',
       description: 'Options for creating a participant',
       required: false,
@@ -337,6 +339,7 @@ export const participantCrud = createAction({
       },
     }),
     readOptions: Property.DynamicProperties({
+      auth: decidimAuth,
       displayName: 'Read Options',
       description: 'Options for reading participant data',
       required: false,
@@ -352,6 +355,7 @@ export const participantCrud = createAction({
       },
     }),
     updateOptions: Property.DynamicProperties({
+      auth: decidimAuth,
       displayName: 'Update Options',
       description: 'Options for updating participant data',
       required: false,

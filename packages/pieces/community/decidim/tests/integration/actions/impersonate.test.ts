@@ -6,6 +6,7 @@ import axios from 'axios';
 import * as systemAccessTokenModule from '../../../src/lib/utils/systemAccessToken';
 import * as introspectTokenModule from '../../../src/lib/utils/introspecToken';
 import { createMockActionContext } from '../../helpers/create-mock-action-context';
+import { AppConnectionType } from '@activepieces/shared';
 
 jest.mock('@octree/decidim-sdk', () => {
   const actual = jest.requireActual('@octree/decidim-sdk');
@@ -25,10 +26,13 @@ const mockOAuthApi = {
 } as unknown as OAuthApi;
 
 const mockAuth = {
-  baseUrl: 'https://example.decidim.com',
-  clientId: 'test-client-id',
-  clientSecret: 'test-client-secret',
-};
+  type: AppConnectionType.CUSTOM_AUTH as AppConnectionType.CUSTOM_AUTH,
+  props: {
+    baseUrl: 'https://example.decidim.com',
+    clientId: 'test-client-id',
+    clientSecret: 'test-client-secret',
+  },
+} as const;
 
 const mockAccessToken: DecidimAccessToken = {
   access_token: 'test-access-token',

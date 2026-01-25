@@ -7,10 +7,16 @@ export type DecidimAuth = {
 };
 
 export function extractAuth(context: { auth: unknown }): DecidimAuth {
-  const auth: DecidimAuth = context.auth as DecidimAuth;
-  if(!auth) {
+  const authValue = context.auth as { type?: string; props?: DecidimAuth } | DecidimAuth;
+  if(!authValue) {
     throw new Error('Auth is required');
   }
+
+  // Handle new structure with type and props
+  const auth = (authValue as { type?: string; props?: DecidimAuth }).props
+    ? (authValue as { props: DecidimAuth }).props
+    : authValue as DecidimAuth;
+
   assertProp(auth.clientId, 'Client ID is required');
   assertProp(auth.clientSecret, 'Client Secret is required');
   assertProp(auth.baseUrl, 'Base URL is required');

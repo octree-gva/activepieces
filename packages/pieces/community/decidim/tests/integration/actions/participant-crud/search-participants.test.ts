@@ -2,6 +2,7 @@ import { participantCrud } from '../../../../src/lib/actions/participant-crud';
 import { OAuthApi, UsersApi } from '@octree/decidim-sdk';
 import { Response } from '../../../../src/lib/utils/response';
 import { createMockActionContext } from '../../../helpers/create-mock-action-context';
+import { AppConnectionType } from '@activepieces/shared';
 
 jest.mock('@octree/decidim-sdk', () => {
   const actual = jest.requireActual('@octree/decidim-sdk');
@@ -19,10 +20,13 @@ jest.mock('../../../../src/lib/utils/systemAccessToken', () => ({
 type SearchResult = Response<{ users: any[]; count: number }>;
 
 const mockAuth = {
-  baseUrl: 'https://example.decidim.com',
-  clientId: 'test-client-id',
-  clientSecret: 'test-client-secret',
-};
+  type: AppConnectionType.CUSTOM_AUTH as AppConnectionType.CUSTOM_AUTH,
+  props: {
+    baseUrl: 'https://example.decidim.com',
+    clientId: 'test-client-id',
+    clientSecret: 'test-client-secret',
+  },
+} as const;
 
 const mockUsersApi = {
   users: jest.fn(),

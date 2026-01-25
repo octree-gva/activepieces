@@ -5,6 +5,7 @@ import { OAuthApi } from '@octree/decidim-sdk';
 import { createMockActionContext } from '../../helpers/create-mock-action-context';
 import * as systemAccessTokenModule from '../../../src/lib/utils/systemAccessToken';
 import * as introspectTokenModule from '../../../src/lib/utils/introspecToken';
+import { AppConnectionType } from '@activepieces/shared';
 
 jest.mock('@octree/decidim-sdk', () => {
   const actual = jest.requireActual('@octree/decidim-sdk');
@@ -81,10 +82,13 @@ describe('impersonate validation', () => {
   } as unknown as OAuthApi;
 
   const mockAuth = {
-    baseUrl: 'https://example.decidim.com',
-    clientId: 'test-client-id',
-    clientSecret: 'test-client-secret',
-  };
+    type: AppConnectionType.CUSTOM_AUTH as AppConnectionType.CUSTOM_AUTH,
+    props: {
+      baseUrl: 'https://example.decidim.com',
+      clientId: 'test-client-id',
+      clientSecret: 'test-client-secret',
+    },
+  } as const;
 
   const createContext = (propsValue: {
     username: string;

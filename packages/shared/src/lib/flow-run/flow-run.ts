@@ -29,6 +29,7 @@ export const FlowRun = Type.Object({
     flowId: Type.String(),
     parentRunId: Type.Optional(Type.String()),
     failParentOnFailure: Type.Boolean(),
+    triggeredBy: Type.Optional(Type.String()),
     tags: Type.Optional(Type.Array(Type.String())),
     flowVersionId: Type.String(),
     flowVersion: Type.Optional(Type.Object({
@@ -36,8 +37,6 @@ export const FlowRun = Type.Object({
     })),
     logsFileId: Nullable(Type.String()),
     status: Type.Enum(FlowRunStatus),
-    duration: Type.Optional(Type.Number()),
-    waitDuration: Type.Optional(Type.Number()),
     startTime: Type.Optional(Type.String()),
     finishTime: Type.Optional(Type.String()),
     environment: Type.Enum(RunEnvironment),
@@ -51,6 +50,7 @@ export const FlowRun = Type.Object({
     })),
     stepNameToTest: Type.Optional(Type.String()),
     archivedAt: Nullable(Type.String({ default: null })),
+    stepsCount: Type.Optional(Type.Number()),
 })
 
 export const FailedStep = Type.Object({

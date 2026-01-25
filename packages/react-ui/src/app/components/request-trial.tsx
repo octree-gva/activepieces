@@ -12,6 +12,7 @@ export type FeatureKey =
   | 'TEAM'
   | 'GLOBAL_CONNECTIONS'
   | 'USERS'
+  | 'EVENT_DESTINATIONS'
   | 'API'
   | 'SSO'
   | 'AUDIT_LOGS'
@@ -26,6 +27,7 @@ export type FeatureKey =
   | 'AGENTS'
   | 'TABLES'
   | 'TODOS'
+  | 'BILLING'
   | 'MCPS';
 
 type RequestTrialProps = {

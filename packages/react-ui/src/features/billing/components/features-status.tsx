@@ -41,9 +41,9 @@ const LICENSE_PROPS_MAP = {
     label: 'Brand Activepieces',
     description: 'Customize the look and feel with your company branding',
   },
-  manageProjectsEnabled: {
-    label: 'Manage Projects',
-    description: 'Organize workflows into separate projects and workspaces',
+  teamProjectsLimit: {
+    label: 'Team Projects Limit',
+    description: 'Control the number of projects your team can create',
   },
   projectRolesEnabled: {
     label: 'Project Roles',
@@ -64,6 +64,10 @@ const LICENSE_PROPS_MAP = {
   customRolesEnabled: {
     label: 'Custom Roles',
     description: 'Create and manage custom roles for your team',
+  },
+  eventStreamingEnabled: {
+    label: 'Event Streaming',
+    description: 'Stream platform events to external destinations',
   },
 };
 

@@ -31,9 +31,10 @@ jobs:
           restore-keys: bun-
 
       - name: Setup nodejs
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -49,12 +50,10 @@ jobs:
       - name: Build package
         run: npx nx run-many --target=build --projects=pieces-i18n-store
 
-      - name: Copy project .npmrc to user level
-        run: cp .npmrc $HOME/.npmrc
-
       - name: Publish to npm
         run: |
           VERSION=$(cat packages/pieces/community/i18n-store/package.json | jq -r .version)
           npx ts-node -r tsconfig-paths/register -P packages/engine/tsconfig.lib.json tools/scripts/utils/publish-nx-project.ts packages/pieces/community/i18n-store
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        permissions:
+          id-token: write
+          contents: read

@@ -149,7 +149,12 @@ async function executeTranslate(
   if(translation === path) {
     throw new Error(`Translation not found for path: ${path} in language: ${language}`);
   }
-  return translation
+  return {
+    ok: true,
+    path: path,
+    language: language,
+    translation: translation,
+  };
 }
 
 export const translateAction = createAction({

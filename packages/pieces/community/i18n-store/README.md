@@ -1,8 +1,10 @@
+<img src="https://raw.githubusercontent.com/octree-gva/activepieces/refs/heads/packages/octree/packages/pieces/community/i18n-store/src/logo.svg" /><br />
 # i18n Store ActivePiece
 
 A piece for managing internationalization (i18n) translations locally within Activepieces flows using [i18next](https://www.i18next.com/).
 
 ## Overview
+
 
 Store translation files (JSON or YAML) at a project level and retrieve translations dynamically based on language and key paths.
 This piece does not add any external dependancies, as it re-use `i18next` already used internally by ActivePiece.
@@ -148,10 +150,6 @@ npx nx test pieces-i18n-store
 
 Development:
 ```bash
-export AP_DEV_PIECES=i18n-store
+export AP_DEV_PIECES=store,i18n-store
 npm start
 ```
-
-## License
-
-MIT License - Part of the Activepieces open-source project.

@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/octree-gva/activepieces"
+    "url": "git+https://github.com/octree-gva/activepieces.git"
   },
   "type": "commonjs",
   "scripts": {

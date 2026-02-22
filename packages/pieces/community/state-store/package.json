@@ -1,6 +1,10 @@
 {
-  "name": "@activepieces/piece-state-store",
+  "name": "@octree/piece-state-store",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/octree-gva/activepieces"
+  },
   "type": "commonjs",
   "scripts": {
     "bridge": "ts-node bin/redis-webhook-bridge.ts"

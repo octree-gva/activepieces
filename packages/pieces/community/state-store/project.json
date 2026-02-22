@@ -1,0 +1,66 @@
+{
+  "name": "pieces-state-store",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/pieces/community/state-store/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": [
+        "{options.outputPath}"
+      ],
+      "options": {
+        "outputPath": "dist/packages/pieces/community/state-store",
+        "tsConfig": "packages/pieces/community/state-store/tsconfig.lib.json",
+        "packageJson": "packages/pieces/community/state-store/package.json",
+        "main": "packages/pieces/community/state-store/src/index.ts",
+        "assets": [
+          "packages/pieces/community/state-store/*.md"
+        ],
+        "buildableProjectDepsInPackageJsonType": "dependencies",
+        "updateBuildableProjectDepsInPackageJson": true,
+        "clean": false
+      },
+      "dependsOn": [
+        "^build",
+        "prebuild"
+      ]
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "outputs": [
+        "{options.outputFile}"
+      ]
+    },
+    "prebuild": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/pieces/community/state-store",
+        "command": "bun install --no-save --silent"
+      },
+      "dependsOn": [
+        "^build"
+      ]
+    },
+    "pretest": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/pieces/community/state-store",
+        "command": "bun install --no-save --silent"
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": [
+        "{workspaceRoot}/coverage/{projectRoot}"
+      ],
+      "options": {
+        "jestConfig": "packages/pieces/community/state-store/jest.config.ts"
+      },
+      "dependsOn": [
+        "pretest"
+      ]
+    }
+  },
+  "tags": []
+}

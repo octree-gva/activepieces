@@ -1,7 +1,6 @@
 import { getConversationAction } from '../../../src/lib/actions/get-conversation';
 import { createMockActionContext } from '../../helpers/create-mock-action-context';
 import { redisConnect } from '../../../src/lib/utils/redis';
-import { jsonStringify } from '../../../src/lib/utils/json';
 import { UNKNOWN_STATE } from '../../../src/types';
 import { AppConnectionType } from '@activepieces/shared';
 import { stateStoreAuth } from '../../../src/stateStoreAuth';
@@ -70,7 +69,7 @@ describe('getConversationAction', () => {
       (call: any[]) => call[0] === 'test:namespace:conversation:conv-123' && call[2] === 'NX'
     );
     expect(setCall).toBeDefined();
-    const expectedValue = jsonStringify({ state: UNKNOWN_STATE, data: {} });
+    const expectedValue = JSON.stringify({ state: UNKNOWN_STATE, data: {} });
     expect(setCall[1]).toBe(expectedValue);
     expect(mockClient.xadd).toHaveBeenCalled();
   });
@@ -107,7 +106,7 @@ describe('getConversationAction', () => {
     const existingConversation = { state: 'state1', data: {} };
     mockClient.get.mockResolvedValueOnce(null); // first check - not found
     mockClient.set.mockResolvedValueOnce(null); // SET NX returns null (already exists)
-    mockClient.get.mockResolvedValueOnce(jsonStringify(existingConversation)); // re-read
+    mockClient.get.mockResolvedValueOnce(JSON.stringify(existingConversation)); // re-read
 
     const context = createMockActionContext({
       auth: { type: AppConnectionType.CUSTOM_AUTH, props: { url: 'redis://localhost:6379', namespace: 'test:namespace' } } as any,

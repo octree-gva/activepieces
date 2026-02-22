@@ -2,7 +2,6 @@ import { createAction, Property } from '@activepieces/pieces-framework';
 import { stateStoreAuth } from '../../stateStoreAuth';
 import { redisConnect } from '../utils/redis';
 import { getEventsKey, getFsmFromAuth } from '../utils/validation';
-import { jsonParse } from '../utils/json';
 
 export const debugSchemaAction = createAction({
   name: 'debug_schema',
@@ -16,6 +15,11 @@ export const debugSchemaAction = createAction({
       required: false,
       defaultValue: 10,
     }),
+    conversation_id: Property.ShortText({
+      displayName: 'Conversation ID',
+      description: 'If set, only return events for this conversation',
+      required: false,
+    }),
   },
   async run(context) {
     const namespace = context.auth.props.namespace;
@@ -26,25 +30,17 @@ export const debugSchemaAction = createAction({
     try {
       const eventsKey = getEventsKey(namespace);
 
-      // Load recent events
       const eventCount = event_count || 10;
-      const events = await client.xrevrange(eventsKey, '+', '-', 'COUNT', eventCount);
+      const conversation_id = context.propsValue.conversation_id;
+      const fetchCount = conversation_id ? 500 : eventCount;
+      const events = await client.xrevrange(eventsKey, '+', '-', 'COUNT', fetchCount);
 
-      const parsedEvents = await Promise.all(events.map(async ([id, fields]) => {
-        const payloadField = fields.find(([key]) => key === 'payload');
-        if (payloadField) {
-          try {
-            const parsed = await jsonParse<Record<string, unknown>>(payloadField[1] as string);
-            return { id, ...parsed };
-          } catch (error) {
-            return {
-              id,
-              raw: payloadField[1],
-            };
-          }
-        }
-        return { id, fields };
-      }));
+      let parsedEvents = events.map(([id, fields]) => ({ id, ...JSON.parse(fields[1] as string) ?? {} }));
+      if (conversation_id) {
+        parsedEvents = parsedEvents
+          .filter((e) => (e as { conversation_id?: string }).conversation_id === conversation_id)
+          .slice(0, eventCount);
+      }
 
       return {
         ok: true,

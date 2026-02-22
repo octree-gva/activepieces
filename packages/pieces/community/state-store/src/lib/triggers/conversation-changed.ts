@@ -9,7 +9,6 @@ import { stateStoreAuth } from '../../stateStoreAuth';
 import { redisConnect } from '../utils/redis';
 import { getEventsKey } from '../utils/validation';
 import { ConversationEvent } from '../../types';
-import { jsonParse } from '../utils/json';
 
 const polling: Polling<AppConnectionValueForAuthProperty<typeof stateStoreAuth>, Record<string, never>> = {
   strategy: DedupeStrategy.LAST_ITEM,
@@ -40,7 +39,7 @@ const polling: Polling<AppConnectionValueForAuthProperty<typeof stateStoreAuth>,
           const payloadField = fields.find(([key]) => key === 'payload');
           if (payloadField) {
             try {
-              const event = await jsonParse<ConversationEvent>(payloadField[1] as string);
+              const event = JSON.parse(payloadField[1] as string) as ConversationEvent;
               items.push({
                 id,
                 data: event,

@@ -4,7 +4,6 @@ import { conversationIdProp } from '../../props';
 import { redisConnect } from '../utils/redis';
 import { Conversation, ConversationEvent, UNKNOWN_STATE } from '../../types';
 import { getConversationKey, getEventsKey, getFsmFromAuth } from '../utils/validation';
-import { jsonStringify, parseJsonSafely } from '../utils/json';
 
 export const getConversationAction = createAction({
   name: 'get_conversation',
@@ -25,7 +24,7 @@ export const getConversationAction = createAction({
       const existing = await client.get(conversationKey);
 
       if (existing) {
-        const conversation = parseJsonSafely<Conversation>(existing);
+        const conversation = JSON.parse(existing as string) as Conversation;
         if (conversation) {
           return {
             ok: true,
@@ -48,7 +47,7 @@ export const getConversationAction = createAction({
       };
 
       // Use SET with NX to ensure atomicity
-      const setResult = await client.set(conversationKey, await jsonStringify(newConversation), 'NX');
+      const setResult = await client.set(conversationKey, JSON.stringify(newConversation), 'NX');
 
       if (setResult === 'OK') {
         // Successfully created - emit event
@@ -63,12 +62,12 @@ export const getConversationAction = createAction({
 
         await client.xadd(
           eventsKey,
-          '*',
-          'payload',
-          await jsonStringify(event),
           'MAXLEN',
           '~',
-          '10000'
+          '10000',
+          '*',
+          'payload',
+          JSON.stringify(event)
         );
 
         return {
@@ -79,7 +78,7 @@ export const getConversationAction = createAction({
       } else {
         // Another process created it, re-read
         const existingAfter = await client.get(conversationKey);
-        const conversation = parseJsonSafely<Conversation>(existingAfter);
+        const conversation = JSON.parse(existingAfter as string) as Conversation;
         if (conversation) {
           return {
             ok: true,

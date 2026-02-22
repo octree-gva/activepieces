@@ -4,7 +4,6 @@ import { conversationIdProp } from '../../props';
 import { redisConnect } from '../utils/redis';
 import { Conversation, ConversationEvent, UNKNOWN_STATE } from '../../types';
 import { getConversationKey, getEventsKey, validateTransition, getFsmFromAuth } from '../utils/validation';
-import { jsonStringify, parseJsonSafely } from '../utils/json';
 
 export const setConversationAction = createAction({
   name: 'set_conversation',
@@ -37,7 +36,7 @@ export const setConversationAction = createAction({
 
       // Load current conversation
       const existingStr = await client.get(conversationKey);
-      let currentConversation: Conversation | null = parseJsonSafely<Conversation>(existingStr);
+      let currentConversation: Conversation | null = JSON.parse(existingStr as string) as Conversation;
 
       if (!currentConversation) {
         currentConversation = {
@@ -76,7 +75,7 @@ export const setConversationAction = createAction({
       };
 
       // Write conversation (full replace)
-      await client.set(conversationKey, await jsonStringify(newConversation));
+      await client.set(conversationKey, JSON.stringify(newConversation));
 
       // Emit event to Redis Streams
       const event: ConversationEvent = {
@@ -89,12 +88,12 @@ export const setConversationAction = createAction({
 
       await client.xadd(
         eventsKey,
-        '*',
-        'payload',
-        await jsonStringify(event),
         'MAXLEN',
         '~',
-        '10000'
+        '10000',
+        '*',
+        'payload',
+        JSON.stringify(event)
       );
 
       return {

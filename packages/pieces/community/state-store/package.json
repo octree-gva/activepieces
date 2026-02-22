@@ -2,8 +2,12 @@
   "name": "@activepieces/piece-state-store",
   "version": "0.0.1",
   "type": "commonjs",
+  "scripts": {
+    "bridge": "ts-node bin/redis-webhook-bridge.ts"
+  },
   "dependencies": {
-    "superjson": "2.2.1"
+    "flatted": "^3.2.9",
+    "ioredis": "5.4.1"
   },
   "peerDependencies": {
     "@activepieces/shared": "*",

@@ -4,6 +4,7 @@ import { getConversationAction } from './lib/actions/get-conversation';
 import { setConversationAction } from './lib/actions/set-conversation';
 import { debugSchemaAction } from './lib/actions/debug-schema';
 import { conversationChangedTrigger } from './lib/triggers/conversation-changed';
+import { conversationChangedWebhookTrigger } from './lib/triggers/conversation-changed-webhook';
 import { stateStoreAuth } from './stateStoreAuth';
 
 export { stateStoreAuth } from './stateStoreAuth';
@@ -23,5 +24,6 @@ export const stateStore = createPiece({
   ],
   triggers: [
     conversationChangedTrigger,
+    conversationChangedWebhookTrigger,
   ],
 });

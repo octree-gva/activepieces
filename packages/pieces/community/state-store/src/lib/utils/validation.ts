@@ -1,5 +1,37 @@
 import { z } from 'zod';
 
+const conversationSchema = z.object({
+  state: z.string(),
+  data: z.record(z.string(), z.unknown()),
+});
+
+export const conversationEventSchema = z.object({
+  namespace: z.string(),
+  conversation_id: z.string(),
+  previous: conversationSchema.nullable(),
+  current: conversationSchema,
+  at: z.string(),
+});
+
+export type ConversationEventPayload = z.infer<typeof conversationEventSchema>;
+
+/** Parse and validate webhook body as ConversationEvent. Returns null if invalid. */
+export function parseConversationEvent(body: string | unknown): ConversationEventPayload | null {
+  let parsed: unknown;
+  if (typeof body === 'string') {
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      return null;
+    }
+  } else {
+    parsed = body;
+  }
+  if (parsed == null) return null;
+  const result = conversationEventSchema.safeParse(parsed);
+  return result.success ? result.data : null;
+}
+
 export function validateTransition(
   currentState: string,
   newState: string,

@@ -1,25 +1,15 @@
-import {
-  ActionContext,
-  createAction,
-  PieceAuthProperty,
-  Property,
-} from '@activepieces/pieces-framework';
-import { stateStoreAuth } from '../..';
-import { redisConnect } from '../common/redis';
-import { SchemaBundle } from '../common/types';
-import { getSchemaKey, getEventsKey } from '../common/validation';
+import { createAction, Property } from '@activepieces/pieces-framework';
+import { stateStoreAuth } from '../../stateStoreAuth';
+import { redisConnect } from '../utils/redis';
+import { getEventsKey, getFsmFromAuth } from '../utils/validation';
+import { jsonParse } from '../utils/json';
 
 export const debugSchemaAction = createAction({
   name: 'debug_schema',
-  displayName: 'Debug Schema Bundle',
-  description: 'Return schema bundle content and recent events for debugging',
+  displayName: 'Inspect State Configuration',
+  description: 'View the configured state machine schema and recent conversation events for troubleshooting',
   auth: stateStoreAuth,
   props: {
-    namespace: Property.ShortText({
-      displayName: 'Namespace',
-      description: 'Namespace to debug',
-      required: true,
-    }),
     event_count: Property.Number({
       displayName: 'Event Count',
       description: 'Number of recent events to return (default: 10)',
@@ -28,36 +18,24 @@ export const debugSchemaAction = createAction({
     }),
   },
   async run(context) {
-    const { namespace, event_count } = context.propsValue;
+    const namespace = context.auth.props.namespace;
+    const { event_count } = context.propsValue;
     const client = await redisConnect(context.auth);
-    
-    try {
-      const schemaKey = getSchemaKey(namespace);
-      const eventsKey = getEventsKey(namespace);
+    const schema = { fsm: getFsmFromAuth(context.auth) };
 
-      // Load schema bundle
-      let schema: SchemaBundle | null = null;
-      const schemaStr = await client.get(schemaKey);
-      if (schemaStr) {
-        try {
-          schema = JSON.parse(schemaStr);
-        } catch (error) {
-          // Invalid JSON
-        }
-      }
+    try {
+      const eventsKey = getEventsKey(namespace);
 
       // Load recent events
       const eventCount = event_count || 10;
       const events = await client.xrevrange(eventsKey, '+', '-', 'COUNT', eventCount);
 
-      const parsedEvents = events.map(([id, fields]) => {
+      const parsedEvents = await Promise.all(events.map(async ([id, fields]) => {
         const payloadField = fields.find(([key]) => key === 'payload');
         if (payloadField) {
           try {
-            return {
-              id,
-              ...JSON.parse(payloadField[1] as string),
-            };
+            const parsed = await jsonParse<Record<string, unknown>>(payloadField[1] as string);
+            return { id, ...parsed };
           } catch (error) {
             return {
               id,
@@ -66,7 +44,7 @@ export const debugSchemaAction = createAction({
           }
         }
         return { id, fields };
-      });
+      }));
 
       return {
         ok: true,

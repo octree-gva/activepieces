@@ -1,4 +1,13 @@
 {
   "name": "@activepieces/piece-state-store",
-  "version": "0.0.1"
+  "version": "0.0.1",
+  "type": "commonjs",
+  "dependencies": {
+    "superjson": "2.2.1"
+  },
+  "peerDependencies": {
+    "@activepieces/shared": "*",
+    "@activepieces/pieces-framework": "*",
+    "@activepieces/pieces-common": "*"
+  }
 }

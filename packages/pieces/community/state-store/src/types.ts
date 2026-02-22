@@ -10,7 +10,6 @@ export interface FSM {
 
 export interface SchemaBundle {
   fsm?: FSM;
-  json_schema?: Record<string, unknown>;
 }
 
 export interface ConversationEvent {
@@ -20,3 +19,5 @@ export interface ConversationEvent {
   current: Conversation;
   at: string;
 }
+
+export const UNKNOWN_STATE = 'unknown';

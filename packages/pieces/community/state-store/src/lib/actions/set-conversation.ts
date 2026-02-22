@@ -1,36 +1,18 @@
-import {
-  ActionContext,
-  createAction,
-  PieceAuthProperty,
-  Property,
-} from '@activepieces/pieces-framework';
-import { stateStoreAuth } from '../..';
-import { redisConnect } from '../common/redis';
-import { Conversation, SchemaBundle, ConversationEvent } from '../common/types';
-import {
-  getSchemaKey,
-  getConversationKey,
-  getEventsKey,
-  validateTransition,
-  validateData,
-} from '../common/validation';
+import { createAction, Property } from '@activepieces/pieces-framework';
+import { stateStoreAuth } from '../../stateStoreAuth';
+import { conversationIdProp } from '../../props';
+import { redisConnect } from '../utils/redis';
+import { Conversation, ConversationEvent, UNKNOWN_STATE } from '../../types';
+import { getConversationKey, getEventsKey, validateTransition, getFsmFromAuth } from '../utils/validation';
+import { jsonStringify, parseJsonSafely } from '../utils/json';
 
 export const setConversationAction = createAction({
   name: 'set_conversation',
-  displayName: 'Set Conversation',
-  description: 'Update conversation state with validation and emit event',
+  displayName: 'Update Conversation State',
+  description: 'Transition a conversation to a new state. Validates state transitions (FSM), then emits an event.',
   auth: stateStoreAuth,
   props: {
-    namespace: Property.ShortText({
-      displayName: 'Namespace',
-      description: 'Namespace for the conversation',
-      required: true,
-    }),
-    conversation_id: Property.ShortText({
-      displayName: 'Conversation ID',
-      description: 'Unique identifier for the conversation',
-      required: true,
-    }),
+    conversation_id: conversationIdProp,
     state: Property.ShortText({
       displayName: 'State',
       description: 'New state to transition to',
@@ -44,64 +26,34 @@ export const setConversationAction = createAction({
     }),
   },
   async run(context) {
-    const { namespace, conversation_id, state, data } = context.propsValue;
+    const namespace = context.auth.props.namespace;
+    const { conversation_id, state, data } = context.propsValue;
     const client = await redisConnect(context.auth);
-    
+
     try {
       const conversationKey = getConversationKey(namespace, conversation_id);
-      const schemaKey = getSchemaKey(namespace);
       const eventsKey = getEventsKey(namespace);
+      const fsm = getFsmFromAuth(context.auth);
 
       // Load current conversation
-      let currentConversation: Conversation | null = null;
       const existingStr = await client.get(conversationKey);
-      
-      if (existingStr) {
-        currentConversation = JSON.parse(existingStr);
-      } else {
-        // Try to get initial state from schema
-        const schemaStr = await client.get(schemaKey);
-        if (schemaStr) {
-          try {
-            const schema: SchemaBundle = JSON.parse(schemaStr);
-            if (schema.fsm?.initial) {
-              currentConversation = {
-                state: schema.fsm.initial,
-                data: {},
-              };
-            }
-          } catch (error) {
-            // Schema invalid, treat as unknown
-          }
-        }
-        
-        if (!currentConversation) {
-          currentConversation = {
-            state: 'unknown',
-            data: {},
-          };
-        }
-      }
+      let currentConversation: Conversation | null = parseJsonSafely<Conversation>(existingStr);
 
-      // Load schema bundle
-      let schema: SchemaBundle | undefined;
-      const schemaStr = await client.get(schemaKey);
-      if (schemaStr) {
-        try {
-          schema = JSON.parse(schemaStr);
-        } catch (error) {
-          // Invalid schema, continue without validation
-        }
+      if (!currentConversation) {
+        currentConversation = {
+          state: fsm?.initial ?? UNKNOWN_STATE,
+          data: {},
+        };
       }
 
       // Validate transition
-      if (schema?.fsm && currentConversation) {
+      if (fsm && currentConversation) {
         const transitionResult = validateTransition(
           currentConversation.state,
           state,
-          schema.fsm
+          fsm
         );
-        
+
         if (!transitionResult.valid) {
           return {
             ok: false,
@@ -114,32 +66,17 @@ export const setConversationAction = createAction({
       }
 
       // Prepare new conversation
-      const newData = data && typeof data === 'object' && !Array.isArray(data) 
+      const newData = data && typeof data === 'object' && !Array.isArray(data)
         ? data as Record<string, unknown>
         : {};
-      
+
       const newConversation: Conversation = {
         state,
         data: newData,
       };
 
-      // Validate data with JSON Schema
-      if (schema?.json_schema) {
-        const validationResult = validateData(state, newData, schema.json_schema);
-        
-        if (!validationResult.valid) {
-          return {
-            ok: false,
-            error: {
-              code: 'INVALID_DATA',
-              message: validationResult.error || 'Data validation failed',
-            },
-          };
-        }
-      }
-
       // Write conversation (full replace)
-      await client.set(conversationKey, JSON.stringify(newConversation));
+      await client.set(conversationKey, await jsonStringify(newConversation));
 
       // Emit event to Redis Streams
       const event: ConversationEvent = {
@@ -154,7 +91,7 @@ export const setConversationAction = createAction({
         eventsKey,
         '*',
         'payload',
-        JSON.stringify(event),
+        await jsonStringify(event),
         'MAXLEN',
         '~',
         '10000'

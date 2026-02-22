@@ -5,25 +5,27 @@ import {
   AppConnectionValueForAuthProperty,
 } from '@activepieces/pieces-framework';
 import { DedupeStrategy, Polling, pollingHelper } from '@activepieces/pieces-common';
-import { stateStoreAuth } from '../..';
-import { redisConnect } from '../common/redis';
-import { getEventsKey } from '../common/validation';
-import { ConversationEvent } from '../common/types';
+import { stateStoreAuth } from '../../stateStoreAuth';
+import { redisConnect } from '../utils/redis';
+import { getEventsKey } from '../utils/validation';
+import { ConversationEvent } from '../../types';
+import { jsonParse } from '../utils/json';
 
-const polling: Polling<AppConnectionValueForAuthProperty<typeof stateStoreAuth>, {
-  namespace: string;
-}> = {
+const polling: Polling<AppConnectionValueForAuthProperty<typeof stateStoreAuth>, Record<string, never>> = {
   strategy: DedupeStrategy.LAST_ITEM,
-  items: async ({ auth, propsValue, lastItemId }) => {
+  items: async ({ auth, lastItemId }) => {
+    // Use the correct type for auth from types.ts that includes all props from stateStoreAuth
+    // Assuming the type is named StateStoreAuthProps in types.ts
+    const { namespace } = auth.props; // Type will enforce inclusion of all required props
     const client = await redisConnect(auth);
-    const eventsKey = getEventsKey(propsValue.namespace);
-    
+    const eventsKey = getEventsKey(namespace);
+
     try {
       // Use simple XREAD approach for polling triggers
       // Consumer groups are better for webhook-style processing, but polling
       // triggers work better with simple XREAD from last known position
       let streamId = lastItemId as string || '0';
-      
+
       // If lastItemId is '0', start from beginning, otherwise read from that ID
       const messages = await client.xread('COUNT', 100, 'STREAMS', eventsKey, streamId);
 
@@ -32,13 +34,13 @@ const polling: Polling<AppConnectionValueForAuthProperty<typeof stateStoreAuth>,
       }
 
       const items: Array<{ id: string; data: ConversationEvent }> = [];
-      
+
       for (const [stream, entries] of messages) {
         for (const [id, fields] of entries) {
           const payloadField = fields.find(([key]) => key === 'payload');
           if (payloadField) {
             try {
-              const event: ConversationEvent = JSON.parse(payloadField[1] as string);
+              const event = await jsonParse<ConversationEvent>(payloadField[1] as string);
               items.push({
                 id,
                 data: event,
@@ -62,13 +64,7 @@ export const conversationChangedTrigger = createTrigger({
   auth: stateStoreAuth,
   displayName: 'On Conversation Changed',
   description: 'Triggered when a conversation state changes in the specified namespace',
-  props: {
-    namespace: Property.ShortText({
-      displayName: 'Namespace',
-      description: 'Namespace to monitor for conversation changes',
-      required: true,
-    }),
-  },
+  props: {},
   sampleData: {
     namespace: 'bot:proposal',
     conversation_id: 'whatsapp:+351...',

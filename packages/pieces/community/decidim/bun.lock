@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "@activepieces/piece-decidim",
+      "name": "@octree/piece-decidim",
       "dependencies": {
         "@octree/decidim-sdk": "https://git.octree.ch/api/v4/projects/464/packages/npm/@octree/decidim-sdk/-/@octree/decidim-sdk-0.2.8.tgz",
         "tslib": "^2.3.0",

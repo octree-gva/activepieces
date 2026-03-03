@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@activepieces/piece-state-store",
+      "name": "@octree/piece-state-store",
       "dependencies": {
         "flatted": "^3.2.9",
       },

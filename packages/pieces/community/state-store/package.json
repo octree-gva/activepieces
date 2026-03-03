@@ -1,21 +1,23 @@
 {
-  "name": "@octree/piece-state-store",
+  "name": "@activepieces/piece-state-store",
   "version": "0.0.1",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/octree-gva/activepieces.git"
   },
-  "type": "commonjs",
   "scripts": {
+    "build": "tsc -p tsconfig.lib.json && cp package.json dist/",
+    "lint": "eslint 'src/**/*.ts'",
     "bridge": "ts-node bin/redis-webhook-bridge.ts"
   },
   "dependencies": {
+    "@activepieces/pieces-common": "workspace:*",
+    "@activepieces/pieces-framework": "workspace:*",
+    "@activepieces/shared": "workspace:*",
     "flatted": "^3.2.9",
-    "ioredis": "5.4.1"
-  },
-  "peerDependencies": {
-    "@activepieces/shared": "*",
-    "@activepieces/pieces-framework": "*",
-    "@activepieces/pieces-common": "*"
+    "ioredis": "5.4.1",
+    "tslib": "2.6.2"
   }
 }

@@ -1,9 +1,12 @@
 import { createPiece } from "@activepieces/pieces-framework";
+import { PieceCategory } from "@activepieces/shared";
 import { decidimAuth } from "./decidimAuth";
 import { allActions } from "./lib/registry/actions";
 import { meetingsReminder } from "./lib/triggers/meetings-reminder";
 import { proposalPublished } from "./lib/triggers/proposal-published";
 import { logoUrl } from "./logo";
+
+export { decidimAuth };
 
 export const decidim = createPiece({
   displayName: "Decidim",
@@ -11,7 +14,8 @@ export const decidim = createPiece({
   auth: decidimAuth,
   minimumSupportedRelease: '0.36.1',
   logoUrl,
-  authors: [],
+  categories: [PieceCategory.PRODUCTIVITY],
+  authors: ['octree-gva'],
   actions: allActions,
   triggers: [meetingsReminder, proposalPublished],
 });

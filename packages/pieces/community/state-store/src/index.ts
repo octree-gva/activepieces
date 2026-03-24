@@ -12,11 +12,11 @@ export { stateStoreAuth } from './stateStoreAuth';
 export const stateStore = createPiece({
   displayName: 'State Store',
   description: 'Redis-backed conversation state machine with FSM validation and event streaming',
-  minimumSupportedRelease: '0.30.0',
+  minimumSupportedRelease: '0.36.1',
   logoUrl: 'https://raw.githubusercontent.com/activepieces/activepieces/main/packages/pieces/community/state-store/src/lib/logo.svg',
   categories: [PieceCategory.DEVELOPER_TOOLS],
   auth: stateStoreAuth,
-  authors: [],
+  authors: ['octree-gva'],
   actions: [
     getConversationAction,
     setConversationAction,

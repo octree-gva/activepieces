@@ -15,6 +15,7 @@ import { oauthIntrospect } from '../domains/oauth/oauth-introspect';
 import { apiRoot } from '../domains/api/api-root';
 import { usersList } from '../domains/users/users-list';
 import { createMagicLink } from '../domains/users/create-magic-link';
+import { customApiCallAction } from '../actions/custom-api-call';
 import { magicLinkSignin } from '../domains/users/magic-link-signin';
 import { meExtendedData } from '../domains/users/me-extended-data';
 import { oauthRequestToken } from '../domains/oauth/oauth-request-token';
@@ -25,6 +26,7 @@ export const allActions: Action[] = [
   apiRoot,
   blogPosts,
   createMagicLink,
+  customApiCallAction,
   draftProposals,
   getParticipatorySpace,
   impersonate,

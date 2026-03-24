@@ -1,10 +1,10 @@
 import { meetingsReminder } from '../../../src/lib/triggers/meetings-reminder';
 
 describe('meetingsReminder trigger', () => {
-  it('fails with actionable message on enable', async () => {
+  it('enables without throwing (manual webhook registration)', async () => {
     await expect(
       meetingsReminder.onEnable({} as Parameters<typeof meetingsReminder.onEnable>[0])
-    ).rejects.toThrow('not supported');
+    ).resolves.toBeUndefined();
   });
 
   it('returns normalized body payload', async () => {

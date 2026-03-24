@@ -17,7 +17,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       # Root package.json uses workspace:* (Bun/pnpm); npm does not resolve that protocol.
       - name: Set up Bun

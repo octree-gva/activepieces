@@ -334,6 +334,9 @@
       "@activepieces/piece-datocms": [
         "packages/pieces/community/datocms/src/index.ts"
       ],
+      "@activepieces/piece-decidim": [
+        "packages/pieces/community/decidim/src/index.ts"
+      ],
       "@activepieces/piece-deepgram": [
         "packages/pieces/community/deepgram/src/index.ts"
       ],
@@ -568,6 +571,9 @@
       ],
       "@activepieces/piece-hunter": [
         "packages/pieces/community/hunter/src/index.ts"
+      ],
+      "@activepieces/piece-i18n-store": [
+        "packages/pieces/community/i18n-store/src/index.ts"
       ],
       "@activepieces/piece-image-ai": [
         "packages/pieces/community/image-ai/src/index.ts"
@@ -1076,6 +1082,9 @@
       ],
       "@activepieces/piece-stable-diffusion-webui": [
         "packages/pieces/community/stable-diffusion-webui/src/index.ts"
+      ],
+      "@activepieces/piece-state-store": [
+        "packages/pieces/community/state-store/src/index.ts"
       ],
       "@activepieces/piece-store": [
         "packages/pieces/core/store/src/index.ts"

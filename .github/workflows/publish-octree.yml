@@ -18,11 +18,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "npm"
+
+      # Root package.json uses workspace:* (Bun/pnpm); npm does not resolve that protocol.
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.3
 
       - name: Install dependencies
-        run: |
-          npm ci
+        run: bun install --frozen-lockfile
 
       # piece-decidim: npm script "test" is `vitest run` (see packages/pieces/community/decidim).
       # Turbo runs `build` first, then Vitest (turbo.json test.dependsOn + test/ inputs).

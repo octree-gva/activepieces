@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.lib.json && cp package.json dist/",
-    "lint": "eslint 'src/**/*.ts'",
+    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts' 'bin/**/*.ts'",
     "test": "jest --config jest.config.ts",
     "bridge": "ts-node bin/redis-webhook-bridge.ts"
   },

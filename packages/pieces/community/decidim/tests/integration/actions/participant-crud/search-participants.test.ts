@@ -1,8 +1,8 @@
-import { participantCrud } from '../../../../src/lib/actions/participant-crud';
+import { participantCrud } from '../../../../src/lib/domains/users/participant-crud';
 import { OAuthApi, UsersApi } from '@octree/decidim-sdk';
 import { Response } from '../../../../src/lib/utils/response';
 import { createMockActionContext } from '../../../helpers/create-mock-action-context';
-import { AppConnectionType } from '@activepieces/shared';
+import { decidimCustomAuth } from '../../../helpers/decidim-test-fixtures';
 
 jest.mock('@octree/decidim-sdk', () => {
   const actual = jest.requireActual('@octree/decidim-sdk');
@@ -17,16 +17,7 @@ jest.mock('../../../../src/lib/utils/systemAccessToken', () => ({
   systemAccessToken: jest.fn().mockResolvedValue('system-token'),
 }));
 
-type SearchResult = Response<{ users: any[]; count: number }>;
-
-const mockAuth = {
-  type: AppConnectionType.CUSTOM_AUTH as AppConnectionType.CUSTOM_AUTH,
-  props: {
-    baseUrl: 'https://example.decidim.com',
-    clientId: 'test-client-id',
-    clientSecret: 'test-client-secret',
-  },
-} as const;
+type SearchResult = Response<{ users: unknown[]; count: number }>;
 
 const mockUsersApi = {
   users: jest.fn(),
@@ -36,7 +27,7 @@ const createContext = (propsValue: {
   action: 'search';
   searchOptions: { extendedDataQuery: string };
 }): Parameters<typeof participantCrud.run>[0] => createMockActionContext({
-  auth: mockAuth,
+  auth: decidimCustomAuth,
   propsValue,
   step: { name: 'participant' },
 }) as Parameters<typeof participantCrud.run>[0];
@@ -86,10 +77,13 @@ describe('Search Participants Integration', () => {
       searchOptions: { extendedDataQuery: '{"chatbotID":"31"}' },
     }));
 
-    expect(mockUsersApi.users).toHaveBeenCalledWith({
-      filterExtendedDataCont: '{"chatbotID": "31"}',
-      perPage: 100,
-    });
+    expect(mockUsersApi.users).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorization: 'Bearer system-token',
+        filterExtendedDataCont: '{"chatbotID": "31"}',
+        perPage: 100,
+      })
+    );
   });
 
   it('should handle API errors', async () => {

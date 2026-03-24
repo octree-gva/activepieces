@@ -1,8 +1,8 @@
-import { participantCrud } from '../../../../src/lib/actions/participant-crud';
+import { participantCrud } from '../../../../src/lib/domains/users/participant-crud';
 import { OAuthApi, UsersApi } from '@octree/decidim-sdk';
 import { Response } from '../../../../src/lib/utils/response';
 import { createMockActionContext } from '../../../helpers/create-mock-action-context';
-import { AppConnectionType } from '@activepieces/shared';
+import { decidimCustomAuth } from '../../../helpers/decidim-test-fixtures';
 
 jest.mock('@octree/decidim-sdk', () => {
   const actual = jest.requireActual('@octree/decidim-sdk');
@@ -17,16 +17,7 @@ jest.mock('../../../../src/lib/utils/systemAccessToken', () => ({
   systemAccessToken: jest.fn().mockResolvedValue('system-token'),
 }));
 
-type UpdateResult = Response<{ userId: string; data: any }>;
-
-const mockAuth = {
-  type: AppConnectionType.CUSTOM_AUTH as AppConnectionType.CUSTOM_AUTH,
-  props: {
-    baseUrl: 'https://example.decidim.com',
-    clientId: 'test-client-id',
-    clientSecret: 'test-client-secret',
-  },
-} as const;
+type UpdateResult = Response<{ userId: string; data: unknown }>;
 
 const mockUsersApi = {
   setUserData: jest.fn(),
@@ -36,11 +27,11 @@ const createContext = (propsValue: {
   action: 'update';
   updateOptions: {
     userId: string;
-    extendedData: Record<string, any> | string;
+    extendedData: Record<string, unknown> | string;
     dataPath?: string;
   };
 }): Parameters<typeof participantCrud.run>[0] => createMockActionContext({
-  auth: mockAuth,
+  auth: decidimCustomAuth,
   propsValue,
   step: { name: 'participant' },
 }) as Parameters<typeof participantCrud.run>[0];
@@ -84,12 +75,15 @@ describe('Update Participant Integration', () => {
       },
     }));
 
-    expect(mockUsersApi.setUserData).toHaveBeenCalledWith({
-      userExtendedDataPayload: {
-        object_path: '.nested',
-        data: updatedData,
-      },
-    });
+    expect(mockUsersApi.setUserData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorization: 'Bearer token',
+        userExtendedDataPayload: {
+          object_path: '.nested',
+          data: updatedData,
+        },
+      })
+    );
   });
 
   it('should parse JSON string extendedData', async () => {
@@ -103,12 +97,15 @@ describe('Update Participant Integration', () => {
       },
     }));
 
-    expect(mockUsersApi.setUserData).toHaveBeenCalledWith({
-      userExtendedDataPayload: {
-        object_path: '.',
-        data: { chatbotID: '31' },
-      },
-    });
+    expect(mockUsersApi.setUserData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorization: 'Bearer token',
+        userExtendedDataPayload: {
+          object_path: '.',
+          data: { chatbotID: '31' },
+        },
+      })
+    );
   });
 
   it('should handle API errors', async () => {

@@ -1,131 +1,95 @@
-<h1 align="center"><img src="./src/logo.svg" alt="Decidim ActivePiece - Integrate Decidim with Activepieces" /></h1>
-<h4 align="center">
-    <a href="https://voca.city">Voca.city</a> |
-    <a href="https://decidim.org">Decidim</a> |
-    <a href="https://docs.decidim.org/en/">Decidim Docs</a> |
-    <a href="https://meta.decidim.org">Participatory Governance (meta decidim)</a>  <br/>
-    <a href="https://matrix.to/#/+decidim:matrix.org">Decidim Community (Matrix+Element.io)</a>
-</h4>
+# Decidim piece (Activepieces)
 
-# Decidim ActivePiece 
-[![Release Activepieces piece: decidim](https://github.com/froger/activepieces/actions/workflows/build-decidim-tarballs.yaml/badge.svg?branch=release%2Fdecidim)](https://github.com/froger/activepieces/actions/workflows/build-decidim-tarballs.yaml)
+Integration with a [Decidim](https://decidim.org/) instance via the REST API and generated `@octree/decidim-sdk` client.
 
-This piece interacts with [Decidim](https://github.com/decidim/decidim) using the [decidim-restfull module](ssh://git@git.octree.ch:6118/decidim/vocacity/decidim-modules/decidim-module-rest_full.git).
+## Layout (where to change what)
 
-## Prerequisites
+| Path | Purpose |
+|------|---------|
+| `src/decidimAuth.ts` | Piece auth (base URL + OAuth client credentials). |
+| `src/lib/props.ts` | Shared property definitions (labels, descriptions, dropdowns). |
+| `src/lib/registry/actions.ts` | List of actions registered on the piece. |
+| `src/lib/domains/*` | One folder per API area (users, spaces, components, …). Each action is a small file; heavy mapping lives in `*.helpers.ts` or focused modules like `spaces-search-params.ts`. |
+| `src/lib/runtime/` | Cross-cutting: `authMode` (system vs user token), `clients` (SDK factories), `errors` (`getErrorMessage`), `locales`. |
+| `src/lib/utils/` | `auth`, `configuration`, `response`, `systemAccessToken`, etc. |
 
-Ensure you have the correct Node.js version installed. Run `nvm use` to use the version specified in the project ([see .nvmrc](../../../../.nvmrc)).
+### Naming
 
-## Setup
+- **Action files**: `{verb}-{resource}.ts` (e.g. `search-participatory-space.ts`).
+- **Parameter builders / validation**: `spaces-search-params.ts`, `search-component.helpers.ts` — pure parsing and SDK-shaped objects where possible.
+- **Tests**: mirror `src` under `test/unit` and `test/integration`.
 
-### Starting Decidim
+## Conventions
 
-1. Run `docker-compose` to start a Decidim container.
-2. Compile assets: `bin/compile-assets`
-3. Start the Rails server: `bundle exec rails s -b 0.0.0.0`
-4. Start the asset server: `bundle exec bin/shakapacker-dev-server`
-5. Seed the database: `bundle exec rails db:seed`
+### Request flow (actions)
 
-Decidim is exposed at port 3001.
+Typical shape, in order:
 
-### System Configuration
+1. **Parse** props (and optional `extractAuth`).
+2. **Validate** preconditions (Zod, `assertProp`, or API errors).
+3. **Call** SDK / HTTP.
+4. **Return** `response(payload)` or `response(payload, getErrorMessage(e))`.
 
-1. Navigate to `/system` with default credentials:
-   - Email: `system@example.org`
-   - Password: `decidim123456789`
-2. Add a "Client API" for the created organization, and check scopes and permissions.
-3. Set the host to `pieces.localhost` in the system settings (organization edition).
+Avoid empty `catch` blocks. Top-level action `catch` should surface a string via `getErrorMessage` (includes **Zod** and **Axios** detail).
 
-### Development
+### Responses
 
-1. Export the piece you want to work on: `export AP_DEV_PIECES=store,decidim`
-2. Start the development server: `npm start`
+| Key | When |
+|-----|------|
+| `ok` | `true` on success, `false` when `error` is set |
+| `error` | Human-readable message from the last failure |
+| `access_token` | Impersonate, some user flows |
+| `auth_mode` | `system` or `user` |
+| `proposal_id`, `draft_proposal_id`, `component_id`, `space_id` | For chaining steps |
+| `has_more` | List steps when `count === per_page` |
+| `pagesFetched` | Search Participatory Space — API pages read during auto-pagination |
 
-### Connection Configuration
+### Search Participatory Space
 
-The Decidim connection requires:
-- `client_id`/`client_secret`: From the Client API created in `/system`
-- Base URL: `http://pieces.localhost:3001`
+- **Title contains** + **Space type** and/or **Advanced filters** — at least one is required.
+- **Max spaces (total)** caps how many items are collected across pages.
+- **Items per page** maps to the API `per_page` (max 100).
+- Advanced filter **Values (JSON array)** is optional; if **Value** is set, Values is ignored.
+- Implementation: `spaces-search-params.ts` (validation + query params), `search-participatory-space.ts` (auth + pagination loop).
 
-## Building
+## Chaining outputs
 
-Run `npx nx build pieces-decidim` to build the library. The build is done in a github workflow to have tarball exported at each versions. 
-Version are managed in packages/pieces/community/decidim/package.json
+Use **`access_token`** from **Impersonate** (or paste a token) into **User access token (optional)** on actions that use `resolveAuthContext`.
 
-## Running unit tests
+- **Impersonate** returns `access_token`, `token`, `user`, `expires_in`, `scope`.
+- **Draft proposals** needs a user token; the action fails if only client credentials are used.
 
-Run `npx nx test pieces-decidim` to execute the unit tests via jest.
+### Example flow
 
-## Features
+1. **Search Component** — find `manifest_name: proposals`, note `component_id`.
+2. **Impersonate** — map `{{step.access_token}}` into the next step.
+3. **Draft proposals → Create** — set **User access token** to `{{impersonate.access_token}}`, **Component ID** from step 1.
+4. **Draft proposals → Update** — title/body JSON.
+5. **Draft proposals → Publish** — use draft id from create/read.
 
-### 🧩 Impersonate
+Published listing/voting: **Proposals** action with the same optional user token when needed.
 
-Get an access token to perform actions as a participant in Decidim.
+## OpenAPI coverage
 
-**Inputs:**
-- `username` (required): The nickname of the user to impersonate (minimum 5 characters)
-- `fetchUserInfo` (optional): If enabled, fetches user information from the Decidim API
-- `registerOnMissing` (optional): If enabled, registers the user if they don't exist
-- `registrationOptions` (optional, shown when `registerOnMissing` is enabled):
-  - `userFullName` (optional): Full name of the user to register (minimum 5 characters)
-  - `sendConfirmationEmailOnRegister` (optional): If enabled, sends a confirmation email to the user
+`implemented-operation-ids.json` lists covered `operationId`s. With the Decidim spec available:
 
-**Outputs:**
-- `token`: OAuth access token object containing `access_token`, `token_type`, `expires_in`, `refresh_token`, and `scope`
-- `user`: User resource details (only if `fetchUserInfo` is enabled)
+```bash
+npm run check-openapi-coverage -w @activepieces/piece-decidim
+# or: DECIDIM_OPENAPI_JSON=/path/to/openapi.json node scripts/verify-openapi-coverage.mjs
+```
 
-### 🧩 Participant Management
+## Tests
 
-Manage Decidim participants with Search, Create, Read, Update operations.
+```bash
+cd packages/pieces/community/decidim
+npm run test
+# or: npx vitest run
+# from repo root: npx turbo test --filter=@activepieces/piece-decidim
+```
 
-#### Search
+- **Unit**: helpers, `spaces-search-params`, mocked actions.
+- **Integration**: behind env vars (see individual test files).
 
-Search participants by extended data query.
+## Piece auth validation
 
-**Inputs:**
-- `extendedDataQuery` (required): JSON string to search in extended_data (e.g., `'{"chatbotUserId": "123"}'`)
-
-**Outputs:**
-- `users`: Array of matching user objects
-- `count`: Number of users found
-
-#### Create
-
-Create a new participant or find an existing one by username. If the user exists, returns an impersonate token. If not, creates the user and returns an impersonate token.
-
-**Inputs:**
-- `username` (required): Nickname of the user
-- `userFullName` (optional): Full name of the user
-- `email` (optional): Email address for the user
-- `extendedData` (optional): Extended data object to set (e.g., `{"chatbotUserId": "123"}`)
-- `fetchUserInfo` (optional): If enabled, fetches user information after creation
-
-**Outputs:**
-- `token`: OAuth impersonate access token object
-- `userId`: Decidim user ID
-- `user`: User resource details (only if `fetchUserInfo` is enabled)
-
-#### Read
-
-Read participant data including extended data and user information.
-
-**Inputs:**
-- `userId` (required): Decidim user ID
-
-**Outputs:**
-- `userId`: Decidim user ID
-- `data`: Extended data object (null if not set)
-- `user`: User resource details
-
-#### Update
-
-Update participant extended data.
-
-**Inputs:**
-- `userId` (required): Decidim user ID
-- `extendedData` (required): Extended data object to update (e.g., `{"chatbotUserId": "123"}`)
-- `dataPath` (optional): Path in extended_data to update (defaults to `"."`)
-
-**Outputs:**
-- `userId`: Decidim user ID
-- `data`: Updated extended data object
+`decidimAuth.validate` treats any request failure as invalid credentials (it does not return the upstream error text). That keeps the settings UI simple; use server logs if token exchange fails unexpectedly.

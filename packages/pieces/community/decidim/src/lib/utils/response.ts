@@ -3,7 +3,7 @@ type ErrorResponse<T> = T & { ok: false; error: string };
 
 export type Response<T> = SuccessResponse<T> | ErrorResponse<T>;
 
-export function response<T extends Record<string, any>>(
+export function response<T extends Record<string, unknown>>(
   payload: T,
   errorMessage: string | null = null
 ): Response<T> {

@@ -1,9 +1,9 @@
-import { participantCrud } from '../../../../src/lib/actions/participant-crud';
+import { participantCrud } from '../../../../src/lib/domains/users/participant-crud';
 import { OAuthApi, UsersApi } from '@octree/decidim-sdk';
 import { Response } from '../../../../src/lib/utils/response';
 import axios from 'axios';
 import { createMockActionContext } from '../../../helpers/create-mock-action-context';
-import { AppConnectionType } from '@activepieces/shared';
+import { decidimCustomAuth } from '../../../helpers/decidim-test-fixtures';
 
 jest.mock('@octree/decidim-sdk', () => {
   const actual = jest.requireActual('@octree/decidim-sdk');
@@ -18,16 +18,7 @@ jest.mock('../../../../src/lib/utils/systemAccessToken', () => ({
   systemAccessToken: jest.fn().mockResolvedValue('system-token'),
 }));
 
-type ReadResult = Response<{ userId: string; data: any; user: any }>;
-
-const mockAuth = {
-  type: AppConnectionType.CUSTOM_AUTH as AppConnectionType.CUSTOM_AUTH,
-  props: {
-    baseUrl: 'https://example.decidim.com',
-    clientId: 'test-client-id',
-    clientSecret: 'test-client-secret',
-  },
-} as const;
+type ReadResult = Response<{ userId: string; data: unknown; user: unknown }>;
 
 const mockUsersApi = {
   userData: jest.fn(),
@@ -38,7 +29,7 @@ const createContext = (propsValue: {
   action: 'read';
   readOptions: { userId: string };
 }): Parameters<typeof participantCrud.run>[0] => createMockActionContext({
-  auth: mockAuth,
+  auth: decidimCustomAuth,
   propsValue,
   step: { name: 'participant' },
 }) as Parameters<typeof participantCrud.run>[0];

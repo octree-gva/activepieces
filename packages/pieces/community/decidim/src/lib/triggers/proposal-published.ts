@@ -8,10 +8,10 @@ export const proposalPublished = createTrigger({
     props: {},
     sampleData: {},
     type: TriggerStrategy.WEBHOOK,
-    async onEnable(context){
+    async onEnable(){
         // implement webhook creation logic
     },
-    async onDisable(context){
+    async onDisable(){
         // implement webhook deletion logic
     },
     async run(context){

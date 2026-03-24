@@ -1,5 +1,5 @@
 import { OAuthApi } from '@octree/decidim-sdk';
-import { DecidimAccessToken } from '../../types';
+import { decidimAccessTokenFromResponse } from '../runtime/sdk-casts';
 
 export async function systemAccessToken(
   oauthApi: OAuthApi,
@@ -14,6 +14,6 @@ export async function systemAccessToken(
       scope: 'oauth',
     },
   });
-  const token = systemAccessResponse.data as unknown as DecidimAccessToken;
+  const token = decidimAccessTokenFromResponse(systemAccessResponse.data);
   return token.access_token;
 }

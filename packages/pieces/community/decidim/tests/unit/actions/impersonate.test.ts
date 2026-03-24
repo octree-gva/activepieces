@@ -1,10 +1,11 @@
-import { handleImpersonateError, impersonate } from '../../../src/lib/actions/impersonate';
+import {
+  handleImpersonateError,
+  impersonate,
+} from '../../../src/lib/domains/users/impersonate';
 import { response } from '../../../src/lib/utils/response';
 import axios from 'axios';
 import { OAuthApi } from '@octree/decidim-sdk';
 import { createMockActionContext } from '../../helpers/create-mock-action-context';
-import * as systemAccessTokenModule from '../../../src/lib/utils/systemAccessToken';
-import * as introspectTokenModule from '../../../src/lib/utils/introspecToken';
 import { AppConnectionType } from '@activepieces/shared';
 
 jest.mock('@octree/decidim-sdk', () => {
@@ -123,7 +124,13 @@ describe('impersonate validation', () => {
 
   it('should throw validation error when username is missing', async () => {
     await expect(
-      impersonate.run(createContext({ username: undefined as any }))
+      impersonate.run(
+        createMockActionContext({
+          auth: mockAuth,
+          propsValue: {} as unknown as Parameters<typeof impersonate.run>[0]['propsValue'],
+          step: { name: 'impersonate' },
+        }) as Parameters<typeof impersonate.run>[0]
+      )
     ).rejects.toThrow('Username is required');
   });
 

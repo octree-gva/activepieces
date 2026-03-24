@@ -1,11 +1,23 @@
-import { participantCrud } from '../../../../src/lib/actions/participant-crud';
+import { participantCrud } from '../../../../src/lib/domains/users/participant-crud';
 import { OAuthApi, UsersApi } from '@octree/decidim-sdk';
 import { Response } from '../../../../src/lib/utils/response';
 import { DecidimAccessToken } from '../../../../src/types';
 import { createMockActionContext } from '../../../helpers/create-mock-action-context';
+import {
+  decidimCustomAuth,
+  sampleDecidimAccessToken,
+} from '../../../helpers/decidim-test-fixtures';
 import * as systemAccessTokenModule from '../../../../src/lib/utils/systemAccessToken';
 import * as introspectTokenModule from '../../../../src/lib/utils/introspecToken';
-import { AppConnectionType } from '@activepieces/shared';
+import type { introspectToken } from '../../../../src/lib/utils/introspecToken';
+
+type IntrospectResult = NonNullable<Awaited<ReturnType<typeof introspectToken>>>;
+
+type ParticipantUserStub = {
+  id: number | string;
+  nickname?: string;
+  email?: string;
+};
 
 jest.mock('@octree/decidim-sdk', () => {
   const actual = jest.requireActual('@octree/decidim-sdk');
@@ -19,24 +31,11 @@ jest.mock('@octree/decidim-sdk', () => {
 jest.mock('../../../../src/lib/utils/systemAccessToken');
 jest.mock('../../../../src/lib/utils/introspecToken');
 
-type CreateResult = Response<{ token: DecidimAccessToken; userId: string; user: any }>;
-
-const mockAuth = {
-  type: AppConnectionType.CUSTOM_AUTH as AppConnectionType.CUSTOM_AUTH,
-  props: {
-    baseUrl: 'https://example.decidim.com',
-    clientId: 'test-client-id',
-    clientSecret: 'test-client-secret',
-  },
-} as const;
-
-const mockAccessToken: DecidimAccessToken = {
-  access_token: 'test-access-token',
-  token_type: 'Bearer',
-  expires_in: 3600,
-  scope: 'oauth',
-  created_at: Date.now(),
-};
+type CreateResult = Response<{
+  token: DecidimAccessToken;
+  userId: string;
+  user: ParticipantUserStub | null;
+}>;
 
 const mockOAuthApi = {
   createToken: jest.fn(),
@@ -54,11 +53,11 @@ const createContext = (propsValue: {
     username: string;
     userFullName?: string;
     email?: string;
-    extendedData?: Record<string, any>;
+    extendedData?: Record<string, unknown>;
     fetchUserInfo?: boolean;
   };
 }): Parameters<typeof participantCrud.run>[0] => createMockActionContext({
-  auth: mockAuth,
+  auth: decidimCustomAuth,
   propsValue,
   step: { name: 'participant' },
 }) as Parameters<typeof participantCrud.run>[0];
@@ -76,12 +75,12 @@ describe('Create Participant Integration', () => {
       .mockResolvedValueOnce({ data: { data: [] } })
       .mockResolvedValueOnce({ data: { data: [mockUser] } });
     mockUsersApi.userData = jest.fn().mockResolvedValue({ data: { data: {} } });
-    (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: mockAccessToken });
+    (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
     jest.spyOn(systemAccessTokenModule, 'systemAccessToken').mockResolvedValue('system-token');
     jest.spyOn(introspectTokenModule, 'introspectToken').mockResolvedValue({
       active: true,
       resource: { id: '456' },
-    } as any);
+    } as unknown as IntrospectResult);
 
     const result = await participantCrud.run(createContext({
       action: 'create',
@@ -95,16 +94,17 @@ describe('Create Participant Integration', () => {
     })) as CreateResult;
 
     expect(result.ok).toBe(true);
-    expect((result as any).userId).toBe('456');
-    expect((result as any).token).toBeDefined();
-    expect((result as any).user).toEqual(mockUser);
+    if (!result.ok) throw new Error('expected success');
+    expect(result.userId).toBe('456');
+    expect(result.token).toBeDefined();
+    expect(result.user).toEqual(mockUser);
   });
 
   it('should use existing participant when user exists', async () => {
     const existingUser = { id: 123, nickname: 'existinguser' };
     mockUsersApi.users = jest.fn().mockResolvedValue({ data: { data: [existingUser] } });
     mockUsersApi.userData = jest.fn().mockResolvedValue({ data: { data: {} } });
-    (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: mockAccessToken });
+    (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
 
     const result = await participantCrud.run(createContext({
       action: 'create',
@@ -116,17 +116,18 @@ describe('Create Participant Integration', () => {
     })) as CreateResult;
 
     expect(result.ok).toBe(true);
-    expect((result as any).userId).toBe('123');
+    if (!result.ok) throw new Error('expected success');
+    expect(result.userId).toBe('123');
   });
 
   it('should create participant without fetching user info', async () => {
     mockUsersApi.users = jest.fn().mockResolvedValue({ data: { data: [] } });
-    (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: mockAccessToken });
+    (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
     jest.spyOn(systemAccessTokenModule, 'systemAccessToken').mockResolvedValue('system-token');
     jest.spyOn(introspectTokenModule, 'introspectToken').mockResolvedValue({
       active: true,
       resource: { id: '789' },
-    } as any);
+    } as unknown as IntrospectResult);
 
     const result = await participantCrud.run(createContext({
       action: 'create',
@@ -137,13 +138,14 @@ describe('Create Participant Integration', () => {
     })) as CreateResult;
 
     expect(result.ok).toBe(true);
-    expect((result as any).userId).toBe('789');
-    expect((result as any).user).toBeNull();
+    if (!result.ok) throw new Error('expected success');
+    expect(result.userId).toBe('789');
+    expect(result.user).toBeNull();
   });
 
   it('should return error when user creation fails', async () => {
     mockUsersApi.users = jest.fn().mockResolvedValue({ data: { data: [] } });
-    (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: mockAccessToken });
+    (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
     jest.spyOn(systemAccessTokenModule, 'systemAccessToken').mockResolvedValue('system-token');
     jest.spyOn(introspectTokenModule, 'introspectToken').mockResolvedValue(null);
 

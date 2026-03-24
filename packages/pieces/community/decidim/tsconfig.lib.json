@@ -2,10 +2,22 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "commonjs",
+    "noPropertyAccessFromIndexSignature": false,
     "outDir": "./dist",
     "declaration": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {}
   },
-  "exclude": ["jest.config.ts", "src/**/*.spec.ts", "src/**/*.test.ts"],
-  "include": ["src/**/*.ts"]
+  "exclude": [
+    "vitest.config.ts",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
+  ],
+  "include": [
+    "src/**/*.ts"
+  ]
 }

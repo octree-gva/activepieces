@@ -20,7 +20,7 @@ export const decidimAuth = PieceAuth.CustomAuth({
   },
   validate: async ({ auth }) => {
     try {
-      const response = await httpClient.sendRequest({
+      await httpClient.sendRequest({
         method: HttpMethod.POST,
         url: `${auth.baseUrl}/oauth/token`,
         headers: {

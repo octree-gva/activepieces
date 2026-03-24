@@ -1,7 +1,7 @@
 import { Configuration } from '@octree/decidim-sdk';
 type AdditionalConfig = {
   baseUrl: string;
-} & Record<string, any>;
+} & Record<string, unknown>;
 export function configuration(
   additionalConfig: AdditionalConfig
 ): Configuration {

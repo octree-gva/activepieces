@@ -1,12 +1,15 @@
-import { impersonate } from '../../../src/lib/actions/impersonate';
-import { OAuthApi } from '@octree/decidim-sdk';
+import { impersonate } from '../../../src/lib/domains/users/impersonate';
+import { OAuthApi, type ResourceDetails } from '@octree/decidim-sdk';
 import { DecidimAccessToken } from '../../../src/types';
 import { Response } from '../../../src/lib/utils/response';
 import axios from 'axios';
 import * as systemAccessTokenModule from '../../../src/lib/utils/systemAccessToken';
 import * as introspectTokenModule from '../../../src/lib/utils/introspecToken';
 import { createMockActionContext } from '../../helpers/create-mock-action-context';
-import { AppConnectionType } from '@activepieces/shared';
+import {
+  decidimCustomAuth,
+  sampleDecidimAccessToken,
+} from '../../helpers/decidim-test-fixtures';
 
 jest.mock('@octree/decidim-sdk', () => {
   const actual = jest.requireActual('@octree/decidim-sdk');
@@ -19,28 +22,14 @@ jest.mock('@octree/decidim-sdk', () => {
 jest.mock('../../../src/lib/utils/systemAccessToken');
 jest.mock('../../../src/lib/utils/introspecToken');
 
-type ImpersonateResult = Response<{ token: DecidimAccessToken | null; user: any }>;
+type ImpersonateResult = Response<{
+  token: DecidimAccessToken | null;
+  user: ResourceDetails | null;
+}>;
 
 const mockOAuthApi = {
   createToken: jest.fn(),
 } as unknown as OAuthApi;
-
-const mockAuth = {
-  type: AppConnectionType.CUSTOM_AUTH as AppConnectionType.CUSTOM_AUTH,
-  props: {
-    baseUrl: 'https://example.decidim.com',
-    clientId: 'test-client-id',
-    clientSecret: 'test-client-secret',
-  },
-} as const;
-
-const mockAccessToken: DecidimAccessToken = {
-  access_token: 'test-access-token',
-  token_type: 'Bearer',
-  expires_in: 3600,
-  scope: 'oauth',
-  created_at: Date.now(),
-};
 
 const createContext = (propsValue: {
   username: string;
@@ -51,7 +40,7 @@ const createContext = (propsValue: {
     sendConfirmationEmailOnRegister?: boolean;
   };
 }): Parameters<typeof impersonate.run>[0] => createMockActionContext({
-  auth: mockAuth,
+  auth: decidimCustomAuth,
   propsValue,
   step: { name: 'impersonate' },
 }) as Parameters<typeof impersonate.run>[0];
@@ -65,7 +54,7 @@ describe('Impersonate Action Integration', () => {
 
   describe('Successful impersonation', () => {
     it('should return token without user info when fetchUserInfo is false', async () => {
-      (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: mockAccessToken });
+      (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
 
       const result = await impersonate.run(createContext({
         username: 'testuser',
@@ -76,13 +65,21 @@ describe('Impersonate Action Integration', () => {
       expect(result).toEqual({
         ok: true,
         error: null,
-        token: mockAccessToken,
+        token: sampleDecidimAccessToken,
         user: null,
+        access_token: sampleDecidimAccessToken.access_token,
+        token_type: sampleDecidimAccessToken.token_type,
+        expires_in: sampleDecidimAccessToken.expires_in,
+        scope: sampleDecidimAccessToken.scope,
       });
     });
 
     it('should return token and user info when fetchUserInfo is true', async () => {
-      const mockUserResource = { id: 'user-123', name: 'Test User', email: 'test@example.com' };
+      const mockUserResource = {
+        id: 'user-123',
+        name: 'Test User',
+        email: 'test@example.com',
+      } as unknown as ResourceDetails;
       const mockIntrospectResponse = {
         active: true,
         sub: 'user-123',
@@ -90,9 +87,15 @@ describe('Impersonate Action Integration', () => {
         resource: mockUserResource,
       };
 
-      (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: mockAccessToken });
+      (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
       jest.spyOn(systemAccessTokenModule, 'systemAccessToken').mockResolvedValue('system-token');
-      jest.spyOn(introspectTokenModule, 'introspectToken').mockResolvedValue(mockIntrospectResponse as any);
+      jest
+        .spyOn(introspectTokenModule, 'introspectToken')
+        .mockResolvedValue(
+          mockIntrospectResponse as unknown as Awaited<
+            ReturnType<typeof introspectTokenModule.introspectToken>
+          >
+        );
 
       const result = await impersonate.run(createContext({
         username: 'testuser',
@@ -103,13 +106,17 @@ describe('Impersonate Action Integration', () => {
       expect(result).toEqual({
         ok: true,
         error: null,
-        token: mockAccessToken,
+        token: sampleDecidimAccessToken,
         user: mockUserResource,
+        access_token: sampleDecidimAccessToken.access_token,
+        token_type: sampleDecidimAccessToken.token_type,
+        expires_in: sampleDecidimAccessToken.expires_in,
+        scope: sampleDecidimAccessToken.scope,
       });
     });
 
     it('should register user with full name and confirmation email', async () => {
-      (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: mockAccessToken });
+      (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
 
       const result = await impersonate.run(createContext({
         username: 'newuser',
@@ -135,7 +142,7 @@ describe('Impersonate Action Integration', () => {
     });
 
     it('should register user without confirmation email', async () => {
-      (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: mockAccessToken });
+      (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
 
       const result = await impersonate.run(createContext({
         username: 'newuser',
@@ -221,7 +228,7 @@ describe('Impersonate Action Integration', () => {
     });
 
     it('should return error when user token is inactive', async () => {
-      (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: mockAccessToken });
+      (mockOAuthApi.createToken as jest.Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
       jest.spyOn(systemAccessTokenModule, 'systemAccessToken').mockResolvedValue('system-token');
       jest.spyOn(introspectTokenModule, 'introspectToken').mockResolvedValue(null);
 

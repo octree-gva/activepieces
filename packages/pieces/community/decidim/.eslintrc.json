@@ -1,32 +1,23 @@
 {
-  "extends": [
-    "../../../../.eslintrc.base.json"
-  ],
-  "ignorePatterns": [
-    "!**/*"
-  ],
+  "extends": ["../../../../.eslintrc.base.json"],
+  "ignorePatterns": ["!**/*"],
   "overrides": [
     {
-      "files": [
-        "*.ts",
-        "*.tsx",
-        "*.js",
-        "*.jsx"
-      ],
+      "files": ["*.ts", "*.tsx", "*.js", "*.jsx"],
       "rules": {}
     },
     {
-      "files": [
-        "*.ts",
-        "*.tsx"
-      ],
-      "rules": {}
+      "files": ["*.ts", "*.tsx"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "error",
+        "@typescript-eslint/no-unused-vars": [
+          "warn",
+          { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+        ]
+      }
     },
     {
-      "files": [
-        "*.js",
-        "*.jsx"
-      ],
+      "files": ["*.js", "*.jsx"],
       "rules": {}
     }
   ]

@@ -1,0 +1,131 @@
+FROM node:20.19-bullseye-slim AS base
+
+ENV LANG=en_US.UTF-8 \
+    LANGUAGE=en_US:en \
+    LC_ALL=en_US.UTF-8
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        openssh-client \
+        python3 \
+        g++ \
+        build-essential \
+        git \
+        poppler-utils \
+        poppler-data \
+        procps \
+        locales \
+        unzip \
+        curl \
+        ca-certificates \
+        libcap-dev && \
+    yarn config set python /usr/bin/python3 && \
+    sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen en_US.UTF-8 && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN export ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then \
+      curl -fSL https://github.com/oven-sh/bun/releases/download/bun-v1.3.1/bun-linux-x64-baseline.zip -o bun.zip; \
+    elif [ "$ARCH" = "aarch64" ]; then \
+      curl -fSL https://github.com/oven-sh/bun/releases/download/bun-v1.3.1/bun-linux-aarch64.zip -o bun.zip; \
+    fi
+
+RUN unzip bun.zip \
+    && mv bun-*/bun /usr/local/bin/bun \
+    && chmod +x /usr/local/bin/bun \
+    && rm -rf bun.zip bun-*
+
+RUN bun --version
+
+RUN npm install -g --no-fund --no-audit \
+    node-gyp \
+    npm@9.9.3 \
+    pm2@6.0.10 \
+    typescript@4.9.4
+
+RUN cd /usr/src && bun install isolated-vm@5.0.1
+
+FROM base AS build
+
+WORKDIR /usr/src/app
+
+COPY .npmrc package.json bun.lock bunfig.toml ./
+COPY packages/ ./packages/
+
+RUN bun install
+
+COPY . .
+
+RUN npx turbo run build --filter=web --filter=@activepieces/engine --filter=api
+
+# Keep all core pieces; keep only required community pieces
+RUN rm -rf packages/pieces/custom && \
+    find packages/pieces/community -mindepth 1 -maxdepth 1 -type d \
+      ! -name decidim \
+      ! -name store \
+      ! -name opnform \
+      ! -name whatsapp \
+      ! -name stripe \
+      ! -name i18n-store \
+      ! -name state-store \
+      ! -name slack \
+      ! -name square \
+      ! -name facebook-leads \
+      ! -name intercom \
+      -exec rm -rf {} +
+
+FROM base AS run
+
+WORKDIR /usr/src/app
+
+ENV AP_API_KEY="api-key" \
+    AP_CACHE_PATH="./dev/cache" \
+    AP_CHATBOT_ENABLED=true \
+    AP_CONFIG_PATH="./dev/config" \
+    AP_DB_TYPE=SQLITE3 \
+    AP_DEV_PIECES="decidim,store,webhook,opnform,whatsapp,stripe,i18n-store,state-store" \
+    AP_ENRICH_ERROR_CONTEXT=true \
+    AP_ENVIRONMENT="dev" \
+    AP_FRONTEND_URL="http://localhost:4200" \
+    AP_LOG_LEVEL=debug \
+    AP_LOG_PRETTY=true \
+    AP_PIECES_SOURCE='FILE' \
+    AP_QUEUE_MODE=MEMORY \
+    AP_TELEMETRY_ENABLED=false \
+    AP_TRIGGER_DEFAULT_POLL_INTERVAL=1 \
+    AP_WEBHOOK_TIMEOUT_SECONDS=30 \
+    AP_PIECES_SYNC_MODE=NONE \
+    AP_WEBHOOK_URL="http://localhost:3000"
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends nginx gettext && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY nginx.react.conf /etc/nginx/nginx.conf
+COPY --from=build /usr/src/app/packages/server/api/src/assets/default.cf /usr/local/etc/isolate
+COPY docker-entrypoint.sh .
+
+RUN mkdir -p \
+    /usr/src/app/dist/packages/engine && \
+    chmod +x docker-entrypoint.sh
+
+COPY --from=build /usr/src/app/package.json ./
+COPY --from=build /usr/src/app/.npmrc ./
+COPY --from=build /usr/src/app/bun.lock ./
+COPY --from=build /usr/src/app/bunfig.toml ./
+COPY --from=build /usr/src/app/LICENSE .
+
+COPY --from=build /usr/src/app/packages ./packages
+COPY --from=build /usr/src/app/node_modules ./node_modules
+
+COPY --from=build /usr/src/app/dist/packages/engine/ ./dist/packages/engine/
+
+COPY --from=build /usr/src/app/dist/packages/web /usr/share/nginx/html/
+
+LABEL service=activepieces-octree
+LABEL author="hadrien@octree.ch"
+
+ENTRYPOINT ["./docker-entrypoint.sh"]
+EXPOSE 80
+

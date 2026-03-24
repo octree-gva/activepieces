@@ -1,9 +1,14 @@
-import { createParticipant } from '../../../../src/lib/actions/participant-crud';
+import { createParticipant } from '../../../../src/lib/domains/users/participant-crud';
 import { configuration } from '../../../../src/lib/utils/configuration';
+import type { Response } from '../../../../src/lib/utils/response';
+import type { DecidimAccessToken } from '../../../../src/types';
 import { OAuthApi, UsersApi } from '@octree/decidim-sdk';
-import { createImpersonateToken, buildOAuthGrantParam } from '../../../../src/lib/actions/impersonate';
+import {
+  createImpersonateToken,
+  buildOAuthGrantParam,
+} from '../../../../src/lib/domains/users/impersonate';
 import { introspectToken } from '../../../../src/lib/utils/introspecToken';
-import { readParticipant } from '../../../../src/lib/actions/participant-crud';
+import { readParticipant } from '../../../../src/lib/domains/users/participant-crud';
 
 jest.mock('@octree/decidim-sdk', () => {
   const actual = jest.requireActual('@octree/decidim-sdk');
@@ -18,7 +23,7 @@ jest.mock('../../../../src/lib/utils/systemAccessToken', () => ({
   systemAccessToken: jest.fn().mockResolvedValue('system-token'),
 }));
 
-jest.mock('../../../../src/lib/actions/impersonate', () => ({
+jest.mock('../../../../src/lib/domains/users/impersonate', () => ({
   createImpersonateToken: jest.fn(),
   buildOAuthGrantParam: jest.fn(),
 }));
@@ -27,13 +32,21 @@ jest.mock('../../../../src/lib/utils/introspecToken', () => ({
   introspectToken: jest.fn(),
 }));
 
-jest.mock('../../../../src/lib/actions/participant-crud', () => {
-  const actual = jest.requireActual('../../../../src/lib/actions/participant-crud');
+jest.mock('../../../../src/lib/domains/users/participant-crud', () => {
+  const actual = jest.requireActual(
+    '../../../../src/lib/domains/users/participant-crud'
+  );
   return {
     ...actual,
     readParticipant: jest.fn(),
   };
 });
+
+type CreateParticipantSuccess = Response<{
+  token: DecidimAccessToken;
+  userId: string;
+  user: { id: number | string; nickname?: string } | null;
+}>;
 
 describe('createParticipant', () => {
   const config = configuration({ baseUrl: 'http://test.com' });
@@ -66,7 +79,7 @@ describe('createParticipant', () => {
       user: { id: '456', nickname: 'newuser' },
     });
 
-    const result = await createParticipant(config, 'clientId', 'clientSecret', mockOAuthApi, {
+    const result = (await createParticipant(config, 'clientId', 'clientSecret', mockOAuthApi, {
       createOptions: {
         username: 'newuser',
         userFullName: 'New User',
@@ -74,12 +87,13 @@ describe('createParticipant', () => {
         extendedData: { chatbotID: '31' },
         fetchUserInfo: true,
       },
-    });
+    })) as CreateParticipantSuccess;
 
     expect(result.ok).toBe(true);
-    expect((result as any).userId).toBe('456');
-    expect((result as any).token).toEqual({ access_token: 'impersonate-token' });
-    expect((result as any).user).toEqual({ id: '456', nickname: 'newuser' });
+    if (!result.ok) throw new Error('expected success');
+    expect(result.userId).toBe('456');
+    expect(result.token).toEqual({ access_token: 'impersonate-token' });
+    expect(result.user).toEqual({ id: '456', nickname: 'newuser' });
   });
 
   it('should use existing participant when user exists', async () => {
@@ -87,16 +101,17 @@ describe('createParticipant', () => {
     mockUsersApi.users = jest.fn().mockResolvedValue({ data: { data: [existingUser] } });
     (readParticipant as jest.Mock).mockResolvedValue({ ok: true, user: existingUser });
 
-    const result = await createParticipant(config, 'clientId', 'clientSecret', mockOAuthApi, {
+    const result = (await createParticipant(config, 'clientId', 'clientSecret', mockOAuthApi, {
       createOptions: {
         username: 'existinguser',
         extendedData: { chatbotID: '31' },
         fetchUserInfo: true,
       },
-    });
+    })) as CreateParticipantSuccess;
 
     expect(result.ok).toBe(true);
-    expect((result as any).userId).toBe('123');
+    if (!result.ok) throw new Error('expected success');
+    expect(result.userId).toBe('123');
     expect(introspectToken).not.toHaveBeenCalled();
   });
 
@@ -104,16 +119,17 @@ describe('createParticipant', () => {
     mockUsersApi.users = jest.fn().mockResolvedValue({ data: { data: [] } });
     (introspectToken as jest.Mock).mockResolvedValue({ resource: { id: '789' } });
 
-    const result = await createParticipant(config, 'clientId', 'clientSecret', mockOAuthApi, {
+    const result = (await createParticipant(config, 'clientId', 'clientSecret', mockOAuthApi, {
       createOptions: {
         username: 'testuser',
         fetchUserInfo: false,
       },
-    });
+    })) as CreateParticipantSuccess;
 
     expect(result.ok).toBe(true);
-    expect((result as any).userId).toBe('789');
-    expect((result as any).user).toBeNull();
+    if (!result.ok) throw new Error('expected success');
+    expect(result.userId).toBe('789');
+    expect(result.user).toBeNull();
     expect(readParticipant).not.toHaveBeenCalled();
   });
 

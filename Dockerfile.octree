@@ -77,7 +77,9 @@ RUN rm -rf packages/pieces/custom && \
       ! -name facebook-leads \
       ! -name intercom \
       -exec rm -rf {} + && \
-    rm -f bun.lock && bun install
+    rm -rf node_modules && \
+    rm -f bun.lock package-lock.json && \
+    bun install
 
 FROM base AS run
 

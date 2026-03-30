@@ -51,5 +51,64 @@ describe('createMagicLink', () => {
     expect(result.token).toBe('magic-token');
     expect(result.signInUrl).toBe('https://example.org/signin');
     expect(result.redirectUrl).toBe('https://example.org/assemblies/42');
+    expect(generateMagicLinkMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generateMagicLinkPayload: { data: { redirect_url: 'https://example.org/assemblies/42' } },
+      })
+    );
+  });
+
+  it('omits redirect_url in payload when prop is empty', async () => {
+    const result = await createMagicLink.run(
+      createMockActionContext({
+        auth: decidimCustomAuth,
+        propsValue: {
+          accessToken: 'user-token',
+          redirectUrl: '',
+        },
+      }) as Parameters<typeof createMagicLink.run>[0]
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected success');
+    expect(result).not.toHaveProperty('redirectUrl');
+    expect(generateMagicLinkMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generateMagicLinkPayload: { data: {} },
+      })
+    );
+  });
+
+  it('rejects non-https redirect_url', async () => {
+    const result = await createMagicLink.run(
+      createMockActionContext({
+        auth: decidimCustomAuth,
+        propsValue: {
+          accessToken: 'user-token',
+          redirectUrl: 'http://example.org/path',
+        },
+      }) as Parameters<typeof createMagicLink.run>[0]
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.error).toContain('https');
+    expect(generateMagicLinkMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects redirect_url with disallowed characters', async () => {
+    const result = await createMagicLink.run(
+      createMockActionContext({
+        auth: decidimCustomAuth,
+        propsValue: {
+          accessToken: 'user-token',
+          redirectUrl: 'https://example.org/path?x=a%20b',
+        },
+      }) as Parameters<typeof createMagicLink.run>[0]
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(generateMagicLinkMock).not.toHaveBeenCalled();
   });
 });

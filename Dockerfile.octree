@@ -116,9 +116,7 @@ COPY --from=build /usr/src/app/.npmrc ./
 COPY --from=build /usr/src/app/bun.lock ./
 COPY --from=build /usr/src/app/bunfig.toml ./
 COPY --from=build /usr/src/app/LICENSE .
-
 COPY --from=build /usr/src/app/packages ./packages
-
 COPY --from=build /usr/src/app/dist/packages/engine/ ./dist/packages/engine/
 
 RUN --mount=type=cache,target=/root/.bun/install/cache \

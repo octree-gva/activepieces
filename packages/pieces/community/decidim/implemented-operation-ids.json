@@ -1,5 +1,4 @@
 [
-  "apiRoot",
   "Assemblies",
   "blog",
   "blog_component",
@@ -14,7 +13,6 @@
   "generateMagicLink",
   "Initiatives",
   "introspectToken",
-  "magicLinkSignin",
   "organization",
   "organizationData",
   "organizations",

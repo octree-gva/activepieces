@@ -35,6 +35,21 @@ export const draftProposals = createAction({
     'Create, read, update, withdraw, or publish draft proposals. Requires a user access token (e.g. from Impersonate).',
   props: {
     accessToken: userAccessTokenProp(false),
+    connectionSetup: Property.DynamicProperties({
+      auth: decidimAuth,
+      displayName: 'Connection',
+      required: false,
+      refreshers: ['auth'],
+      props: async ({ auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
+        if (auth) return {};
+        return {
+          connectionHint: Property.MarkDown({
+            value:
+              '**Connection required.** Add a valid Decidim connection for this step so dependent fields (components, draft IDs, dropdowns) can load.',
+          }),
+        };
+      },
+    }),
     action: Property.StaticDropdown({
       displayName: 'Action',
       required: true,

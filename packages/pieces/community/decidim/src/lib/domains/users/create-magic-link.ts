@@ -11,6 +11,45 @@ import { createUsersApi } from '../../runtime/clients';
 import type { UsersApiGenerateMagicLinkRequest } from '@octree/decidim-sdk';
 import { userAccessTokenProp } from '../../props';
 
+/** Hostname: letters, digits, dots, hyphens, underscores (no IPv6). Userinfo rejected separately. */
+const REDIRECT_HOST_RE = /^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$/;
+/** Path + query + hash: only a-z, A-Z, 0-9, ._-/?#= (no spaces, %, &, etc.). */
+const REDIRECT_PATH_SEARCH_HASH_RE = /^\/[a-zA-Z0-9._\-/?#=]*$/;
+
+function redirectUrlValidationMessage(trimmed: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return 'redirect_url must be a valid URL';
+  }
+  if (url.protocol !== 'https:') {
+    return 'redirect_url must use https';
+  }
+  if (url.username !== '' || url.password !== '') {
+    return 'redirect_url must not include userinfo';
+  }
+  if (!REDIRECT_HOST_RE.test(url.hostname)) {
+    return 'redirect_url host may only use letters, digits, dots, hyphens, and underscores';
+  }
+  const pathSearchHash = url.pathname + url.search + url.hash;
+  if (!REDIRECT_PATH_SEARCH_HASH_RE.test(pathSearchHash)) {
+    return 'redirect_url path and query may only use letters, digits, and ._-/?#=';
+  }
+  return null;
+}
+
+const redirectUrlSchema = z.string().optional().superRefine((val, ctx) => {
+  if (val === undefined || val.trim() === '') {
+    return;
+  }
+  const trimmed = val.trim();
+  const msg = redirectUrlValidationMessage(trimmed);
+  if (msg !== null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: msg });
+  }
+});
+
 export const createMagicLink = createAction({
   name: 'createMagicLink',
   auth: decidimAuth,
@@ -22,8 +61,9 @@ export const createMagicLink = createAction({
     accessToken: userAccessTokenProp(true),
     redirectUrl: Property.ShortText({
       displayName: 'redirect_url',
-      required: true,
-      description: 'URL the user is sent to after sign-in (OpenAPI request body data.redirect_url).',
+      required: false,
+      description:
+        'Optional. HTTPS URL sent to the API as data.redirect_url. Allowed characters: letters, digits, and ._-/?#= in path and query (no %, &, spaces, or other specials).',
     }),
   },
   async run(context) {
@@ -43,15 +83,19 @@ export const createMagicLink = createAction({
       }
 
       await propsValidation.validateZod(context.propsValue, {
-        redirectUrl: z.string().min(1),
+        redirectUrl: redirectUrlSchema,
       });
+
+      const rawRedirect = context.propsValue.redirectUrl;
+      const trimmedRedirect =
+        typeof rawRedirect === 'string' && rawRedirect.trim() !== '' ? rawRedirect.trim() : undefined;
 
       const api = createUsersApi(resolved.baseConfiguration, resolved.rawAccessToken);
       const authHeader = bearerAuthorization(resolved.rawAccessToken);
       const magicReq: UsersApiGenerateMagicLinkRequest = {
         authorization: authHeader,
         generateMagicLinkPayload: {
-          data: { redirect_url: context.propsValue.redirectUrl.trim() },
+          data: trimmedRedirect ? { redirect_url: trimmedRedirect } : {},
         },
       };
       const result = await api.generateMagicLink(magicReq);
@@ -73,7 +117,7 @@ export const createMagicLink = createAction({
         token,
         sign_in_url: signInHref,
         signInUrl: signInHref,
-        redirectUrl: context.propsValue.redirectUrl.trim(),
+        ...(trimmedRedirect !== undefined ? { redirectUrl: trimmedRedirect } : {}),
         access_token: resolved.rawAccessToken,
         auth_mode: resolved.mode,
       });

@@ -11,12 +11,10 @@ import { typedComponents } from '../domains/components/typed-components';
 import { organizations } from '../domains/organizations/organizations';
 import { organizationExtendedData } from '../domains/organizations/organization-extended-data';
 import { roles } from '../domains/roles/roles';
-import { oauthIntrospect } from '../domains/oauth/oauth-introspect';
 import { usersList } from '../domains/users/users-list';
 import { createMagicLink } from '../domains/users/create-magic-link';
 import { customApiCallAction } from '../actions/custom-api-call';
 import { meExtendedData } from '../domains/users/me-extended-data';
-import { oauthRequestToken } from '../domains/oauth/oauth-request-token';
 import { upsertParticipant } from '../domains/users/upsert-participant';
 
 /** Single import surface for createPiece; keep alphabetical-ish by domain */
@@ -27,8 +25,6 @@ export const allActions: Action[] = [
   draftProposals,
   getParticipatorySpace,
   impersonate,
-  oauthIntrospect,
-  oauthRequestToken,
   organizationExtendedData,
   organizations,
   meExtendedData,

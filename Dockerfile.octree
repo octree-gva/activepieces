@@ -61,7 +61,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 
 COPY . .
 
-RUN npx turbo run build --filter=web --filter=@activepieces/engine --filter=api
+RUN npx turbo run build --filter=web --filter=@activepieces/engine --filter=api --filter=worker
 
 RUN rm -rf packages/pieces/custom && \
     find packages/pieces/community -mindepth 1 -maxdepth 1 -type d \

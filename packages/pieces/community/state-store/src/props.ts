@@ -17,6 +17,7 @@ export const namespaceProp = Property.ShortText({
   displayName: 'Namespace',
   description: 'Namespace (e.g., "bot:proposal")',
   required: true,
+  defaultValue: `${process.env['AP_STATE_STORE_NAMESPACE'] || 'ap:default'}`,
 });
 
 export const conversationIdProp = Property.ShortText({

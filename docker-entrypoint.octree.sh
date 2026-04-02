@@ -27,10 +27,6 @@ if [ -z "$AP_WORKER_TOKEN" ] && [ -n "$AP_JWT_SECRET" ]; then
 fi
 
 # Precondition:
-if [ -z "$AP_CONTAINER_TYPE" ] || [ "$AP_CONTAINER_TYPE" != "WORKER" ] || [ "$AP_CONTAINER_TYPE" != "WORKER_AND_APP" ]; then
-    echo "AP_CONTAINER_TYPE must be WORKER or WORKER_AND_APP"
-    exit 1
-fi
 if [ -z "$AP_REDIS_URL" ]; then
     echo "AP_REDIS_URL must be set"
     exit 1

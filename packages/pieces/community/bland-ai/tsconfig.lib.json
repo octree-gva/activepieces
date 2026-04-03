@@ -2,20 +2,14 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "commonjs",
-    "outDir": "./dist",
-<<<<<<<< HEAD:packages/server/utils/tsconfig.lib.json
-    "declaration": true,
-    "declarationMap": true,
-    "types": ["node"],
-========
     "rootDir": ".",
->>>>>>>> main:packages/pieces/community/bland-ai/tsconfig.lib.json
     "baseUrl": ".",
     "paths": {},
+    "outDir": "./dist",
     "declaration": true,
     "declarationMap": true,
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.spec.ts", "src/**/*.test.ts"]
+  "exclude": ["jest.config.ts", "src/**/*.spec.ts", "src/**/*.test.ts"]
 }

@@ -62,11 +62,8 @@ activepieces-engine.js
 # scratch pad
 scratch.md
 
-# environment variables (local / secrets — not templates)
-.env
-.env.*
-!.env.example
-!.env.*.example
+# environment variables
+.env*
 
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md

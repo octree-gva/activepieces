@@ -81,13 +81,10 @@ export function FlowsDetails({
         ),
         cell: ({ row }) => (
           <div
-            className="flex items-center gap-1 text-foreground hover:underline cursor-pointer max-w-[300px]"
-            onClick={() =>
-              window.open(
-                `/projects/${row.original.projectId}/flows/${row.original.flowId}`,
-                '_blank',
-              )
-            }
+            className={cn(
+              'flex items-center gap-3 flex-wrap',
+              DASHBOARD_CONTENT_PADDING_X,
+            )}
           >
             <Workflow className="size-4 mr-2 text-primary shrink-0" />
             <span className="truncate">{row.original.flowName}</span>

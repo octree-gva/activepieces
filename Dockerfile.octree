@@ -20,7 +20,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         unzip \
         curl \
         ca-certificates \
-        libcap-dev && \
+        libcap-dev \
+        redis-tools && \
     yarn config set python /usr/bin/python3 && \
     sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
     locale-gen en_US.UTF-8
@@ -42,9 +43,11 @@ RUN bun --version
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g --no-fund --no-audit \
     node-gyp \
+    ts-node@10.7.0 \
     npm@11.11.0 \
     pm2@6.0.10 \
-    typescript@4.9.4
+    typescript@4.9.4 \
+    wait-on@7.2.0
 
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     cd /usr/src && bun install isolated-vm@6.0.2
@@ -89,7 +92,7 @@ ENV AP_API_KEY="api-key" \
     AP_CACHE_PATH="./dev/cache" \
     AP_CHATBOT_ENABLED=true \
     AP_CONFIG_PATH="./dev/config" \
-    AP_DB_TYPE=SQLITE3 \
+    AP_DB_TYPE=POSTGRES \
     AP_DEV_PIECES="decidim,store,webhook,opnform,whatsapp,stripe,i18n-store,state-store" \
     AP_ENRICH_ERROR_CONTEXT=true \
     AP_ENVIRONMENT="prod" \
@@ -97,12 +100,13 @@ ENV AP_API_KEY="api-key" \
     AP_LOG_LEVEL=warn \
     AP_LOG_PRETTY=false \
     AP_PIECES_SOURCE='FILE' \
-    AP_QUEUE_MODE=MEMORY \
+    AP_QUEUE_MODE=REDIS \
     AP_TELEMETRY_ENABLED=false \
     AP_TRIGGER_DEFAULT_POLL_INTERVAL=1 \
     AP_WEBHOOK_TIMEOUT_SECONDS=30 \
     AP_PIECES_SYNC_MODE=NONE \
     AP_WEBHOOK_URL="http://localhost:3000" \
+    AP_PORT=3000 \
     ROOT=/usr/src/app
 
 COPY --from=build /usr/src/app/packages/server/api/src/assets/default.cf /usr/local/etc/isolate

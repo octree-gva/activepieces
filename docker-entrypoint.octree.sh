@@ -3,9 +3,10 @@
 export AP_CONTAINER_TYPE="${AP_CONTAINER_TYPE:-WORKER_AND_APP}"
 export AP_PORT="${AP_PORT:-80}"
 export AP_PM2_INSTANCES="${AP_PM2_INSTANCES:-1}"
-
-
-
+export PM2_LOG_ROTATE_MAX_SIZE="${PM2_LOG_ROTATE_MAX_SIZE:-10M}"
+export PM2_LOG_ROTATE_RETAIN="${PM2_LOG_ROTATE_RETAIN:-30}"
+export HOME=${HOME:-$ROOT}
+export AP_PORT=${AP_PORT:-80}
 
 echo "AP_CONTAINER_TYPE: $AP_CONTAINER_TYPE"
 echo "AP_PORT: $AP_PORT"
@@ -43,36 +44,101 @@ if [ -z "$AP_WORKER_TOKEN" ]; then
     echo "AP_WORKER_TOKEN must be set"
     exit 1
 fi
+
+# Postgres: wait-on TCP. Redis: 3x PING, 3s sleep between failures. AP_SKIP_WAIT_FOR_DEPS=1 skips both.
+WAIT_MS=120000
+if [ -n "${AP_POSTGRES_HOST:-}" ]; then
+    echo "wait-on -t ${WAIT_MS} tcp:${AP_POSTGRES_HOST}:${AP_POSTGRES_PORT:-5432}"
+    wait-on -t "$WAIT_MS" "tcp:${AP_POSTGRES_HOST}:${AP_POSTGRES_PORT:-5432}"
+fi
+if [ -n "${AP_REDIS_URL:-}" ]; then
+  if redis-cli -u "$AP_REDIS_URL" PING 2>/dev/null | grep -q PONG; then
+    echo "Redis Ready"
+  else
+    sleep 3
+    if redis-cli -u "$AP_REDIS_URL" PING 2>/dev/null | grep -q PONG; then
+      echo "Redis Ready"
+    else
+      echo "Redis Not Ready"
+      exit 1
+    fi
+  fi
+fi
+
 # Build PM2 ecosystem config
-ECOSYSTEM="
+echo "
 module.exports = {
     apps: [
     {
         name: 'activepieces-app',
         script: 'packages/server/api/dist/src/bootstrap.js',
         node_args: '--enable-source-maps',
-        instances: 1
-        env: { AP_CONTAINER_TYPE: 'APP' }
+        exec_mode: 'fork',
+        instances: 1,
+        env: { AP_CONTAINER_TYPE: 'APP' },
+        kill_timeout: 3000,
+        min_uptime: '10s',
+        restart_delay: 5000,
+        log_date_format: 'YYYY-MM-DD HH:mm Z',
+        combine_logs: true,
+        merge_logs: true,
+        time: true,
+        out_file: '/var/log/run.log',
+        error_file: '/var/log/run.log',
+
     },
     {
         name: 'activepieces-worker',
         script: 'packages/server/worker/dist/src/bootstrap.js',
         node_args: '--enable-source-maps',
-        instances: 1
+        exec_mode: 'fork',
+        env: { AP_CONTAINER_TYPE: 'WORKER_AND_APP' },
+        instances: 1,
+        kill_timeout: 3000,
+        log_date_format: 'YYYY-MM-DD HH:mm Z',
+        combine_logs: true,
+        merge_logs: true,
+        time: true,
+        out_file: '/var/log/run.log',
+        error_file: '/var/log/run.log',
     },
     {
         name: 'activepieces-state-store-bridge',
-        script: 'npx ts-node packages/pieces/community/state-store/bin/redis-webhook-bridge.ts',
+        script: 'packages/pieces/community/state-store/bin/redis-webhook-bridge.ts',
+        args: '--webhook-url http://localhost:${AP_PORT}/sync --redis-url $AP_REDIS_URL --namespace $AP_STATE_STORE_NAMESPACE',
         instances: 1,
-        env: {
-            AP_REDIS_URL: '$AP_REDIS_URL',
-            AP_NAMESPACE: '$AP_STATE_STORE_NAMESPACE'
-        }
+        exec_mode: 'fork',
+        interpreter: 'ts-node',
+        kill_timeout: 3000,
+        log_date_format: 'YYYY-MM-DD HH:mm Z',
+        combine_logs: true,
+        merge_logs: true,
+        time: true,
+        out_file: '/var/log/run.log',
+        error_file: '/var/log/run.log',
     }
     ]
 };
-"
+" > /tmp/ecosystem.config.js
 
-PM2_RUN=${PM2_RUN:-activepieces-app,activepieces-worker}
 echo "Starting Activepieces with PM2 (${AP_CONTAINER_TYPE} mode)"
+
+# Start PM2 daemon first (needed for pm2 commands to work)
+pm2 ping || pm2 kill || true
+pm2 ping || true
+
+# Install and configure pm2-logrotate
+if ! pm2 list 2>/dev/null | grep -q "pm2-logrotate" || [ ! -d "$HOME/.pm2/modules/pm2-logrotate" ]; then
+  pm2 install pm2-logrotate || true
+fi
+
+# Configure pm2-logrotate
+pm2 set pm2-logrotate:max_size "${PM2_LOG_ROTATE_MAX_SIZE}" || true
+pm2 set pm2-logrotate:retain "${PM2_LOG_ROTATE_RETAIN}" || true
+pm2 set pm2-logrotate:rotateInterval "0 0 * * *" || true
+pm2 set pm2-logrotate:workerInterval 30 || true
+pm2 set pm2-logrotate:compress true || true
+
 pm2-runtime start /tmp/ecosystem.config.js
+
+

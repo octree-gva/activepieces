@@ -12,16 +12,20 @@ echo "AP_CONTAINER_TYPE: $AP_CONTAINER_TYPE"
 echo "AP_PORT: $AP_PORT"
 echo "AP_PM2_INSTANCES: $AP_PM2_INSTANCES"
 
-# Auto-generate worker token if not set and JWT secret is available
+# Auto-generate worker token if not set and JWT secret is available.
+# Must match packages/server/api jwt-utils (HS256, issuer activepieces, kid 1) and the same AP_JWT_SECRET the API uses.
+# If you set AP_WORKER_TOKEN yourself, it must be a JWT signed with the current AP_JWT_SECRET (not from an old deploy).
 if [ -z "$AP_WORKER_TOKEN" ] && [ -n "$AP_JWT_SECRET" ]; then
     echo "Auto-generating AP_WORKER_TOKEN..."
     export AP_WORKER_TOKEN=$(node -e "
         const jwt = require('jsonwebtoken');
         const crypto = require('crypto');
+        const secret = String(process.env.AP_JWT_SECRET || '').trim();
+        const expiresInSeconds = Math.floor(100 * 365.25 * 24 * 60 * 60);
         const token = jwt.sign(
             { id: crypto.randomUUID(), type: 'WORKER' },
-            process.env.AP_JWT_SECRET,
-            { expiresIn: '100y', keyid: '1', algorithm: 'HS256', issuer: 'activepieces' }
+            secret,
+            { expiresIn: expiresInSeconds, keyid: '1', algorithm: 'HS256', issuer: 'activepieces' }
         );
         process.stdout.write(token);
     ")
@@ -65,6 +69,9 @@ if [ -n "${AP_REDIS_URL:-}" ]; then
   fi
 fi
 
+# Worker health HTTP binds AP_PORT; PM2 increment_var gives each worker a distinct port. Base = API port + 1 so workers do not collide with the app.
+AP_WORKER_HEALTH_PORT_BASE=$((AP_PORT + 1))
+
 # Build PM2 ecosystem config
 echo "
 module.exports = {
@@ -85,15 +92,15 @@ module.exports = {
         time: true,
         out_file: '/var/log/run.log',
         error_file: '/var/log/run.log',
-
     },
     {
         name: 'activepieces-worker',
         script: 'packages/server/worker/dist/src/bootstrap.js',
         node_args: '--enable-source-maps',
         exec_mode: 'fork',
-        env: { AP_CONTAINER_TYPE: 'WORKER_AND_APP' },
-        instances: 1,
+        env: { AP_CONTAINER_TYPE: 'WORKER', AP_PORT: '$AP_WORKER_HEALTH_PORT_BASE' },
+        increment_var: 'AP_PORT',
+        instances: 3,
         kill_timeout: 3000,
         log_date_format: 'YYYY-MM-DD HH:mm Z',
         combine_logs: true,

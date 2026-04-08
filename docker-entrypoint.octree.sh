@@ -72,6 +72,9 @@ fi
 # Worker health HTTP binds AP_PORT; PM2 increment_var gives each worker a distinct port. Base = API port + 1 so workers do not collide with the app.
 AP_WORKER_HEALTH_PORT_BASE=$((AP_PORT + 1))
 
+# Worker processes use AP_FRONTEND_URL for Socket.IO to the API. The public AP_FRONTEND_URL (browser / Traefik host:port) is often wrong inside the container — use the API listen address unless the operator overrides (e.g. external worker container).
+AP_WORKER_FRONTEND_URL="${AP_WORKER_FRONTEND_URL:-http://127.0.0.1:${AP_PORT}}"
+
 # Build PM2 ecosystem config
 echo "
 module.exports = {
@@ -98,7 +101,7 @@ module.exports = {
         script: 'packages/server/worker/dist/src/bootstrap.js',
         node_args: '--enable-source-maps',
         exec_mode: 'fork',
-        env: { AP_CONTAINER_TYPE: 'WORKER', AP_PORT: '$AP_WORKER_HEALTH_PORT_BASE' },
+        env: { AP_CONTAINER_TYPE: 'WORKER', AP_PORT: '${AP_WORKER_HEALTH_PORT_BASE}', AP_FRONTEND_URL: '${AP_WORKER_FRONTEND_URL}' },
         increment_var: 'AP_PORT',
         instances: 3,
         kill_timeout: 3000,

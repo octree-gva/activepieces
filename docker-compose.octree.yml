@@ -7,18 +7,21 @@ services:
     restart: unless-stopped
     ports:
       - '8080:80'
+      - '3000:3000'
     depends_on:
       - postgres
       - redis
     env_file: .env
     environment:
-      - AP_CONTAINER_TYPE=APP
+      - AP_CONTAINER_TYPE=APP_AND_WORKER
     volumes:
       - ./cache:/usr/src/app/cache
     networks:
       - activepieces
+
   postgres:
-    image: 'postgres:14.4'
+    # pgvector required for knowledge base embeddings (CREATE EXTENSION vector)
+    image: 'pgvector/pgvector:pg14'
     container_name: postgres
     restart: unless-stopped
     env_file: .env
@@ -27,7 +30,7 @@ services:
       - 'POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD}'
       - 'POSTGRES_USER=${AP_POSTGRES_USERNAME}'
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql/data
     networks:
       - activepieces
   redis:
@@ -35,11 +38,11 @@ services:
     container_name: redis
     restart: unless-stopped
     volumes:
-      - 'redis_data:/data'
+      - 'red_data:/data'
     networks:
       - activepieces
 volumes:
-  postgres_data:
-  redis_data:
+  pg_data:
+  red_data:
 networks:
   activepieces:

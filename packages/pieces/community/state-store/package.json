@@ -20,5 +20,10 @@
     "flatted": "^3.2.9",
     "ioredis": "5.4.1",
     "tslib": "2.6.2"
+  },
+  "devDependencies": {
+    "@types/jest": "30.0.0",
+    "jest": "30.0.5",
+    "ts-jest": "29.4.5"
   }
 }

@@ -23,7 +23,7 @@ describe('updateParticipant', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUsersApi = {
-      setUserData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+      setUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
     } as unknown as UsersApi;
     (UsersApi as Mock).mockImplementation(() => mockUsersApi);
     (OAuthApi as Mock).mockImplementation(() => ({
@@ -33,7 +33,9 @@ describe('updateParticipant', () => {
 
   it('should update participant extended data', async () => {
     const updatedData = { chatbotID: '31' };
-    mockUsersApi.setUserData = vi.fn().mockResolvedValue({ data: { data: updatedData } });
+    mockUsersApi.setUserExtendedData = vi
+      .fn()
+      .mockResolvedValue({ data: { data: updatedData } });
 
     const result = await updateParticipant(config, 'clientId', 'clientSecret', {
       updateOptions: {
@@ -49,7 +51,9 @@ describe('updateParticipant', () => {
 
   it('should update data at custom path', async () => {
     const updatedData = { nested: { field: 'value' } };
-    mockUsersApi.setUserData = vi.fn().mockResolvedValue({ data: { data: updatedData } });
+    mockUsersApi.setUserExtendedData = vi
+      .fn()
+      .mockResolvedValue({ data: { data: updatedData } });
 
     await updateParticipant(config, 'clientId', 'clientSecret', {
       updateOptions: {
@@ -59,7 +63,7 @@ describe('updateParticipant', () => {
       },
     });
 
-    expect(mockUsersApi.setUserData).toHaveBeenCalledWith(
+    expect(mockUsersApi.setUserExtendedData).toHaveBeenCalledWith(
       expect.objectContaining({
         authorization: 'Bearer token',
         userExtendedDataPayload: {
@@ -78,7 +82,7 @@ describe('updateParticipant', () => {
       },
     });
 
-    expect(mockUsersApi.setUserData).toHaveBeenCalledWith(
+    expect(mockUsersApi.setUserExtendedData).toHaveBeenCalledWith(
       expect.objectContaining({
         authorization: 'Bearer token',
         userExtendedDataPayload: {

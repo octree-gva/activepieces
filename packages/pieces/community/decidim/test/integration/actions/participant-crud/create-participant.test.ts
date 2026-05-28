@@ -48,9 +48,9 @@ const mockOAuthApi = {
 } as unknown as OAuthApi;
 
 const mockUsersApi = {
-  users: vi.fn(),
-  userData: vi.fn().mockResolvedValue({ data: { data: {} } }),
-  setUserData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+  listUsers: vi.fn(),
+  getUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+  setUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
 } as unknown as UsersApi;
 
 const createContext = (propsValue: {
@@ -77,10 +77,10 @@ describe('Create Participant Integration', () => {
 
   it('should create new participant when user does not exist', async () => {
     const mockUser = { id: '456', nickname: 'newuser', email: 'newuser@example.com' };
-    mockUsersApi.users = vi.fn()
+    mockUsersApi.listUsers = vi.fn()
       .mockResolvedValueOnce({ data: { data: [] } })
       .mockResolvedValueOnce({ data: { data: [mockUser] } });
-    mockUsersApi.userData = vi.fn().mockResolvedValue({ data: { data: {} } });
+    mockUsersApi.getUserExtendedData = vi.fn().mockResolvedValue({ data: { data: {} } });
     (mockOAuthApi.createToken as Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
     vi.spyOn(systemAccessTokenModule, 'systemAccessToken').mockResolvedValue('system-token');
     vi.spyOn(introspectTokenModule, 'introspectToken').mockResolvedValue({
@@ -108,8 +108,8 @@ describe('Create Participant Integration', () => {
 
   it('should use existing participant when user exists', async () => {
     const existingUser = { id: 123, nickname: 'existinguser' };
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [existingUser] } });
-    mockUsersApi.userData = vi.fn().mockResolvedValue({ data: { data: {} } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [existingUser] } });
+    mockUsersApi.getUserExtendedData = vi.fn().mockResolvedValue({ data: { data: {} } });
     (mockOAuthApi.createToken as Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
 
     const result = await participantCrud.run(createContext({
@@ -127,7 +127,7 @@ describe('Create Participant Integration', () => {
   });
 
   it('should create participant without fetching user info', async () => {
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [] } });
     (mockOAuthApi.createToken as Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
     vi.spyOn(systemAccessTokenModule, 'systemAccessToken').mockResolvedValue('system-token');
     vi.spyOn(introspectTokenModule, 'introspectToken').mockResolvedValue({
@@ -150,7 +150,7 @@ describe('Create Participant Integration', () => {
   });
 
   it('should return error when user creation fails', async () => {
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [] } });
     (mockOAuthApi.createToken as Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
     vi.spyOn(systemAccessTokenModule, 'systemAccessToken').mockResolvedValue('system-token');
     vi.spyOn(introspectTokenModule, 'introspectToken').mockResolvedValue(null);
@@ -172,7 +172,7 @@ describe('Create Participant Integration', () => {
       message: 'Bad request',
       isAxiosError: true,
     };
-    mockUsersApi.users = vi.fn().mockRejectedValue(axiosError);
+    mockUsersApi.listUsers = vi.fn().mockRejectedValue(axiosError);
 
     const result = await participantCrud.run(createContext({
       action: 'create',

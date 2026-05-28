@@ -120,7 +120,7 @@ export const proposals = createAction({
           searchOptions: o,
         });
 
-        const result = await api.proposals(request);
+        const result = await api.listProposals(request);
 
         const list = (result.data as { data?: unknown[] })?.data ?? [];
         const arr = Array.isArray(list) ? list : [];
@@ -138,7 +138,7 @@ export const proposals = createAction({
           accessToken: resolved.rawAccessToken,
           readOptions: o,
         });
-        const result = await api.proposal(readReq);
+        const result = await api.getProposal(readReq);
         const data = (result.data as { data?: unknown })?.data;
         const rid =
           data && typeof data === 'object' && data !== null && 'id' in data
@@ -157,8 +157,8 @@ export const proposals = createAction({
           accessToken: resolved.rawAccessToken,
           voteOptions: o,
         });
-        const result = await api.voteProposal(voteReq);
-        const proposal_id = voteReq.voteAProposalPayload.proposal_id;
+        const result = await api.castProposalVote(voteReq);
+        const proposal_id = voteReq.voteProposalCreateBody.proposal_id;
         return response({
           data: result.data,
           proposal_id: String(proposal_id),

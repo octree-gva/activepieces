@@ -100,7 +100,7 @@ export async function searchParticipants(
   }
 
   const { usersApi, authorization } = await getUsersApi(config, clientId, clientSecret);
-  const searchResult = await usersApi.users(
+  const searchResult = await usersApi.listUsers(
     asUsersApiUsersRequest({
       authorization,
       filterExtendedDataCont: extendedDataQuery,
@@ -136,7 +136,7 @@ export async function createParticipant(
 
   // Search if user exists
   const { usersApi, authorization } = await getUsersApi(config, clientId, clientSecret);
-  const searchResult = await usersApi.users(
+  const searchResult = await usersApi.listUsers(
     asUsersApiUsersRequest({
       authorization,
       filterNicknameEq: username,
@@ -191,7 +191,7 @@ export async function createParticipant(
   // Set extended_data if provided
   if (extendedData) {
     const { usersApi: userApi, authorization } = await getUsersApi(config, clientId, clientSecret, decidimUserId);
-    await userApi.setUserData(
+    await userApi.setUserExtendedData(
       asUsersApiSetUserDataRequest({
         authorization,
         userExtendedDataPayload: {
@@ -239,7 +239,7 @@ export async function readParticipant(
   // Get user data
   let userData = null;
   try {
-    const dataResult = await usersApi.userData(
+    const dataResult = await usersApi.getUserExtendedData(
       asUsersApiUserDataRequest({
         authorization,
         objectPath: '.',
@@ -255,10 +255,10 @@ export async function readParticipant(
   }
 
   // Get user info
-  const userResult = await usersApi.users(
+  const userResult = await usersApi.listUsers(
     asUsersApiUsersRequest({
       authorization,
-      filterIdEq: parseInt(userId),
+      filterIdEq: parseInt(userId, 10),
       perPage: 1,
     })
   );
@@ -310,7 +310,7 @@ export async function updateParticipant(
   const dataPath = (updateOptions['dataPath'] as string) || '.';
 
   const { usersApi, authorization } = await getUsersApi(config, clientId, clientSecret, userId);
-  const result = await usersApi.setUserData(
+  const result = await usersApi.setUserExtendedData(
     asUsersApiSetUserDataRequest({
       authorization,
       userExtendedDataPayload: {

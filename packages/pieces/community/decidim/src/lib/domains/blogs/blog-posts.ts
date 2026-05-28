@@ -125,7 +125,7 @@ export const blogPosts = createAction({
           searchOptions,
         });
 
-        const result = await blogsApi.blogs(asBlogsApiBlogsRequest(request));
+        const result = await blogsApi.listBlogPosts(asBlogsApiBlogsRequest(request));
         const posts =
           (result.data as { data?: unknown[] } | undefined)?.data ?? [];
         const list = Array.isArray(posts) ? posts : [];
@@ -150,7 +150,7 @@ export const blogPosts = createAction({
           readOptions,
         });
 
-        const result = await blogsApi.blog(asBlogsApiBlogRequest(request));
+        const result = await blogsApi.getBlogPost(asBlogsApiBlogRequest(request));
         const data = (result.data as { data?: unknown } | undefined)?.data;
         return response({ post: data });
       }

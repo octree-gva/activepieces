@@ -56,9 +56,9 @@ describe('createParticipant', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUsersApi = {
-      users: vi.fn().mockResolvedValue({ data: { data: [] } }),
-      userData: vi.fn().mockResolvedValue({ data: { data: {} } }),
-      setUserData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+      listUsers: vi.fn().mockResolvedValue({ data: { data: [] } }),
+      getUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+      setUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
     } as unknown as UsersApi;
     mockOAuthApi = {
       createToken: vi.fn().mockResolvedValue({ data: { access_token: 'token' } }),
@@ -70,7 +70,7 @@ describe('createParticipant', () => {
   });
 
   it('should create new participant when user does not exist', async () => {
-    mockUsersApi.users = vi.fn()
+    mockUsersApi.listUsers = vi.fn()
       .mockResolvedValueOnce({ data: { data: [] } })
       .mockResolvedValueOnce({ data: { data: [{ id: '456', nickname: 'newuser' }] } });
     (introspectToken as Mock).mockResolvedValue({ resource: { id: '456' } });
@@ -98,7 +98,7 @@ describe('createParticipant', () => {
 
   it('should use existing participant when user exists', async () => {
     const existingUser = { id: 123, nickname: 'existinguser' };
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [existingUser] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [existingUser] } });
     (readParticipant as Mock).mockResolvedValue({ ok: true, user: existingUser });
 
     const result = (await createParticipant(config, 'clientId', 'clientSecret', mockOAuthApi, {
@@ -116,7 +116,7 @@ describe('createParticipant', () => {
   });
 
   it('should create participant without fetching user info', async () => {
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [] } });
     (introspectToken as Mock).mockResolvedValue({ resource: { id: '789' } });
 
     const result = (await createParticipant(config, 'clientId', 'clientSecret', mockOAuthApi, {
@@ -134,7 +134,7 @@ describe('createParticipant', () => {
   });
 
   it('should return error when user creation fails', async () => {
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [] } });
     (introspectToken as Mock).mockResolvedValue(null);
 
     const result = await createParticipant(config, 'clientId', 'clientSecret', mockOAuthApi, {

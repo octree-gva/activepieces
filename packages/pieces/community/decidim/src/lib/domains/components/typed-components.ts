@@ -116,7 +116,7 @@ export const typedComponents = createAction({
         const perPage = z.number().int().min(1).max(100).default(50).parse(o.perPage ?? 50);
         const result =
           kind === 'blog'
-            ? await api.blogComponents(
+            ? await api.listBlogComponents(
                 buildBlogComponentsListParams({
                   authorization: auth,
                   page,
@@ -124,7 +124,7 @@ export const typedComponents = createAction({
                   listOptions: o,
                 })
               )
-            : await api.proposalComponents(
+            : await api.listProposalComponents(
                 buildProposalComponentsListParams({
                   authorization: auth,
                   page,
@@ -148,14 +148,14 @@ export const typedComponents = createAction({
         const id = z.number().int().positive().parse(o.componentId);
         const result =
           kind === 'blog'
-            ? await api.blogComponent(
+            ? await api.showBlogComponent(
                 buildBlogComponentReadParams({
                   authorization: auth,
                   componentId: id,
                   readOptions: o,
                 })
               )
-            : await api.proposalComponent(
+            : await api.showProposalComponent(
                 buildProposalComponentReadParams({
                   authorization: auth,
                   componentId: id,

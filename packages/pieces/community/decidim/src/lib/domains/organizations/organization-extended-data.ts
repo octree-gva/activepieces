@@ -1,7 +1,7 @@
 import { createAction, Property, InputPropertyMap } from '@activepieces/pieces-framework';
 import { z } from 'zod';
 import type {
-  OrganizationsExtendedDataApiOrganizationDataRequest,
+  OrganizationsExtendedDataApiGetOrganizationExtendedDataRequest,
   OrganizationsExtendedDataApiSetOrganizationExtendedDataRequest,
 } from '@octree/decidim-sdk';
 import { decidimAuth } from '../../../decidimAuth';
@@ -89,12 +89,12 @@ export const organizationExtendedData = createAction({
         assertProp(o.objectPath, 'Object path required');
         const id = z.number().int().positive().parse(o.organizationId);
         const objectPath = z.string().min(1).parse(o.objectPath);
-        const readReq: OrganizationsExtendedDataApiOrganizationDataRequest = {
+        const readReq: OrganizationsExtendedDataApiGetOrganizationExtendedDataRequest = {
           id,
           objectPath,
           authorization: auth,
         };
-        const result = await api.organizationData(readReq);
+        const result = await api.getOrganizationExtendedData(readReq);
         return response({
           data: (result.data as { data?: unknown })?.data,
           organization_id: String(id),

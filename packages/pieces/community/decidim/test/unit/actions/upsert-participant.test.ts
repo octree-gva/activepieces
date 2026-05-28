@@ -29,9 +29,9 @@ describe('upsertParticipant', () => {
   } as unknown as OAuthApi;
 
   const mockUsersApi = {
-    users: vi.fn(),
-    setUserData: vi.fn().mockResolvedValue({ data: { data: {} } }),
-    userData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+    listUsers: vi.fn(),
+    setUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+    getUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
   } as unknown as UsersApi;
 
   beforeEach(() => {
@@ -51,7 +51,7 @@ describe('upsertParticipant', () => {
   }
 
   it('returns existing participant by nickname', async () => {
-    mockUsersApi.users = vi.fn().mockResolvedValue({
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({
       data: { data: [{ id: 10, nickname: 'john' }] },
     });
 
@@ -68,7 +68,7 @@ describe('upsertParticipant', () => {
   });
 
   it('creates participant by email when missing', async () => {
-    mockUsersApi.users = vi
+    mockUsersApi.listUsers = vi
       .fn()
       .mockResolvedValueOnce({ data: { data: [] } })
       .mockResolvedValueOnce({ data: { data: [{ id: 21, nickname: 'jane' }] } });
@@ -91,7 +91,7 @@ describe('upsertParticipant', () => {
   });
 
   it('searches by extended_data json path', async () => {
-    mockUsersApi.users = vi.fn().mockResolvedValue({
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({
       data: { data: [{ id: 77 }] },
     });
 
@@ -104,7 +104,7 @@ describe('upsertParticipant', () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(mockUsersApi.users).toHaveBeenCalledWith(
+    expect(mockUsersApi.listUsers).toHaveBeenCalledWith(
       expect.objectContaining({
         filterExtendedDataCont: '{"phone": "+12025550123"}',
       })

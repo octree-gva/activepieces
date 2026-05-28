@@ -14,9 +14,10 @@
     "@activepieces/pieces-framework": "workspace:*",
     "@activepieces/shared": "workspace:*",
     "tslib": "2.6.2",
-    "@octree/decidim-sdk": "https://git.octree.ch/api/v4/projects/464/packages/npm/@octree/decidim-sdk/-/@octree/decidim-sdk-0.2.11.tgz"
+    "@octree/decidim-sdk": "https://git.octree.ch/api/v4/projects/464/packages/npm/@octree/decidim-sdk/-/@octree/decidim-sdk-0.3.0.tgz"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "3.0.8",
     "vitest": "3.0.8"
   }
 }

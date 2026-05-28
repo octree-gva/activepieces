@@ -89,8 +89,13 @@ export const upsertParticipant = createAction({
       const { baseUrl, clientId, clientSecret } = extractAuth(context);
       const config = configuration({ baseUrl });
       const oauthApi = new OAuthApi(config);
-      const usersApi = new UsersApi(config);
-      const authorization = `Bearer ${await systemAccessToken(oauthApi, clientId, clientSecret)}`;
+      const token = await systemAccessToken(oauthApi, clientId, clientSecret);
+      const usersApi = new UsersApi({
+        ...config,
+        isJsonMime: config.isJsonMime,
+        accessToken: token,
+      });
+      const authorization = `Bearer ${token}`;
 
       const by = upsertBySchema.parse(context.propsValue.by);
       const options = (context.propsValue.options as Record<string, unknown>) || {};
@@ -126,7 +131,7 @@ export const upsertParticipant = createAction({
         matchedValue = String(value);
       }
 
-      const searchResult = await usersApi.users(asUsersApiUsersRequest(searchReq));
+      const searchResult = await usersApi.listUsers(asUsersApiUsersRequest(searchReq));
       const existing = searchResult.data?.data?.[0] ?? null;
 
       if (existing) {

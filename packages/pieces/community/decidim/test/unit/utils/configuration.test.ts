@@ -5,14 +5,14 @@ describe('configuration', () => {
   it('should create configuration with basePath from baseUrl', () => {
     const result = configuration({ baseUrl: 'https://example.com' });
 
-    expect(result.basePath).toBe('https://example.com/api/rest_full/v0.2');
+    expect(result.basePath).toBe('https://example.com/api/rest_full/v0.3');
     expect(result.isJsonMime('application/json')).toBe(true);
   });
 
   it('should handle baseUrl with trailing slash', () => {
     const result = configuration({ baseUrl: 'https://example.com/' });
 
-    expect(result.basePath).toBe('https://example.com//api/rest_full/v0.2');
+    expect(result.basePath).toBe('https://example.com/api/rest_full/v0.3');
   });
 
   it('should spread additional properties', () => {

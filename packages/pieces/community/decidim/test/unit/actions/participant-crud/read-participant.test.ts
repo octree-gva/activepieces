@@ -27,8 +27,8 @@ describe('readParticipant', () => {
     vi.clearAllMocks();
     mockIsAxiosError.mockReturnValue(false);
     mockUsersApi = {
-      userData: vi.fn().mockResolvedValue({ data: { data: {} } }),
-      users: vi.fn().mockResolvedValue({ data: { data: [] } }),
+      getUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+      listUsers: vi.fn().mockResolvedValue({ data: { data: [] } }),
     } as unknown as UsersApi;
     (UsersApi as Mock).mockImplementation(() => mockUsersApi);
     (OAuthApi as Mock).mockImplementation(() => ({
@@ -39,8 +39,10 @@ describe('readParticipant', () => {
   it('should return participant data and user info', async () => {
     const mockUserData = { chatbotID: '31' };
     const mockUser = { id: 123, nickname: 'testuser' };
-    mockUsersApi.userData = vi.fn().mockResolvedValue({ data: { data: mockUserData } });
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [mockUser] } });
+    mockUsersApi.getUserExtendedData = vi
+      .fn()
+      .mockResolvedValue({ data: { data: mockUserData } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [mockUser] } });
 
     const result = await readParticipant(config, 'clientId', 'clientSecret', {
       readOptions: { userId: '123' },
@@ -59,8 +61,8 @@ describe('readParticipant', () => {
       isAxiosError: true,
     };
     mockIsAxiosError.mockReturnValue(true);
-    mockUsersApi.userData = vi.fn().mockRejectedValue(axiosError);
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [mockUser] } });
+    mockUsersApi.getUserExtendedData = vi.fn().mockRejectedValue(axiosError);
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [mockUser] } });
 
     const result = await readParticipant(config, 'clientId', 'clientSecret', {
       readOptions: { userId: '123' },
@@ -77,7 +79,7 @@ describe('readParticipant', () => {
       isAxiosError: true,
     };
     mockIsAxiosError.mockReturnValue(true);
-    mockUsersApi.userData = vi.fn().mockRejectedValue(axiosError);
+    mockUsersApi.getUserExtendedData = vi.fn().mockRejectedValue(axiosError);
 
     await expect(
       readParticipant(config, 'clientId', 'clientSecret', {

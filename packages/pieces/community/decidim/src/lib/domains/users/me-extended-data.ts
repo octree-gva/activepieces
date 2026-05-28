@@ -11,7 +11,10 @@ import { response } from '../../utils/response';
 import { assertProp } from '../../utils/assertProp';
 import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
-import type { UsersApiSetUserDataRequest, UsersApiUserDataRequest } from '@octree/decidim-sdk';
+import type {
+  UsersApiGetUserExtendedDataRequest,
+  UsersApiSetUserExtendedDataRequest,
+} from '@octree/decidim-sdk';
 import { createUsersApi } from '../../runtime/clients';
 import { userAccessTokenProp } from '../../props';
 
@@ -91,11 +94,11 @@ export const meExtendedData = createAction({
         const o = (context.propsValue.getOptions as Record<string, unknown>) || {};
         assertProp(o.objectPath, 'object_path is required');
         const object_path = z.string().min(1).parse(o.objectPath);
-        const getReq: UsersApiUserDataRequest = {
+        const getReq: UsersApiGetUserExtendedDataRequest = {
           authorization: authHeader,
           objectPath: object_path,
         };
-        const result = await api.userData(getReq);
+        const result = await api.getUserExtendedData(getReq);
         return response({
           data: (result.data as { data?: unknown })?.data,
           object_path,
@@ -108,14 +111,14 @@ export const meExtendedData = createAction({
         assertProp(o.data, 'data is required');
         await propsValidation.validateZod(o, { data: z.record(z.string(), z.unknown()) });
         const object_path = z.string().default('.').parse(o.objectPath ?? '.');
-        const setReq: UsersApiSetUserDataRequest = {
+        const setReq: UsersApiSetUserExtendedDataRequest = {
           authorization: authHeader,
           userExtendedDataPayload: {
             data: o.data as object,
             object_path,
           },
         };
-        const result = await api.setUserData(setReq);
+        const result = await api.setUserExtendedData(setReq);
         return response({
           data: (result.data as { data?: unknown })?.data,
           object_path,

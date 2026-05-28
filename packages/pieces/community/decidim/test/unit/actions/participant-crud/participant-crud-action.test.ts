@@ -60,9 +60,9 @@ describe('participantCrud action', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUsersApi = {
-      users: vi.fn().mockResolvedValue({ data: { data: [] } }),
-      userData: vi.fn().mockResolvedValue({ data: { data: {} } }),
-      setUserData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+      listUsers: vi.fn().mockResolvedValue({ data: { data: [] } }),
+      getUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+      setUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
     } as unknown as UsersApi;
     (UsersApi as Mock).mockImplementation(() => mockUsersApi);
     (OAuthApi as Mock).mockImplementation(() => ({
@@ -71,7 +71,7 @@ describe('participantCrud action', () => {
   });
 
   it('should execute search action', async () => {
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [{ id: 1 }] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [{ id: 1 }] } });
 
     const result = (await participantCrud.run(
       participantContext({
@@ -86,7 +86,7 @@ describe('participantCrud action', () => {
   });
 
   it('should execute create action', async () => {
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [] } });
 
     const result = (await participantCrud.run(
       participantContext({
@@ -104,8 +104,8 @@ describe('participantCrud action', () => {
 
   it('should execute read action', async () => {
     mockUsersApi = {
-      userData: vi.fn().mockResolvedValue({ data: { data: {} } }),
-      users: vi.fn().mockResolvedValue({ data: { data: [{ id: 123 }] } }),
+      getUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+      listUsers: vi.fn().mockResolvedValue({ data: { data: [{ id: 123 }] } }),
     } as unknown as UsersApi;
     (UsersApi as Mock).mockImplementation(() => mockUsersApi);
 
@@ -121,7 +121,7 @@ describe('participantCrud action', () => {
 
   it('should execute update action', async () => {
     mockUsersApi = {
-      setUserData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+      setUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
     } as unknown as UsersApi;
     (UsersApi as Mock).mockImplementation(() => mockUsersApi);
 

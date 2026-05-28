@@ -21,7 +21,7 @@ vi.mock('../../../../src/lib/utils/systemAccessToken', () => ({
 type SearchResult = Response<{ users: unknown[]; count: number }>;
 
 const mockUsersApi = {
-  users: vi.fn(),
+  listUsers: vi.fn(),
 } as unknown as UsersApi;
 
 const createContext = (propsValue: {
@@ -45,7 +45,7 @@ describe('Search Participants Integration', () => {
       { id: 1, nickname: 'user1', email: 'user1@example.com' },
       { id: 2, nickname: 'user2', email: 'user2@example.com' },
     ];
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: mockUsers } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: mockUsers } });
 
     const result = await participantCrud.run(createContext({
       action: 'search',
@@ -58,7 +58,7 @@ describe('Search Participants Integration', () => {
   });
 
   it('should return empty results when no matches found', async () => {
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [] } });
 
     const result = await participantCrud.run(createContext({
       action: 'search',
@@ -71,14 +71,14 @@ describe('Search Participants Integration', () => {
   });
 
   it('should normalize JSON query formatting', async () => {
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [] } });
 
     await participantCrud.run(createContext({
       action: 'search',
       searchOptions: { extendedDataQuery: '{"chatbotID":"31"}' },
     }));
 
-    expect(mockUsersApi.users).toHaveBeenCalledWith(
+    expect(mockUsersApi.listUsers).toHaveBeenCalledWith(
       expect.objectContaining({
         authorization: 'Bearer system-token',
         filterExtendedDataCont: '{"chatbotID": "31"}',
@@ -93,7 +93,7 @@ describe('Search Participants Integration', () => {
       message: 'Internal server error',
       isAxiosError: true,
     };
-    mockUsersApi.users = vi.fn().mockRejectedValue(axiosError);
+    mockUsersApi.listUsers = vi.fn().mockRejectedValue(axiosError);
 
     const result = await participantCrud.run(createContext({
       action: 'search',

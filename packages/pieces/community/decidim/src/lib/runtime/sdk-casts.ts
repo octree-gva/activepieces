@@ -4,15 +4,15 @@
  */
 
 import type {
-  BlogsApiBlogRequest,
-  BlogsApiBlogsRequest,
+  BlogsApiGetBlogPostRequest,
+  BlogsApiListBlogPostsRequest,
   ComponentsApiSearchComponentsRequest,
   CreateRoleRequest,
   SpacesApiSearchSpacesRequest,
   UpdateOrganizationPayload,
-  UsersApiSetUserDataRequest,
-  UsersApiUserDataRequest,
-  UsersApiUsersRequest,
+  UsersApiGetUserExtendedDataRequest,
+  UsersApiListUsersRequest,
+  UsersApiSetUserExtendedDataRequest,
 } from '@octree/decidim-sdk';
 import type { DecidimAccessToken } from '../../types';
 import type { OAuthAccessTokenBody } from '../types/decidim-api';
@@ -25,16 +25,16 @@ export function decidimAccessTokenFromResponse(data: unknown): DecidimAccessToke
   return data as DecidimAccessToken;
 }
 
-export function asUsersApiUsersRequest(payload: unknown): UsersApiUsersRequest {
-  return payload as UsersApiUsersRequest;
+export function asUsersApiUsersRequest(payload: unknown): UsersApiListUsersRequest {
+  return payload as UsersApiListUsersRequest;
 }
 
-export function asUsersApiSetUserDataRequest(payload: unknown): UsersApiSetUserDataRequest {
-  return payload as UsersApiSetUserDataRequest;
+export function asUsersApiSetUserDataRequest(payload: unknown): UsersApiSetUserExtendedDataRequest {
+  return payload as UsersApiSetUserExtendedDataRequest;
 }
 
-export function asUsersApiUserDataRequest(payload: unknown): UsersApiUserDataRequest {
-  return payload as UsersApiUserDataRequest;
+export function asUsersApiUserDataRequest(payload: unknown): UsersApiGetUserExtendedDataRequest {
+  return payload as UsersApiGetUserExtendedDataRequest;
 }
 
 export function asSpacesApiSearchSpacesRequest(payload: unknown): SpacesApiSearchSpacesRequest {
@@ -47,12 +47,12 @@ export function asComponentsApiSearchComponentsRequest(
   return payload as ComponentsApiSearchComponentsRequest;
 }
 
-export function asBlogsApiBlogsRequest(payload: unknown): BlogsApiBlogsRequest {
-  return payload as BlogsApiBlogsRequest;
+export function asBlogsApiBlogsRequest(payload: unknown): BlogsApiListBlogPostsRequest {
+  return payload as BlogsApiListBlogPostsRequest;
 }
 
-export function asBlogsApiBlogRequest(payload: unknown): BlogsApiBlogRequest {
-  return payload as BlogsApiBlogRequest;
+export function asBlogsApiBlogRequest(payload: unknown): BlogsApiGetBlogPostRequest {
+  return payload as BlogsApiGetBlogPostRequest;
 }
 
 export function updateOrganizationPayloadFromRecord(

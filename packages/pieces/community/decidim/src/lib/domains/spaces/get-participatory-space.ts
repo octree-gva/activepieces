@@ -9,10 +9,10 @@ import { createSpacesApi } from '../../runtime/clients';
 import { localesProp, userAccessTokenProp } from '../../props';
 import { parseLocales } from '../../runtime/locales';
 import type {
-  SpacesApiAssembliesRequest,
-  SpacesApiConferencesRequest,
-  SpacesApiInitiativesRequest,
-  SpacesApiParticipatoryProcessesRequest,
+  SpacesApiShowAssemblyRequest,
+  SpacesApiShowConferenceRequest,
+  SpacesApiShowInitiativeRequest,
+  SpacesApiShowParticipatoryProcessRequest,
 } from '@octree/decidim-sdk';
 import type { DecidimSingleResource } from '../../types/decidim-api';
 
@@ -62,23 +62,23 @@ export const getParticipatorySpace = createAction({
       let result;
       switch (t) {
         case 'participatory_processes': {
-          const req: SpacesApiParticipatoryProcessesRequest = base;
-          result = await api.participatoryProcesses(req);
+          const req: SpacesApiShowParticipatoryProcessRequest = base;
+          result = await api.showParticipatoryProcess(req);
           break;
         }
         case 'assemblies': {
-          const req: SpacesApiAssembliesRequest = base;
-          result = await api.assemblies(req);
+          const req: SpacesApiShowAssemblyRequest = base;
+          result = await api.showAssembly(req);
           break;
         }
         case 'conferences': {
-          const req: SpacesApiConferencesRequest = base;
-          result = await api.conferences(req);
+          const req: SpacesApiShowConferenceRequest = base;
+          result = await api.showConference(req);
           break;
         }
         case 'initiatives': {
-          const req: SpacesApiInitiativesRequest = base;
-          result = await api.initiatives(req);
+          const req: SpacesApiShowInitiativeRequest = base;
+          result = await api.showInitiative(req);
           break;
         }
         default:

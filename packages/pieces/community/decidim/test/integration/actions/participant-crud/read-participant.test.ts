@@ -22,8 +22,8 @@ vi.mock('../../../../src/lib/utils/systemAccessToken', () => ({
 type ReadResult = Response<{ userId: string; data: unknown; user: unknown }>;
 
 const mockUsersApi = {
-  userData: vi.fn(),
-  users: vi.fn(),
+  getUserExtendedData: vi.fn(),
+  listUsers: vi.fn(),
 } as unknown as UsersApi;
 
 const createContext = (propsValue: {
@@ -48,8 +48,10 @@ describe('Read Participant Integration', () => {
   it('should return participant data and user info', async () => {
     const mockUserData = { chatbotID: '31', customField: 'value' };
     const mockUser = { id: 123, nickname: 'testuser', email: 'test@example.com' };
-    mockUsersApi.userData = vi.fn().mockResolvedValue({ data: { data: mockUserData } });
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [mockUser] } });
+    mockUsersApi.getUserExtendedData = vi
+      .fn()
+      .mockResolvedValue({ data: { data: mockUserData } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [mockUser] } });
 
     const result = await participantCrud.run(createContext({
       action: 'read',
@@ -69,8 +71,8 @@ describe('Read Participant Integration', () => {
       isAxiosError: true,
     };
     vi.spyOn(axios, 'isAxiosError').mockReturnValue(true);
-    mockUsersApi.userData = vi.fn().mockRejectedValue(axiosError);
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: [mockUser] } });
+    mockUsersApi.getUserExtendedData = vi.fn().mockRejectedValue(axiosError);
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [mockUser] } });
 
     const result = await participantCrud.run(createContext({
       action: 'read',
@@ -89,7 +91,7 @@ describe('Read Participant Integration', () => {
       isAxiosError: true,
     };
     vi.spyOn(axios, 'isAxiosError').mockReturnValue(true);
-    mockUsersApi.userData = vi.fn().mockRejectedValue(axiosError);
+    mockUsersApi.getUserExtendedData = vi.fn().mockRejectedValue(axiosError);
 
     const result = await participantCrud.run(createContext({
       action: 'read',
@@ -106,7 +108,7 @@ describe('Read Participant Integration', () => {
       message: 'Server error',
       isAxiosError: true,
     };
-    mockUsersApi.users = vi.fn().mockRejectedValue(axiosError);
+    mockUsersApi.listUsers = vi.fn().mockRejectedValue(axiosError);
 
     const result = await participantCrud.run(createContext({
       action: 'read',

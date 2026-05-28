@@ -21,7 +21,7 @@ vi.mock('../../../../src/lib/utils/systemAccessToken', () => ({
 type UpdateResult = Response<{ userId: string; data: unknown }>;
 
 const mockUsersApi = {
-  setUserData: vi.fn(),
+  setUserExtendedData: vi.fn(),
 } as unknown as UsersApi;
 
 const createContext = (propsValue: {
@@ -48,7 +48,9 @@ describe('Update Participant Integration', () => {
 
   it('should update participant extended data', async () => {
     const updatedData = { chatbotID: '31', customField: 'updated' };
-    mockUsersApi.setUserData = vi.fn().mockResolvedValue({ data: { data: updatedData } });
+    mockUsersApi.setUserExtendedData = vi
+      .fn()
+      .mockResolvedValue({ data: { data: updatedData } });
 
     const result = await participantCrud.run(createContext({
       action: 'update',
@@ -65,7 +67,9 @@ describe('Update Participant Integration', () => {
 
   it('should update data at custom path', async () => {
     const updatedData = { nested: { field: 'value' } };
-    mockUsersApi.setUserData = vi.fn().mockResolvedValue({ data: { data: updatedData } });
+    mockUsersApi.setUserExtendedData = vi
+      .fn()
+      .mockResolvedValue({ data: { data: updatedData } });
 
     await participantCrud.run(createContext({
       action: 'update',
@@ -76,7 +80,7 @@ describe('Update Participant Integration', () => {
       },
     }));
 
-    expect(mockUsersApi.setUserData).toHaveBeenCalledWith(
+    expect(mockUsersApi.setUserExtendedData).toHaveBeenCalledWith(
       expect.objectContaining({
         authorization: 'Bearer token',
         userExtendedDataPayload: {
@@ -88,7 +92,9 @@ describe('Update Participant Integration', () => {
   });
 
   it('should parse JSON string extendedData', async () => {
-    mockUsersApi.setUserData = vi.fn().mockResolvedValue({ data: { data: { chatbotID: '31' } } });
+    mockUsersApi.setUserExtendedData = vi
+      .fn()
+      .mockResolvedValue({ data: { data: { chatbotID: '31' } } });
 
     await participantCrud.run(createContext({
       action: 'update',
@@ -98,7 +104,7 @@ describe('Update Participant Integration', () => {
       },
     }));
 
-    expect(mockUsersApi.setUserData).toHaveBeenCalledWith(
+    expect(mockUsersApi.setUserExtendedData).toHaveBeenCalledWith(
       expect.objectContaining({
         authorization: 'Bearer token',
         userExtendedDataPayload: {
@@ -115,7 +121,7 @@ describe('Update Participant Integration', () => {
       message: 'Bad request',
       isAxiosError: true,
     };
-    mockUsersApi.setUserData = vi.fn().mockRejectedValue(axiosError);
+    mockUsersApi.setUserExtendedData = vi.fn().mockRejectedValue(axiosError);
 
     const result = await participantCrud.run(createContext({
       action: 'update',
@@ -131,7 +137,7 @@ describe('Update Participant Integration', () => {
 
   it('should use extendedData when API response data is missing', async () => {
     const extendedData = { chatbotID: '31' };
-    mockUsersApi.setUserData = vi.fn().mockResolvedValue({ data: null });
+    mockUsersApi.setUserExtendedData = vi.fn().mockResolvedValue({ data: null });
 
     const result = await participantCrud.run(createContext({
       action: 'update',

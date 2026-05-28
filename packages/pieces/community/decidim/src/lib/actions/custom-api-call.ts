@@ -8,7 +8,7 @@ export const customApiCallAction = createCustomApiCallAction({
   name: 'custom_api_call',
   displayName: 'Custom API Call',
   description:
-    'Send an authenticated request to your Decidim instance (Bearer token from client credentials). Use a path like `/api/v1/...` or the full URL.',
+    'Send an authenticated request to your Decidim REST API (Bearer token from client credentials). Use a path like `/api/rest_full/v0.3/...` relative to your base URL (or the full URL).',
   baseUrl: (auth) => {
     if (!auth) {
       throw new Error('Decidim connection is required');

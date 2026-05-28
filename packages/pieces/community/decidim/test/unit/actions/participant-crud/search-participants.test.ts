@@ -23,7 +23,7 @@ describe('searchParticipants', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUsersApi = {
-      users: vi.fn().mockResolvedValue({ data: { data: [] } }),
+      listUsers: vi.fn().mockResolvedValue({ data: { data: [] } }),
     } as unknown as UsersApi;
     (UsersApi as Mock).mockImplementation(() => mockUsersApi);
     (OAuthApi as Mock).mockImplementation(() => ({}));
@@ -31,7 +31,7 @@ describe('searchParticipants', () => {
 
   it('should return participants matching extended data query', async () => {
     const mockUsers = [{ id: 1, nickname: 'user1' }, { id: 2, nickname: 'user2' }];
-    mockUsersApi.users = vi.fn().mockResolvedValue({ data: { data: mockUsers } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: mockUsers } });
 
     const result = await searchParticipants(config, 'clientId', 'clientSecret', {
       searchOptions: { extendedDataQuery: '{"chatbotID": "31"}' },
@@ -47,7 +47,7 @@ describe('searchParticipants', () => {
       searchOptions: { extendedDataQuery: '{"chatbotID":"31"}' },
     });
 
-    expect(mockUsersApi.users).toHaveBeenCalledWith(
+    expect(mockUsersApi.listUsers).toHaveBeenCalledWith(
       expect.objectContaining({
         authorization: 'Bearer system-token',
         filterExtendedDataCont: '{"chatbotID": "31"}',

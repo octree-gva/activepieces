@@ -18,9 +18,9 @@ import {
 import { computeHasMore } from '../components/search-component.helpers';
 import type {
   RolesApiCreateRoleRequest,
-  RolesApiDestroyRoleRequest,
-  RolesApiRoleRequest,
-  RolesApiRolesRequest,
+  RolesApiDeleteRoleRequest,
+  RolesApiGetRoleRequest,
+  RolesApiListRolesRequest,
 } from '@octree/decidim-sdk';
 import { createRoleRequestBodyFromRecord } from '../../runtime/sdk-casts';
 
@@ -112,8 +112,8 @@ export const roles = createAction({
         });
         const page = z.number().int().min(1).default(1).parse(o.page ?? 1);
         const perPage = z.number().int().min(1).max(100).default(50).parse(o.perPage ?? 50);
-        const listReq: RolesApiRolesRequest = { authorization: auth, page, perPage };
-        const result = await api.roles(listReq);
+        const listReq: RolesApiListRolesRequest = { authorization: auth, page, perPage };
+        const result = await api.listRoles(listReq);
         const list = (result.data as { data?: unknown[] })?.data ?? [];
         const arr = Array.isArray(list) ? list : [];
         return response({
@@ -129,8 +129,8 @@ export const roles = createAction({
       if (action === 'read') {
         assertProp(idOpts.roleId, 'Role ID required');
         const id = z.string().min(1).parse(idOpts.roleId);
-        const readReq: RolesApiRoleRequest = { id, authorization: auth };
-        const result = await api.role(readReq);
+        const readReq: RolesApiGetRoleRequest = { id, authorization: auth };
+        const result = await api.getRole(readReq);
         return response({
           role: (result.data as { data?: unknown })?.data,
           role_id: id,
@@ -141,8 +141,8 @@ export const roles = createAction({
       if (action === 'destroy') {
         assertProp(idOpts.roleId, 'Role ID required');
         const id = z.string().min(1).parse(idOpts.roleId);
-        const destroyReq: RolesApiDestroyRoleRequest = { id, authorization: auth };
-        await api.destroyRole(destroyReq);
+        const destroyReq: RolesApiDeleteRoleRequest = { id, authorization: auth };
+        await api.deleteRole(destroyReq);
         return response({ destroyed: true, role_id: id, auth_mode: resolved.mode });
       }
 

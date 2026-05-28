@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import type {
-  BlogComponentSpaceManifestEnum,
-  ComponentsApiBlogComponentRequest,
-  ComponentsApiBlogComponentsRequest,
-  ComponentsApiProposalComponentRequest,
-  ComponentsApiProposalComponentsRequest,
+  ComponentsApiListBlogComponentsRequest,
+  ComponentsApiListProposalComponentsRequest,
+  ComponentsApiShowBlogComponentRequest,
+  ComponentsApiShowProposalComponentRequest,
+  ShowBlogComponentSpaceManifestEnum,
 } from '@octree/decidim-sdk';
 import { parseLocales } from '../../runtime/locales';
 import { parseOptionalSpaceManifest } from '../blogs/blog-posts.helpers';
@@ -14,7 +14,7 @@ export function buildBlogComponentsListParams(args: {
   page: number;
   perPage: number;
   listOptions: Record<string, unknown>;
-}): ComponentsApiBlogComponentsRequest {
+}): ComponentsApiListBlogComponentsRequest {
   const o = args.listOptions;
   const manifest = parseOptionalSpaceManifest(o['spaceManifest']);
   const spaceIdRaw = o['spaceId'];
@@ -38,7 +38,7 @@ export function buildProposalComponentsListParams(args: {
   page: number;
   perPage: number;
   listOptions: Record<string, unknown>;
-}): ComponentsApiProposalComponentsRequest {
+}): ComponentsApiListProposalComponentsRequest {
   const o = args.listOptions;
   const manifest = parseOptionalSpaceManifest(o['spaceManifest']);
   const spaceIdRaw = o['spaceId'];
@@ -61,7 +61,7 @@ export function buildBlogComponentReadParams(args: {
   authorization: string;
   componentId: number;
   readOptions: Record<string, unknown>;
-}): ComponentsApiBlogComponentRequest {
+}): ComponentsApiShowBlogComponentRequest {
   const o = args.readOptions;
   const manifest = parseOptionalSpaceManifest(o['spaceManifest']);
   const spaceIdRaw = o['spaceId'];
@@ -75,7 +75,7 @@ export function buildBlogComponentReadParams(args: {
     authorization: args.authorization,
     locales: parseLocales(o['locales']),
     ...(manifest !== undefined
-      ? { spaceManifest: manifest as BlogComponentSpaceManifestEnum }
+      ? { spaceManifest: manifest as ShowBlogComponentSpaceManifestEnum }
       : {}),
     ...(spaceId !== undefined ? { spaceId } : {}),
   };
@@ -85,7 +85,7 @@ export function buildProposalComponentReadParams(args: {
   authorization: string;
   componentId: number;
   readOptions: Record<string, unknown>;
-}): ComponentsApiProposalComponentRequest {
+}): ComponentsApiShowProposalComponentRequest {
   const o = args.readOptions;
   return {
     id: args.componentId,

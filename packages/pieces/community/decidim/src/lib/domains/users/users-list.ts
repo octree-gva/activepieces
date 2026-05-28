@@ -9,7 +9,7 @@ import { getErrorMessage } from '../../runtime/errors';
 import { createUsersApi } from '../../runtime/clients';
 import { pageProp, perPageProp, userAccessTokenProp } from '../../props';
 import { computeHasMore } from '../components/search-component.helpers';
-import type { UsersApiUsersRequest } from '@octree/decidim-sdk';
+import type { UsersApiListUsersRequest } from '@octree/decidim-sdk';
 import type { DecidimResourceList } from '../../types/decidim-api';
 
 export const usersList = createAction({
@@ -46,12 +46,12 @@ export const usersList = createAction({
         .parse(context.propsValue.perPage ?? 50);
 
       const api = createUsersApi(resolved.baseConfiguration, resolved.rawAccessToken);
-      const usersReq: UsersApiUsersRequest = {
+      const usersReq: UsersApiListUsersRequest = {
         authorization: bearerAuthorization(resolved.rawAccessToken),
         page,
         perPage,
       };
-      const result = await api.users(usersReq);
+      const result = await api.listUsers(usersReq);
       const list = (result.data as DecidimResourceList<unknown> | undefined)?.data ?? [];
       const arr = Array.isArray(list) ? list : [];
       return response({

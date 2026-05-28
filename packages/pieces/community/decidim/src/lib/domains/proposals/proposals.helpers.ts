@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import type {
-  ProposalsApiProposalRequest,
-  ProposalsApiProposalsRequest,
-  ProposalsApiVoteProposalRequest,
-  ProposalsOrderEnum,
+  ListProposalsOrderEnum,
+  ProposalsApiCastProposalVoteRequest,
+  ProposalsApiGetProposalRequest,
+  ProposalsApiListProposalsRequest,
 } from '@octree/decidim-sdk';
 import { parseLocales } from '../../runtime/locales';
 import {
@@ -14,15 +14,15 @@ import {
 } from '../blogs/blog-posts.helpers';
 import { bearerAuthorization } from '../../runtime/authMode';
 
-function parseOptionalProposalsOrder(value: unknown): ProposalsOrderEnum | undefined {
+function parseOptionalProposalsOrder(value: unknown): ListProposalsOrderEnum | undefined {
   if (value === undefined || value === null || value === '') return undefined;
-  return z.enum(['published_at', 'rand']).parse(value) as ProposalsOrderEnum;
+  return z.enum(['published_at', 'rand']).parse(value) as ListProposalsOrderEnum;
 }
 
 export function buildProposalsListRequest(args: {
   accessToken: string;
   searchOptions: Record<string, unknown>;
-}): { request: ProposalsApiProposalsRequest; effectivePerPage: number } {
+}): { request: ProposalsApiListProposalsRequest; effectivePerPage: number } {
   const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
   const o = args.searchOptions;
   const { page, effectivePerPage } = normalizePagePerPage(o['page'], o['perPage']);
@@ -33,7 +33,7 @@ export function buildProposalsListRequest(args: {
   const order = parseOptionalProposalsOrder(o['order']);
   const orderDirection = parseOptionalOrderDirection(o['orderDirection']);
 
-  const request: ProposalsApiProposalsRequest = {
+  const request: ProposalsApiListProposalsRequest = {
     authorization: auth,
     page,
     perPage: effectivePerPage,
@@ -51,7 +51,7 @@ export function buildProposalsListRequest(args: {
 export function buildProposalReadRequest(args: {
   accessToken: string;
   readOptions: Record<string, unknown>;
-}): ProposalsApiProposalRequest {
+}): ProposalsApiGetProposalRequest {
   const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
   const o = args.readOptions;
   const id = z.number().int().positive().parse(o['proposalId']);
@@ -62,7 +62,7 @@ export function buildProposalReadRequest(args: {
   const order = parseOptionalProposalsOrder(o['order']);
   const orderDirection = parseOptionalOrderDirection(o['orderDirection']);
 
-  const readReq: ProposalsApiProposalRequest = {
+  const readReq: ProposalsApiGetProposalRequest = {
     id,
     authorization: auth,
     locales: parseLocales(o['locales']),
@@ -78,7 +78,7 @@ export function buildProposalReadRequest(args: {
 export function buildVoteProposalRequest(args: {
   accessToken: string;
   voteOptions: Record<string, unknown>;
-}): ProposalsApiVoteProposalRequest {
+}): ProposalsApiCastProposalVoteRequest {
   const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
   const o = args.voteOptions;
   const proposal_id = z.number().int().positive().parse(o['proposalId']);
@@ -86,7 +86,7 @@ export function buildVoteProposalRequest(args: {
 
   return {
     authorization: auth,
-    voteAProposalPayload: {
+    voteProposalCreateBody: {
       proposal_id,
       data: { weight },
     },

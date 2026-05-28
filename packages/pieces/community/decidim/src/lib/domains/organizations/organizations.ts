@@ -19,8 +19,8 @@ import {
 import { parseLocales } from '../../runtime/locales';
 import { computeHasMore } from '../components/search-component.helpers';
 import type {
-  OrganizationsApiOrganizationRequest,
-  OrganizationsApiOrganizationsRequest,
+  OrganizationsApiGetOrganizationRequest,
+  OrganizationsApiListOrganizationsRequest,
   OrganizationsApiUpdateOrganizationRequest,
 } from '@octree/decidim-sdk';
 import { updateOrganizationPayloadFromRecord } from '../../runtime/sdk-casts';
@@ -106,13 +106,13 @@ export const organizations = createAction({
         });
         const page = z.number().int().min(1).default(1).parse(o.page ?? 1);
         const perPage = z.number().int().min(1).max(100).default(50).parse(o.perPage ?? 50);
-        const listReq: OrganizationsApiOrganizationsRequest = {
+        const listReq: OrganizationsApiListOrganizationsRequest = {
           authorization: auth,
           page,
           perPage,
           locales: parseLocales(o.locales),
         };
-        const result = await api.organizations(listReq);
+        const result = await api.listOrganizations(listReq);
         const list = (result.data as { data?: unknown[] })?.data ?? [];
         const arr = Array.isArray(list) ? list : [];
         return response({
@@ -127,12 +127,12 @@ export const organizations = createAction({
         const o = (context.propsValue.readOptions as Record<string, unknown>) || {};
         assertProp(o.organizationId, 'Organization ID required');
         const id = z.string().min(1).parse(o.organizationId);
-        const readReq: OrganizationsApiOrganizationRequest = {
+        const readReq: OrganizationsApiGetOrganizationRequest = {
           id,
           authorization: auth,
           locales: parseLocales(o.locales),
         };
-        const result = await api.organization(readReq);
+        const result = await api.getOrganization(readReq);
         return response({
           organization: (result.data as { data?: unknown })?.data,
           organization_id: id,

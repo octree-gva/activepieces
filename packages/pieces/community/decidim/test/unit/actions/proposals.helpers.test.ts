@@ -94,7 +94,7 @@ describe('buildVoteProposalRequest', () => {
     });
     expect(req).toEqual({
       authorization: 'Bearer t',
-      voteAProposalPayload: {
+      voteProposalCreateBody: {
         proposal_id: 5,
         data: { weight: 2 },
       },

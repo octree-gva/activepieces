@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import type { BlogsApiBlogRequest, BlogsApiBlogsRequest } from '@octree/decidim-sdk';
+import type {
+  BlogsApiGetBlogPostRequest,
+  BlogsApiListBlogPostsRequest,
+} from '@octree/decidim-sdk';
 import { bearerAuthorization } from '../../runtime/authMode';
 import { asBlogsApiBlogRequest, asBlogsApiBlogsRequest } from '../../runtime/sdk-casts';
 import { parseLocales } from '../../runtime/locales';
@@ -52,7 +55,7 @@ export function parseOptionalOrderDirection(
 export function buildBlogsListRequest(args: {
   accessToken: string;
   searchOptions: Record<string, unknown>;
-}): { request: BlogsApiBlogsRequest; effectivePerPage: number } {
+}): { request: BlogsApiListBlogPostsRequest; effectivePerPage: number } {
   const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
   const o = args.searchOptions;
   const { page, effectivePerPage } = normalizePagePerPage(
@@ -84,8 +87,8 @@ export function buildBlogsListRequest(args: {
 export function buildBlogReadRequest(args: {
   accessToken: string;
   readOptions: Record<string, unknown>;
-}): BlogsApiBlogRequest {
-  const auth = bearerAuthorization(args.accessToken);
+}): BlogsApiGetBlogPostRequest {
+  const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
   const o = args.readOptions;
   const id = z.number().int().positive('Blog post ID must be > 0').parse(o['blogPostId']);
 

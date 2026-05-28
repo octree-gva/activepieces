@@ -14,7 +14,7 @@ import { createDraftProposalsApi } from '../../runtime/clients';
 import { decidimComponentIdProp, draftProposalIdProp, userAccessTokenProp } from '../../props';
 import type {
   DraftProposalsApiCreateDraftProposalRequest,
-  DraftProposalsApiDraftProposalRequest,
+  DraftProposalsApiGetDraftProposalRequest,
   DraftProposalsApiPublishDraftProposalRequest,
   DraftProposalsApiUpdateDraftProposalRequest,
   DraftProposalsApiWithdrawDraftProposalRequest,
@@ -141,11 +141,11 @@ export const draftProposals = createAction({
       const id = parseDraftProposalId(idOpts.draftProposalId);
 
       if (action === 'read') {
-        const readReq: DraftProposalsApiDraftProposalRequest = {
+        const readReq: DraftProposalsApiGetDraftProposalRequest = {
           id,
           authorization: authHeader,
         };
-        const result = await api.draftProposal(readReq);
+        const result = await api.getDraftProposal(readReq);
         const data = (result.data as { data?: unknown })?.data;
         return response({
           draft: data,

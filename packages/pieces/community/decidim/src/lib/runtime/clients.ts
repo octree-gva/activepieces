@@ -1,6 +1,5 @@
 import type { Configuration } from '@octree/decidim-sdk';
 import {
-  APIApi,
   BlogsApi,
   ComponentsApi,
   DraftProposalsApi,
@@ -65,10 +64,6 @@ export function createOrganizationsExtendedDataApi(
 
 export function createRolesApi(base: Configuration, rawAccessToken: string) {
   return new RolesApi(clientConfig(base, rawAccessToken));
-}
-
-export function createAPIApi(base: Configuration, rawAccessToken: string) {
-  return new APIApi(clientConfig(base, rawAccessToken));
 }
 
 export function createOAuthApi(base: Configuration) {

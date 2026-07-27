@@ -1,8 +1,11 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-# Prevent committing .env files
-ENV_FILES=$(git diff --cached --name-only | grep '\.env' || true)
+# Prevent committing secret .env files; allow known templates already used in-repo.
+ENV_FILES=$(git diff --cached --name-only \
+  | grep '\.env' \
+  | grep -vE '(^|/)\.env\.example$|(^|/)\.env\.tests$|(^|/)\.env\.e2e$|\.env\.sample$' \
+  || true)
 if [ -n "$ENV_FILES" ]; then
   echo "Error: Attempting to commit .env files:"
   echo "$ENV_FILES"

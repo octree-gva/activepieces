@@ -1,4 +1,4 @@
-import { createAction, Property } from '@activepieces/pieces-framework';
+import { createAction, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
 import { excelAuth } from '../auth';
 import { commonProps } from '../common/props';
 import { getDrivePath, createMSGraphClient } from '../common/helpers';
@@ -8,6 +8,8 @@ export const getRangeAction = createAction({
   name: 'get_range',
   displayName: 'Get Cells in Range',
   description: 'Retrieve the values in a given cell range (e.g., “A1:C10”).',
+  audience: 'both',
+  aiMetadata: { description: 'Read a specific rectangular cell range from a worksheet using A1 notation (e.g. "A1:C10" or a single cell "B2"). Use when you know the exact addresses to fetch; for full-sheet or header-keyed reads use Get Worksheet Rows. Read-only and idempotent.', idempotent: true },
   props: {
     storageSource: commonProps.storageSource,
     siteId: commonProps.siteId,
@@ -24,6 +26,7 @@ export const getRangeAction = createAction({
   async run(context) {
     const { storageSource, siteId, documentId, workbookId, worksheetId, range } = context.propsValue;
     const { access_token } = context.auth;
+    const cloud = (context.auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
     if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
       throw new Error('please select SharePoint site and document library.');
@@ -36,7 +39,7 @@ export const getRangeAction = createAction({
       );
     }
 
-    const client = createMSGraphClient(access_token);
+    const client = createMSGraphClient(access_token, cloud);
     const response = await client
       .api(`${drivePath}/items/${workbookId}/workbook/worksheets/${worksheetId}/range(address='${range}')`)
       .get();

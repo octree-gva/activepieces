@@ -1,10 +1,22 @@
 import {
     EngineOperationType,
+    isNil,
     JobData,
-    ProgressUpdateType,
     RunEnvironment,
+    StreamStepProgress,
+    WorkerGroupScope,
 } from '@activepieces/shared'
 import { z } from 'zod'
+
+export const parseWorkerGroupValue = ({ value, projectWorker }: { value: string | undefined, projectWorker: boolean }): WorkerGroupAssignment | null => {
+    if (isNil(value) || value.length === 0) {
+        return null
+    }
+    return {
+        scope: projectWorker ? WorkerGroupScope.PROJECT : WorkerGroupScope.PLATFORM,
+        id: value,
+    }
+}
 
 export * from './runs-metadata-queue-factory'
 
@@ -18,8 +30,13 @@ export enum QueueName {
     RUNS_METADATA = 'runsMetadata',
 }
 
-export const getPlatformQueueName = (platformId: string): string => {
-    return `platform-${platformId}-jobs`
+export const getPlatformGroupQueueName = (workerGroupId: string): string => {
+    // TODO Rename this to workerGroups-workerGroupId-jobs in the future and migrate existings jobs there.
+    return `platform-${workerGroupId}-jobs`
+}
+
+export const getProjectGroupQueueName = (workerGroupId: string): string => {
+    return `project-${workerGroupId}-jobs`
 }
 
 export const ApQueueJob = z.object({
@@ -46,8 +63,8 @@ export type SavePayloadRequest = z.infer<typeof SavePayloadRequest>
 export const SubmitPayloadsRequest = z.object({
     flowVersionId: z.string(),
     projectId: z.string(),
-    progressUpdateType: z.nativeEnum(ProgressUpdateType),
-    synchronousHandlerId: z.string().optional(),
+    streamStepProgress: z.nativeEnum(StreamStepProgress),
+    workerHandlerId: z.string().optional(),
     httpRequestId: z.string().optional(),
     payloads: z.array(z.unknown()),
     environment: z.nativeEnum(RunEnvironment),
@@ -67,8 +84,14 @@ export function getEngineTimeout(operationType: EngineOperationType, flowTimeout
             return flowTimeoutSandbox
         case EngineOperationType.EXECUTE_PROPERTY:
         case EngineOperationType.EXECUTE_VALIDATE_AUTH:
+        case EngineOperationType.EXECUTE_REFRESH_TOKEN_AUTH:
         case EngineOperationType.EXTRACT_PIECE_METADATA:
         case EngineOperationType.EXECUTE_TRIGGER_HOOK:
             return triggerTimeoutSandbox
     }
+}
+
+export type WorkerGroupAssignment = {
+    scope: WorkerGroupScope
+    id: string
 }

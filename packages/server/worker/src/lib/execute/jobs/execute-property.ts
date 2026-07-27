@@ -1,34 +1,25 @@
-import {
-    EngineOperationType,
-    ExecutePropertyJobData,
-    WorkerJobType,
-} from '@activepieces/shared'
-import { provisioner } from '../../cache/provisioner'
+import { tryCatch } from '@activepieces/core-utils'
+import { EngineOperationType, EngineResponseStatus, ExecutePropertyJobData, WorkerJobType } from '@activepieces/shared'
 import { workerSettings } from '../../config/worker-settings'
 import { JobContext, JobHandler, JobResultKind, SynchronousJobResult } from '../types'
+import { isSandboxTimeout } from '../utils/sandbox-helpers'
 
 export const executePropertyJob: JobHandler<ExecutePropertyJobData, SynchronousJobResult> = {
     jobType: WorkerJobType.EXECUTE_PROPERTY,
     async execute(ctx: JobContext, data: ExecutePropertyJobData): Promise<SynchronousJobResult> {
-        const settings = workerSettings.getSettings()
-        const timeoutInSeconds = settings.TRIGGER_TIMEOUT_SECONDS
+        const timeoutInSeconds = workerSettings.getSettings().TRIGGER_TIMEOUT_SECONDS
 
-        await provisioner(ctx.log, ctx.apiClient).provision({
-            pieces: [data.piece],
-            codeSteps: [],
-        })
+        const resolved = await ctx.resolver.resolve({ platformId: data.platformId, publicApiUrl: ctx.publicApiUrl, engineToken: ctx.engineToken, pieces: [data.piece] })
+        if (resolved.kind !== 'ready') {
+            throw new Error(`Unexpected resolve outcome "${resolved.kind}" for piece-only job`)
+        }
 
-        const sandbox = ctx.sandboxManager.acquire({ log: ctx.log, apiClient: ctx.apiClient })
-        try {
-            await sandbox.start({
-                flowVersionId: undefined,
-                platformId: data.platformId,
-                mounts: [],
-            })
-
-            const result = await sandbox.execute(
-                EngineOperationType.EXECUTE_PROPERTY,
-                {
+        const { data: result, error } = await tryCatch(async () => {
+            return ctx.runtime.execute({
+                workerIndex: ctx.workerIndex,
+                log: ctx.log,
+                operationType: EngineOperationType.EXECUTE_PROPERTY,
+                operation: {
                     piece: data.piece,
                     propertyName: data.propertyName,
                     actionOrTriggerName: data.actionOrTriggerName,
@@ -43,23 +34,24 @@ export const executePropertyJob: JobHandler<ExecutePropertyJobData, SynchronousJ
                     publicApiUrl: ctx.publicApiUrl,
                     timeoutInSeconds,
                 },
-                { timeoutInSeconds },
-            )
+                timeoutInSeconds,
+                provision: resolved.provision,
+            })
+        })
 
-            return {
-                kind: JobResultKind.SYNCHRONOUS,
-                status: result.status,
-                response: result.response,
-                errorMessage: result.error,
-                logs: result.logs,
+        if (error) {
+            if (isSandboxTimeout(error)) {
+                return { kind: JobResultKind.SYNCHRONOUS, status: EngineResponseStatus.TIMEOUT, response: {} }
             }
+            throw error
         }
-        catch (e) {
-            await ctx.sandboxManager.invalidate(ctx.log)
-            throw e
-        }
-        finally {
-            await ctx.sandboxManager.release(ctx.log)
+
+        return {
+            kind: JobResultKind.SYNCHRONOUS,
+            status: result.status,
+            response: result.response,
+            errorMessage: result.error,
+            logs: result.logs,
         }
     },
 }

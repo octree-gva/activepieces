@@ -1,12 +1,11 @@
 import { createPiece } from '@activepieces/pieces-framework';
-import { PieceCategory } from '@activepieces/shared';
+import { PieceCategory } from '@activepieces/pieces-framework';
 import { amazonTextractAuth } from './lib/auth';
 import { analyzeDocument } from './lib/actions/analyze-document';
 import { detectDocumentText } from './lib/actions/detect-document-text';
 import { analyzeExpense } from './lib/actions/analyze-expense';
 import { analyzeId } from './lib/actions/analyze-id';
-import { startDocumentAnalysis } from './lib/actions/start-document-analysis';
-import { getDocumentAnalysis } from './lib/actions/get-document-analysis';
+import { analyzeDocumentAsync } from './lib/actions/analyze-document-async';
 
 export const amazonTextract = createPiece({
   displayName: 'AWS Textract',
@@ -22,8 +21,7 @@ export const amazonTextract = createPiece({
     detectDocumentText,
     analyzeExpense,
     analyzeId,
-    startDocumentAnalysis,
-    getDocumentAnalysis,
+    analyzeDocumentAsync,
   ],
   triggers: [],
 });

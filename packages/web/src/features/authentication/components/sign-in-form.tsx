@@ -1,21 +1,23 @@
+import { ErrorCode, isNil } from '@activepieces/core-utils';
 import {
   OtpType,
   ApEdition,
   ApFlagId,
   AuthenticationResponse,
-  ErrorCode,
-  isNil,
   SignInRequest,
+  TelemetryEventName,
 } from '@activepieces/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { t } from 'i18next';
+import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { SubmitHandler, useForm } from 'react-hook-form';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
 import { authenticationApi } from '@/api/authentication-api';
+import { useTelemetry } from '@/components/providers/telemetry-provider';
 import { Button } from '@/components/ui/button';
 import { Form, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -37,6 +39,7 @@ type SignInSchema = z.infer<typeof SignInSchema>;
 
 const SignInForm: React.FC = () => {
   const [showCheckYourEmailNote, setShowCheckYourEmailNote] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const form = useForm<SignInSchema>({
     resolver: zodResolver(SignInSchema),
     defaultValues: {
@@ -50,6 +53,8 @@ const SignInForm: React.FC = () => {
 
   const { data: userCreated } = flagsHooks.useFlag(ApFlagId.USER_CREATED);
   const redirectAfterLogin = useRedirectAfterLogin();
+  const navigate = useNavigate();
+  const { capture } = useTelemetry();
 
   const { mutate, isPending } = useMutation<
     AuthenticationResponse,
@@ -59,6 +64,11 @@ const SignInForm: React.FC = () => {
     mutationFn: authenticationApi.signIn,
     onSuccess: (data) => {
       authenticationSession.saveResponse(data, false);
+
+      if (isNil(data.projectId)) {
+        navigate('/create-platform');
+        return;
+      }
       redirectAfterLogin();
     },
     onError: (error) => {
@@ -66,6 +76,10 @@ const SignInForm: React.FC = () => {
         const errorCode: ErrorCode | undefined = (
           error.response?.data as { code: ErrorCode }
         )?.code;
+        capture({
+          name: TelemetryEventName.SIGN_IN_FAILED,
+          payload: { errorCode: errorCode ?? 'UNKNOWN' },
+        });
         if (isNil(errorCode)) {
           form.setError('root.serverError', {
             message: t('Something went wrong, please try again later'),
@@ -115,6 +129,10 @@ const SignInForm: React.FC = () => {
     form.setError('root.serverError', {
       message: undefined,
     });
+    capture({
+      name: TelemetryEventName.SIGN_IN_SUBMITTED,
+      payload: { method: 'email' },
+    });
     mutate(data);
   };
 
@@ -160,22 +178,39 @@ const SignInForm: React.FC = () => {
                   {edition !== ApEdition.COMMUNITY && (
                     <Link
                       to="/forget-password"
-                      className="text-muted-foreground text-sm hover:text-primary transition-all duration-200"
+                      className="text-muted-foreground text-xs hover:text-primary transition-all duration-200"
                     >
                       {t('Forgot your password?')}
                     </Link>
                   )}
                 </div>
-                <Input
-                  {...field}
-                  required
-                  id="password"
-                  type="password"
-                  placeholder={'********'}
-                  className="rounded-sm"
-                  tabIndex={2}
-                  data-testid="sign-in-password"
-                />
+                <div className="relative">
+                  <Input
+                    {...field}
+                    required
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder={'********'}
+                    className="rounded-sm pr-10"
+                    tabIndex={2}
+                    data-testid="sign-in-password"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    tabIndex={-1}
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+
                 <FormMessage />
               </FormItem>
             )}

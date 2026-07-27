@@ -1,21 +1,10 @@
+import { ActivepiecesError, ErrorCode, isNil, PlatformId, STEP_NAME_REGEX, UserId } from '@activepieces/core-utils'
 import {
     PieceAuthProperty,
     piecePropertiesUtils,
     PiecePropertyMap,
 } from '@activepieces/pieces-framework'
-import {
-    FlowActionType,
-    FlowOperationRequest,
-    FlowOperationType,
-    FlowTriggerType,
-    isNil,
-    LoopOnItemsActionSettings,
-    PieceActionSettings,
-    PieceTriggerSettings,
-    PlatformId,
-    RouterActionSettingsWithValidation,
-    UserId,
-} from '@activepieces/shared'
+import { CodeActionSettings, FlowActionType, FlowOperationRequest, FlowOperationType, flowPieceUtil, flowStructureUtil, FlowTrigger, FlowTriggerType, LoopOnItemsActionSettings, PieceActionSettings, PieceTriggerSettings, RouterActionSettingsWithValidation, SourceCode } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
 import { pieceMetadataService } from '../../pieces/metadata/piece-metadata-service'
@@ -24,6 +13,12 @@ const loopSettingsValidator = LoopOnItemsActionSettings.and(z.object({
     items: z.string().min(1),
 }))
 const routerSettingsValidator = RouterActionSettingsWithValidation
+const codeSettingsValidator = CodeActionSettings.and(z.object({
+    sourceCode: SourceCode.and(z.object({
+        code: z.string().min(1),
+        packageJson: z.string().min(1),
+    })),
+}))
 
 type ValidationResult = {
     valid: boolean
@@ -43,6 +38,7 @@ export const flowVersionValidationUtil = (log: FastifyBaseLogger) => ({
                         ).success
                         break
                     case FlowActionType.PIECE: {
+                        clonedRequest.request.action.settings.pieceVersion = flowPieceUtil.getExactVersion(clonedRequest.request.action.settings.pieceVersion)
                         const result = await validateAction(
                             { settings: clonedRequest.request.action.settings, platformId, log },
                         )
@@ -57,9 +53,11 @@ export const flowVersionValidationUtil = (log: FastifyBaseLogger) => ({
                             clonedRequest.request.action.settings,
                         ).success
                         break
-                    case FlowActionType.CODE: {
+                    case FlowActionType.CODE:
+                        clonedRequest.request.action.valid = codeSettingsValidator.safeParse(
+                            clonedRequest.request.action.settings,
+                        ).success
                         break
-                    }
                 }
                 break
             case FlowOperationType.UPDATE_ACTION:
@@ -70,6 +68,7 @@ export const flowVersionValidationUtil = (log: FastifyBaseLogger) => ({
                         ).success
                         break
                     case FlowActionType.PIECE: {
+                        clonedRequest.request.settings.pieceVersion = flowPieceUtil.getExactVersion(clonedRequest.request.settings.pieceVersion)
                         const result = await validateAction(
                             { settings: clonedRequest.request.settings, platformId, log },
                         )
@@ -84,9 +83,11 @@ export const flowVersionValidationUtil = (log: FastifyBaseLogger) => ({
                             clonedRequest.request.settings,
                         ).success
                         break
-                    case FlowActionType.CODE: {
+                    case FlowActionType.CODE:
+                        clonedRequest.request.valid = codeSettingsValidator.safeParse(
+                            clonedRequest.request.settings,
+                        ).success
                         break
-                    }
                 }
                 break
             case FlowOperationType.UPDATE_TRIGGER:
@@ -95,6 +96,7 @@ export const flowVersionValidationUtil = (log: FastifyBaseLogger) => ({
                         clonedRequest.request.valid = false
                         break
                     case FlowTriggerType.PIECE: {
+                        clonedRequest.request.settings.pieceVersion = flowPieceUtil.getExactVersion(clonedRequest.request.settings.pieceVersion)
                         const result = await validateTrigger(
                             { settings: clonedRequest.request.settings, platformId, log },
                         )
@@ -107,6 +109,7 @@ export const flowVersionValidationUtil = (log: FastifyBaseLogger) => ({
                 }
                 break
             case FlowOperationType.IMPORT_FLOW:{
+                assertImportedStepNamesAreSafe(clonedRequest.request.trigger)
                 const notes = clonedRequest.request.notes
                 if (!isNil(notes)) {
                     clonedRequest.request.notes = notes.map(note => ({
@@ -122,6 +125,16 @@ export const flowVersionValidationUtil = (log: FastifyBaseLogger) => ({
         return clonedRequest
     },
 })
+
+function assertImportedStepNamesAreSafe(trigger: FlowTrigger): void {
+    const invalidStep = flowStructureUtil.getAllSteps(trigger).find((step) => !STEP_NAME_REGEX.test(step.name))
+    if (!isNil(invalidStep)) {
+        throw new ActivepiecesError({
+            code: ErrorCode.VALIDATION,
+            params: { message: `Invalid step name: "${invalidStep.name}"` },
+        })
+    }
+}
 
 async function validateAction({ settings, platformId, log }: ValidateActionParams): Promise<ValidationResult> {
     if (
@@ -188,7 +201,7 @@ function validateProps(
     requireAuth: boolean | undefined = true,
 ): ValidationResult {
     const propsSchema = piecePropertiesUtils.buildSchema(props, auth, requireAuth)
-    const schemaKeys = Object.keys((propsSchema as z.ZodObject<z.ZodRawShape>).shape)
+    const schemaKeys = Object.keys((propsSchema as unknown as z.ZodObject<z.ZodRawShape>).shape)
     const cleanInput = !isNil(input) ? Object.fromEntries(
         schemaKeys.map(key => [key, input?.[key]]),
     ) : undefined

@@ -1,17 +1,10 @@
+import { ActivepiecesError, ErrorCode, isNil } from '@activepieces/core-utils'
 import { OAuth2AuthorizationMethod } from '@activepieces/pieces-framework'
-import { ActivepiecesError,
-    AppConnectionType,
-    BaseOAuth2ConnectionValue,
-    ErrorCode,
-    isNil,
-    OAuth2ConnectionValueWithApp,
-    OAuth2GrantType,
-    resolveValueFromProps,
-} from '@activepieces/shared'
+import { safeHttp } from '@activepieces/server-utils'
+import { AppConnectionType, BaseOAuth2ConnectionValue, OAuth2ConnectionValueWithApp, OAuth2GrantType, resolveValueFromProps } from '@activepieces/shared'
 import { AxiosError } from 'axios'
 import { FastifyBaseLogger } from 'fastify'
 import { secretManagersService } from '../../../../ee/secret-managers/secret-managers.service'
-import { apAxios } from '../../../../helper/ap-axios'
 import {
     ClaimOAuth2Request,
     OAuth2Service,
@@ -71,7 +64,7 @@ export const credentialsOauth2Service = (log: FastifyBaseLogger): OAuth2Service<
             }
             const urlSearchParams = new URLSearchParams(Object.fromEntries(Object.entries(body).map(([key, value]) => [key, String(value)])))
             const response = (
-                await apAxios.post(request.tokenUrl, urlSearchParams, {
+                await safeHttp.retryingAxios.post(request.tokenUrl, urlSearchParams, {
                     headers,
                 })
             ).data
@@ -171,7 +164,7 @@ export const credentialsOauth2Service = (log: FastifyBaseLogger): OAuth2Service<
                 throw new Error(`Unknown authorization method: ${authorizationMethod}`)
         }
         const response = (
-            await apAxios.post(appConnection.token_url, new URLSearchParams(body), {
+            await safeHttp.retryingAxios.post(appConnection.token_url, new URLSearchParams(body), {
                 headers,
                 timeout: 20000,
             })

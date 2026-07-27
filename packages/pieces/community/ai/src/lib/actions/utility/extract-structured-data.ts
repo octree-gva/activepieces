@@ -4,9 +4,10 @@ import { generateText, tool, jsonSchema, ModelMessage, UserModelMessage } from '
 import mime from 'mime-types';
 import Ajv from 'ajv';
 import { aiProps } from '../../common/props';
-import { AIProviderName } from '@activepieces/shared';
+import { AIProviderName } from '@activepieces/pieces-framework';
 
 export const extractStructuredData = createAction({
+  audience: 'human',
 	name: 'extractStructuredData',
 	displayName: 'Extract Structured Data',
 	description: 'Accurately Pull names, amounts, and other structured data from emails, invoices, and scanned documents.',
@@ -229,15 +230,15 @@ export const extractStructuredData = createAction({
 				}
 				const fileType = file.extension ? mime.lookup(file.extension) : 'image/jpeg';
 
-				if (fileType && fileType.startsWith('image') && file.data) {
+				if (fileType && fileType.startsWith('image') && file.base64) {
 					contentParts.push({
 						type: 'image',
-						image: file.data,
+						image: `data:${fileType};base64,${file.base64}`,
 					});
-				} else if (fileType && fileType.startsWith('application/pdf') && file.data) {
+				} else if (fileType && fileType.startsWith('application/pdf') && file.base64) {
 					contentParts.push({
 						type: 'file',
-						data: file.data,
+						data: `data:${fileType};base64,${file.base64}`,
 						mediaType: fileType,
 						filename: file.filename,
 					});

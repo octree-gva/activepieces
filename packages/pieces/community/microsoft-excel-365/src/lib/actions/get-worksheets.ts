@@ -1,4 +1,4 @@
-import { createAction, Property } from '@activepieces/pieces-framework';
+import { createAction, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
 import { excelAuth } from '../auth';
 import { commonProps } from '../common/props';
 import { getDrivePath, createMSGraphClient } from '../common/helpers';
@@ -7,6 +7,8 @@ export const getWorksheetsAction = createAction({
   auth: excelAuth,
   name: 'get_worksheets',
   description: 'Retrieve worksheets from a workbook',
+  audience: 'both',
+  aiMetadata: { description: 'List the worksheets (tabs) in a workbook, returning metadata such as id, name, and position for each sheet. Use to discover available sheets before reading or writing; to look up a sheet by name use Find Worksheet. Read-only and idempotent; returns up to the given limit unless Return All is enabled.', idempotent: true },
   displayName: 'Get Worksheets',
   props: {
     storageSource: commonProps.storageSource,
@@ -30,6 +32,7 @@ export const getWorksheetsAction = createAction({
     const { storageSource, siteId, documentId, workbookId } = propsValue;
     const returnAll = propsValue['returnAll'];
     const limit = propsValue['limit'];
+    const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
     if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
       throw new Error('please select SharePoint site and document library.');
@@ -38,7 +41,7 @@ export const getWorksheetsAction = createAction({
 
     const endpoint = `${drivePath}/items/${workbookId}/workbook/worksheets`;
 
-    const client = createMSGraphClient(auth['access_token']);
+    const client = createMSGraphClient(auth['access_token'], cloud);
     const response = await client.api(endpoint).get();
 
     const worksheets = response.value;

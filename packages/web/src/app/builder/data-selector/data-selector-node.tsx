@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { VirtualizedList } from '@/components/ui/virtualized-list';
+
 import {
   Collapsible,
   CollapsibleContent,
@@ -22,13 +24,13 @@ const DataSelectorNode = ({
   depth,
   searchTerm,
 }: DataSelectorNodeProps) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(depth === 0);
 
   useEffect(() => {
-    if (searchTerm && depth <= 1) {
+    if (searchTerm) {
       setExpanded(true);
-    } else if (!searchTerm) {
-      setExpanded(false);
+    } else {
+      setExpanded(depth === 0);
     }
   }, [searchTerm, depth]);
 
@@ -36,6 +38,8 @@ const DataSelectorNode = ({
   if (isTestStepNode) {
     return <TestStepSection stepName={node.data.stepName}></TestStepSection>;
   }
+
+  const children = node.children ?? [];
 
   return (
     <Collapsible className="w-full" open={expanded} onOpenChange={setExpanded}>
@@ -49,16 +53,20 @@ const DataSelectorNode = ({
           ></DataSelectorNodeContent>
         </CollapsibleTrigger>
         <CollapsibleContent className="w-full">
-          {node.children && node.children.length > 0 && (
+          {children.length > 0 && (
             <div className="flex flex-col ">
-              {node.children.map((node) => (
-                <DataSelectorNode
-                  depth={depth + 1}
-                  node={node}
-                  key={node.key}
-                  searchTerm={searchTerm}
-                ></DataSelectorNode>
-              ))}
+              <VirtualizedList
+                items={children}
+                estimateSize={32}
+                getItemKey={(index) => children[index].key}
+                renderItem={(child) => (
+                  <DataSelectorNode
+                    depth={depth + 1}
+                    node={child}
+                    searchTerm={searchTerm}
+                  ></DataSelectorNode>
+                )}
+              />
             </div>
           )}
         </CollapsibleContent>

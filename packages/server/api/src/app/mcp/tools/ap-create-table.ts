@@ -1,9 +1,10 @@
-import { apId, FieldType, McpServer, McpToolDefinition } from '@activepieces/shared'
+import { apId, Permission } from '@activepieces/core-utils'
+import { FieldType, McpToolDefinition, ProjectScopedMcpServer } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
 import { fieldService } from '../../tables/field/field.service'
 import { tableService } from '../../tables/table/table.service'
-import { mcpToolError } from './mcp-utils'
+import { mcpUtils } from './mcp-utils'
 import { fieldTypeSchema, formatFieldInfo } from './table-utils'
 
 const createTableInput = z.object({
@@ -15,10 +16,11 @@ const createTableInput = z.object({
     })).describe('Fields to create. Max 100 fields per table.'),
 })
 
-export const apCreateTableTool = (mcp: McpServer, log: FastifyBaseLogger): McpToolDefinition => {
+export const apCreateTableTool = (mcp: ProjectScopedMcpServer, log: FastifyBaseLogger): McpToolDefinition => {
     return {
         title: 'ap_create_table',
-        description: 'Create a new table with an initial set of fields. Field types: TEXT, NUMBER, DATE, STATIC_DROPDOWN (requires options). The new table will be empty — use ap_insert_records to add data.',
+        permission: Permission.WRITE_TABLE,
+        description: 'Create a new table with an initial set of fields. Types: TEXT, NUMBER, DATE, STATIC_DROPDOWN.',
         inputSchema: createTableInput.shape,
         annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: false },
         execute: async (args) => {
@@ -58,13 +60,19 @@ export const apCreateTableTool = (mcp: McpServer, log: FastifyBaseLogger): McpTo
                 return {
                     content: [{
                         type: 'text',
-                        text: `✅ Table "${name}" created (id: ${table.id})\nFields:\n${fieldLines}`,
+                        text: `✅ Table "${name}" created (id: ${table.id}, externalId: ${table.externalId})\nFields:\n${fieldLines}\n\nℹ️ Use "id" with the record/field tools; use "externalId" as table_id when configuring a Tables piece step in a flow.`,
                     }],
+                    structuredContent: {
+                        id: table.id,
+                        externalId: table.externalId,
+                        name: table.name,
+                        fields: createdFields.map(f => ({ id: f.id, externalId: f.externalId, name: f.name, type: f.type })),
+                    },
                 }
             }
             catch (err) {
-                log.error({ err, projectId: mcp.projectId }, 'ap_create_table failed')
-                return mcpToolError('Failed to create table', err)
+                log.error({ error: err, project: { id: mcp.projectId } }, 'ap_create_table failed')
+                return mcpUtils.mcpToolError('Failed to create table', err)
             }
         },
     }

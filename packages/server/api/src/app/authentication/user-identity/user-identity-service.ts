@@ -1,4 +1,5 @@
-import { ActivepiecesError, apId, ErrorCode, isNil, spreadIfDefined, UserIdentity } from '@activepieces/shared'
+import { ActivepiecesError, apId, ErrorCode, isNil, spreadIfDefined } from '@activepieces/core-utils'
+import { UserIdentity } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import { nanoid } from 'nanoid'
 import { repoFactory } from '../../core/db/repo-factory'
@@ -116,6 +117,9 @@ export const userIdentityService = (log: FastifyBaseLogger) => ({
             ...spreadIfDefined('password', params.password ? await passwordHasher.hash(params.password) : undefined),
         })
     },
+    async updateLastLoggedInPlatformId({ id, lastLoggedInPlatformId }: UpdateLastLoggedInPlatformIdParams): Promise<void> {
+        await userIdentityRepository().update(id, { lastLoggedInPlatformId })
+    },
 })
 
 
@@ -138,6 +142,11 @@ type UpdateParams = {
     lastName?: string
     password?: string
     imageUrl?: string | null
+}
+
+type UpdateLastLoggedInPlatformIdParams = {
+    id: string
+    lastLoggedInPlatformId: string
 }
 
 type VerifyIdentityPasswordParams = {

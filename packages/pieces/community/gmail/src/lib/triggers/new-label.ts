@@ -1,9 +1,9 @@
 import { createTrigger, TriggerStrategy } from '@activepieces/pieces-framework';
-import { gmailAuth } from '../auth';
-import { google } from 'googleapis';
-import { OAuth2Client } from 'googleapis-common';
+import { gmailAuth, createGoogleClient } from '../auth';
+import { gmail as googleGmail } from '@googleapis/gmail';
 import { getFirstFiveOrAll } from '../common/data';
-import { isNil } from '@activepieces/shared';
+import { isNil } from '@activepieces/pieces-framework';
+import { newLabelTriggerOutputSchema } from '../output-schemas';
 
 const TRIGGER_KEY = 'labels';
 
@@ -12,13 +12,17 @@ export const gmailNewLabelTrigger = createTrigger({
   name: 'new_label',
   displayName: 'New Label',
   description: 'Triggers when a new label is created.',
+  aiMetadata: {
+    description:
+      'Fires when a new label is created in the connected Gmail account. Each event represents one newly added label not seen on a prior poll.',
+  },
   props: {},
+  outputSchema: newLabelTriggerOutputSchema,
   sampleData: {},
   type: TriggerStrategy.POLLING,
   async onEnable(context) {
-    const authClient = new OAuth2Client();
-    authClient.setCredentials(context.auth);
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+    const authClient = await createGoogleClient(context.auth);
+    const gmail = googleGmail({ version: 'v1', auth: authClient });
 
     const response = await gmail.users.labels.list({
       userId: 'me',
@@ -33,9 +37,8 @@ export const gmailNewLabelTrigger = createTrigger({
     await context.store.delete(TRIGGER_KEY);
   },
   async test(context) {
-    const authClient = new OAuth2Client();
-    authClient.setCredentials(context.auth);
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+    const authClient = await createGoogleClient(context.auth);
+    const gmail = googleGmail({ version: 'v1', auth: authClient });
 
     const response = await gmail.users.labels.list({
       userId: 'me',
@@ -49,10 +52,9 @@ export const gmailNewLabelTrigger = createTrigger({
     const existingIds = (await context.store.get<string>(TRIGGER_KEY)) ?? '[]';
     const parsedExistingIds = JSON.parse(existingIds) as string[];
 
-    const authClient = new OAuth2Client();
-    authClient.setCredentials(context.auth);
+    const authClient = await createGoogleClient(context.auth);
 
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+    const gmail = googleGmail({ version: 'v1', auth: authClient });
 
     const response = await gmail.users.labels.list({
       userId: 'me',

@@ -1,9 +1,8 @@
+import { isNil, Permission } from '@activepieces/core-utils';
 import {
   FlowRun,
   FlowVersion,
   FlowVersionState,
-  isNil,
-  Permission,
   PopulatedFlow,
 } from '@activepieces/shared';
 import { useMutation } from '@tanstack/react-query';
@@ -145,7 +144,7 @@ const PublishFlowReminderWidget = () => {
 };
 
 PublishFlowReminderWidget.displayName = 'PublishFlowReminderWidget';
-export default PublishFlowReminderWidget;
+export { PublishFlowReminderWidget };
 
 const useShouldShowPublishButton = ({
   flowVersion,

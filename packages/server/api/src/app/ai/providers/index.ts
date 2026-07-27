@@ -1,9 +1,12 @@
-import { AIProviderAuthConfig, AIProviderConfig, AIProviderName } from '@activepieces/shared'
+import { AIProviderName } from '@activepieces/core-utils'
+import { AIProviderAuthConfig, AIProviderConfig } from '@activepieces/shared'
 import { AIProviderStrategy } from './ai-provider'
 import { anthropicProvider } from './anthropic-provider'
 import { azureProvider } from './azure-provider'
+import { bedrockProvider } from './bedrock-provider'
 import { cloudflareGatewayProvider } from './cloudflare-gateway-provider'
 import { googleProvider } from './google-provider'
+import { mistralProvider } from './mistral-provider'
 import { openAICompatibleProvider } from './openai-compatible-gateway-provider'
 import { openaiProvider } from './openai-provider'
 import { openRouterProvider } from './openrouter-provider'
@@ -16,6 +19,8 @@ export const aiProviders: Record<AIProviderName, AIProviderStrategy<AIProviderAu
     [AIProviderName.GOOGLE]: googleProvider,
     [AIProviderName.CLOUDFLARE_GATEWAY]: cloudflareGatewayProvider,
     [AIProviderName.CUSTOM]: openAICompatibleProvider,
+    [AIProviderName.BEDROCK]: bedrockProvider,
+    [AIProviderName.MISTRAL]: mistralProvider,
     [AIProviderName.ACTIVEPIECES]: {
         ...openRouterProvider,
         name: 'Activepieces',

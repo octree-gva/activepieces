@@ -1,4 +1,5 @@
-import { apId, isEmpty, isNil, PackageType, PieceType } from '@activepieces/shared'
+import { apId, isEmpty, isNil } from '@activepieces/core-utils'
+import { PackageType, PieceType } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import semVer from 'semver'
 import { system } from '../../../helper/system/system'
@@ -33,11 +34,28 @@ export function lastVersionOfEachPiece(pieces: PieceMetadataSchema[]): PieceMeta
     return Array.from(seen.values())
 }
 
+let devPiecesCachePromise: Promise<PieceMetadataSchema[]> | null = null
+
+export function invalidateDevPieceCache(): void {
+    devPiecesCachePromise = null
+}
+
 export async function loadDevPiecesIfEnabled(log: FastifyBaseLogger): Promise<PieceMetadataSchema[]> {
     const devPiecesConfig = system.get(AppSystemProp.DEV_PIECES)
     if (isNil(devPiecesConfig) || isEmpty(devPiecesConfig)) {
         return []
     }
+    if (devPiecesCachePromise) {
+        return devPiecesCachePromise
+    }
+    devPiecesCachePromise = loadDevPieces(log, devPiecesConfig)
+    devPiecesCachePromise.catch(() => {
+        devPiecesCachePromise = null
+    })
+    return devPiecesCachePromise
+}
+
+async function loadDevPieces(log: FastifyBaseLogger, devPiecesConfig: string): Promise<PieceMetadataSchema[]> {
     const piecesNames = devPiecesConfig.split(',')
     const pieces = await filePiecesUtils(log).loadDistPiecesMetadata(piecesNames)
 

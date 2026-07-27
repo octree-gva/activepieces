@@ -1,10 +1,12 @@
 import { microsoftSharePointAuth } from '../auth';
 import {
   createAction,
+  OAuth2PropertyValue,
   Property,
   DropdownOption,
   PiecePropValueSchema,
 } from '@activepieces/pieces-framework';
+import { getGraphBaseUrl } from '../common/microsoft-cloud';
 import { microsoftSharePointCommon } from '../common';
 import { Client, PageCollection, ResponseType } from '@microsoft/microsoft-graph-client';
 import { DriveItem } from '@microsoft/microsoft-graph-types';
@@ -21,6 +23,11 @@ export const copyItemWithinSiteAction = createAction({
   name: 'microsoft_sharepoint_copy_item_within_site',
   displayName: 'Copy File or Folder (Within Site)',
   description: 'Copy a file or folder to another folder within the same site.',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Copies a file or folder to another folder within the same SharePoint site and drive, optionally renaming the copy; select the root to copy to the drive top level. Use for same-site duplication; for cross-site copies use the across-sites variant. The conflict behavior (fail, replace, or rename) controls name clashes. Not idempotent: each run produces another copy (rename mode) or overwrites the target (replace mode).',
+    idempotent: false,
+  },
   props: {
     siteId: microsoftSharePointCommon.siteId,
     driveId: microsoftSharePointCommon.driveId,
@@ -42,10 +49,12 @@ export const copyItemWithinSiteAction = createAction({
         const authValue = auth as PiecePropValueSchema<
           typeof microsoftSharePointAuth
         >;
+        const cloud = (authValue as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
         const client = Client.initWithMiddleware({
           authProvider: {
             getAccessToken: () => Promise.resolve(authValue.access_token),
           },
+          baseUrl: getGraphBaseUrl(cloud),
         });
 
         const options: DropdownOption<string>[] = [
@@ -96,10 +105,12 @@ export const copyItemWithinSiteAction = createAction({
     const { siteId, driveId, itemId, destinationFolderId, newName, conflictBehavior } =
       context.propsValue;
 
+    const cloud = context.auth.props?.['cloud'] as string | undefined;
     const client = Client.initWithMiddleware({
       authProvider: {
         getAccessToken: () => Promise.resolve(context.auth.access_token),
       },
+      baseUrl: getGraphBaseUrl(cloud),
     });
 
     const effectiveDestinationId = destinationFolderId === 'root'

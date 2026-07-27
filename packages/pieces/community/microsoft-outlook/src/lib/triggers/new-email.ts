@@ -5,10 +5,11 @@ import {
 	createTrigger,
 	Property,
 } from '@activepieces/pieces-framework';
-import { Client, PageCollection } from '@microsoft/microsoft-graph-client';
+import { PageCollection } from '@microsoft/microsoft-graph-client';
 import { Message } from '@microsoft/microsoft-graph-types';
 import dayjs from 'dayjs';
 import { microsoftOutlookAuth } from '../common/auth';
+import { outlookCommon } from '../common/client';
 
 const polling: Polling<AppConnectionValueForAuthProperty<typeof microsoftOutlookAuth>, {
 	sender?: string;
@@ -16,11 +17,7 @@ const polling: Polling<AppConnectionValueForAuthProperty<typeof microsoftOutlook
 }> = {
 	strategy: DedupeStrategy.TIMEBASED,
 	items: async ({ auth, lastFetchEpochMS, propsValue }) => {
-		const client = Client.initWithMiddleware({
-			authProvider: {
-				getAccessToken: () => Promise.resolve(auth.access_token),
-			},
-		});
+		const client = outlookCommon.createClient(auth);
 
 		const messages = [];
 		const filter =
@@ -29,7 +26,7 @@ const polling: Polling<AppConnectionValueForAuthProperty<typeof microsoftOutlook
 				: `$filter=receivedDateTime gt ${dayjs(lastFetchEpochMS).toISOString()}`;
 
 		let response: PageCollection = await client
-			.api(`/me/mailFolders/inbox/messages?${filter}`)
+			.api(`${outlookCommon.mailboxPrefix(auth)}/mailFolders/inbox/messages?${filter}`)
 			.orderby('receivedDateTime desc')
 			.get();
 
@@ -89,6 +86,9 @@ export const newEmailTrigger = createTrigger({
 	name: 'newEmail',
 	displayName: 'New Email',
 	description: 'Triggers when a new email is received in the inbox.',
+	aiMetadata: {
+		description: 'Fires when a new message arrives in the mailbox Inbox, optionally narrowed to a specific sender and/or recipient address. Each fire represents one newly received email.',
+	},
 	props: {
 		sender: Property.ShortText({
 			displayName: 'From (Sender Email)',

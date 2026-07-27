@@ -1,7 +1,8 @@
 import React, { Suspense } from 'react';
 
 import { PageTitle } from '@/app/components/page-title';
-import { LoadingScreen } from '@/components/custom/loading-screen';
+import { RouteLoadingBar } from '@/components/custom/route-loading-bar';
+import { lazyWithRetry } from '@/lib/lazy-with-retry';
 
 import { ProjectDashboardLayout } from '../components/project-layout';
 import { TemplateDetailsWrapper } from '../guards/template-details-wrapper';
@@ -10,21 +11,26 @@ import NotFoundPage from './404-page';
 import AuthenticatePage from './authenticate';
 import { EmbedPage } from './embed';
 import { EmbeddedConnectionDialog } from './embed/embedded-connection-dialog';
+import { EmbeddedMcpAuthorizeDialog } from './embed/embedded-mcp-authorize-dialog';
+import { EmbeddedMcpSettingsDialog } from './embed/embedded-mcp-settings-dialog';
 import { McpAuthorizePage } from './mcp-authorize';
 import { RedirectPage } from './redirect';
 
-const ChatPage = React.lazy(() =>
-  import('./chat').then((m) => ({ default: m.ChatPage })),
+const ChatPage = lazyWithRetry(
+  () => import('./chat').then((m) => ({ default: m.ChatPage })),
+  'public-chat',
 );
-const FormPage = React.lazy(() =>
-  import('./forms').then((m) => ({ default: m.FormPage })),
+const FormPage = lazyWithRetry(
+  () => import('./forms').then((m) => ({ default: m.FormPage })),
+  'public-form',
 );
-const TemplatesPage = React.lazy(() =>
-  import('./templates').then((m) => ({ default: m.TemplatesPage })),
+const TemplatesPage = lazyWithRetry(
+  () => import('./templates').then((m) => ({ default: m.TemplatesPage })),
+  'public-templates',
 );
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<LoadingScreen />}>{children}</Suspense>;
+  return <Suspense fallback={<RouteLoadingBar />}>{children}</Suspense>;
 }
 
 export const publicRoutes = [
@@ -35,6 +41,14 @@ export const publicRoutes = [
   {
     path: '/embed/connections',
     element: <EmbeddedConnectionDialog></EmbeddedConnectionDialog>,
+  },
+  {
+    path: '/embed/mcp',
+    element: <EmbeddedMcpSettingsDialog></EmbeddedMcpSettingsDialog>,
+  },
+  {
+    path: '/embed/mcp-authorize',
+    element: <EmbeddedMcpAuthorizeDialog></EmbeddedMcpAuthorizeDialog>,
   },
   {
     path: '/authenticate',

@@ -1,4 +1,5 @@
-import { isNil, PrincipalType } from '@activepieces/shared'
+import { isNil } from '@activepieces/core-utils'
+import { PrincipalType } from '@activepieces/shared'
 import { FastifyRequest } from 'fastify'
 import { AuthorizationRouteSecurity } from '../../authorization/authorization'
 import { AuthorizationType, ProjectResourceType, RouteKind } from '../../authorization/common'
@@ -45,6 +46,7 @@ export async function convertToSecurityAccessRequest(request: FastifyRequest): P
                 kind: RouteKind.AUTHENTICATED,
                 authorization: {
                     adminOnly: security.authorization.adminOnly,
+                    nonEmbedUsersOnly: security.authorization.nonEmbedUsersOnly,
                     type: AuthorizationType.PLATFORM,
                     allowedPrincipals: security.authorization.allowedPrincipals,
                 },

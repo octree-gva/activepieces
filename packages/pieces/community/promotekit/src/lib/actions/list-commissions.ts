@@ -8,6 +8,11 @@ export const listCommissions = createAction({
   name: 'list_commissions',
   displayName: 'List Commissions',
   description: 'List all commissions in your PromoteKit account.',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Retrieve a paginated list of commissions earned in the PromoteKit account. Use to enumerate or browse commissions rather than look one up by a known ID. Supports page and per-page limit (max 100); read-only and safe to repeat.',
+    idempotent: true,
+  },
   props: {
     page: Property.Number({
       displayName: 'Page',
@@ -26,7 +31,7 @@ export const listCommissions = createAction({
     const response = await promotekitApiCall<{
       data: Record<string, unknown>[];
     }>({
-      token: context.auth as unknown as string,
+      token: context.auth.secret_text,
       method: HttpMethod.GET,
       path: '/commissions',
       queryParams: {

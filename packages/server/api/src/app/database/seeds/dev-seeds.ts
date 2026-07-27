@@ -1,8 +1,9 @@
-import { ApEdition, ApEnvironment, UserIdentityProvider } from '@activepieces/shared'
+import { ApEnvironment, UserIdentityProvider } from '@activepieces/shared'
 import { authenticationService } from '../../authentication/authentication.service'
 import { FlagEntity } from '../../flags/flag.entity'
 import { system } from '../../helper/system/system'
 import { AppSystemProp } from '../../helper/system/system-props'
+import { platformService } from '../../platform/platform.service'
 import { databaseConnection } from '../database-connection'
 import { DataSeed } from './data-seed'
 
@@ -11,8 +12,7 @@ const log = system.globalLogger()
 
 const currentEnvIsNotDev = (): boolean => {
     const env = system.get(AppSystemProp.ENVIRONMENT)
-    const edition = system.get(AppSystemProp.EDITION)
-    return env !== ApEnvironment.DEVELOPMENT  || edition === ApEdition.ENTERPRISE
+    return env !== ApEnvironment.DEVELOPMENT
 }
 
 const devDataAlreadySeeded = async (): Promise<boolean> => {
@@ -35,7 +35,7 @@ const seedDevUser = async (): Promise<void> => {
     const DEV_PASSWORD = '12345678'
 
 
-    await authenticationService(log).signUp({
+    const response = await authenticationService(log).signUp({
         email: DEV_EMAIL,
         password: DEV_PASSWORD,
         firstName: 'Dev',
@@ -46,7 +46,13 @@ const seedDevUser = async (): Promise<void> => {
         provider: UserIdentityProvider.EMAIL,
     })
 
-    log.info({ email: DEV_EMAIL, password: DEV_PASSWORD }, '[devSeeds#seedDevUser] Dev user created')
+    await platformService(log).createPlatformWithProject({
+        identityId: response.id,
+        name: 'dev\'s Platform',
+        invalidatePreviousTokens: true,
+    })
+
+    log.info({ email: DEV_EMAIL, password: DEV_PASSWORD }, '[devSeeds#seedDevUser] Dev user and platform created')
 }
 const seedDevData = async (): Promise<void> => {
     if (currentEnvIsNotDev()) {

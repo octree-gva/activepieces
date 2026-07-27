@@ -1,4 +1,4 @@
-import { isNil } from '@activepieces/shared';
+import { isNil } from '@activepieces/core-utils';
 import { useQuery } from '@tanstack/react-query';
 import { t } from 'i18next';
 import { useEffect } from 'react';
@@ -17,7 +17,7 @@ type ProjectRoleSelectProps = {
 export const ProjectRoleSelect = ({ form }: ProjectRoleSelectProps) => {
   const { platform } = platformHooks.useCurrentPlatform();
 
-  const { data: rolesData } = useQuery({
+  const { data: rolesData, isPending: rolesLoading } = useQuery({
     queryKey: ['project-roles'],
     queryFn: () => projectRoleApi.list(),
     enabled:
@@ -51,6 +51,7 @@ export const ProjectRoleSelect = ({ form }: ProjectRoleSelectProps) => {
             onValueChange={field.onChange}
             roles={roles}
             placeholder={t('Select a project role')}
+            isLoading={rolesLoading}
           />
           <FormMessage />
         </FormItem>

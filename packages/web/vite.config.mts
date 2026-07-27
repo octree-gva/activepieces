@@ -29,15 +29,59 @@ export default defineConfig(({ command, mode }) => {
           },
           ws: true,
         },
-        '/mcp': {
+        '/ingest': {
           target: 'http://127.0.0.1:3000',
           secure: false,
           changeOrigin: true,
         },
-        '/.well-known/oauth-authorization-server': {
+        '^/mcp(/|$)': {
           target: 'http://127.0.0.1:3000',
           secure: false,
           changeOrigin: true,
+          headers: {
+            'X-Forwarded-Host': 'localhost:4200',
+          },
+          rewrite: (p: string) => p,
+        },
+        '/.well-known': {
+          target: 'http://127.0.0.1:3000',
+          secure: false,
+          changeOrigin: true,
+          headers: {
+            'X-Forwarded-Host': 'localhost:4200',
+          },
+        },
+        '/register': {
+          target: 'http://127.0.0.1:3000',
+          secure: false,
+          changeOrigin: true,
+          headers: {
+            'X-Forwarded-Host': 'localhost:4200',
+          },
+        },
+        '/authorize': {
+          target: 'http://127.0.0.1:3000',
+          secure: false,
+          changeOrigin: true,
+          headers: {
+            'X-Forwarded-Host': 'localhost:4200',
+          },
+        },
+        '/token': {
+          target: 'http://127.0.0.1:3000',
+          secure: false,
+          changeOrigin: true,
+          headers: {
+            'X-Forwarded-Host': 'localhost:4200',
+          },
+        },
+        '/revoke': {
+          target: 'http://127.0.0.1:3000',
+          secure: false,
+          changeOrigin: true,
+          headers: {
+            'X-Forwarded-Host': 'localhost:4200',
+          },
         },
       },
       port: 4200,
@@ -49,11 +93,17 @@ export default defineConfig(({ command, mode }) => {
       host: 'localhost',
     },
     resolve: {
+      dedupe: [
+        '@codemirror/state',
+        '@codemirror/view',
+        '@codemirror/language',
+        '@codemirror/commands',
+      ],
       alias: {
         '@': path.resolve(__dirname, './src'),
         '@activepieces/shared': path.resolve(
           __dirname,
-          '../../packages/shared/src',
+          '../../packages/core/shared/src',
         ),
         'ee-embed-sdk': path.resolve(
           __dirname,
@@ -63,11 +113,21 @@ export default defineConfig(({ command, mode }) => {
           __dirname,
           '../../packages/pieces/framework/src',
         ),
-        // request-filtering-agent extends Node.js http.Agent and cannot run in the browser.
-        // SSRF protection is server-side only, so we stub it out for the browser bundle.
-        'request-filtering-agent': path.resolve(
+        '@activepieces/core-utils': path.resolve(
           __dirname,
-          './src/stubs/request-filtering-agent.ts',
+          '../../packages/core/utils/src',
+        ),
+        '@activepieces/core-formula': path.resolve(
+          __dirname,
+          '../../packages/core/formula/src',
+        ),
+        '@activepieces/core-piece-types': path.resolve(
+          __dirname,
+          '../../packages/core/piece-types/src',
+        ),
+        '@activepieces/core-execution': path.resolve(
+          __dirname,
+          '../../packages/core/execution/src',
         ),
       },
     },
@@ -96,6 +156,7 @@ export default defineConfig(({ command, mode }) => {
       outDir: '../../dist/packages/web',
       emptyOutDir: true,
       reportCompressedSize: true,
+      sourcemap: 'hidden',
       commonjsOptions: {
         transformMixedEsModules: true,
       },

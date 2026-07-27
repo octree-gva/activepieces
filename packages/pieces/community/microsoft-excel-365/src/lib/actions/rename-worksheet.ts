@@ -1,4 +1,4 @@
-import { createAction, Property } from '@activepieces/pieces-framework';
+import { createAction, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
 import { excelAuth } from '../auth';
 import { commonProps } from '../common/props';
 import { getDrivePath, createMSGraphClient } from '../common/helpers';
@@ -16,6 +16,8 @@ export const renameWorksheetAction = createAction({
   name: 'rename_worksheet',
   displayName: 'Rename Worksheet',
   description: 'Change the name of an existing worksheet.',
+  audience: 'both',
+  aiMetadata: { description: 'Rename an existing worksheet (tab) within a workbook. Use to relabel a sheet without altering its contents. Effectively idempotent — applying the same target name leaves the sheet in the same state. The new name must be non-blank, 31 characters or fewer, avoid the characters / \\ ? * : [ ], and cannot be the reserved name "History".', idempotent: true },
   props: {
     storageSource: commonProps.storageSource,
     siteId: commonProps.siteId,
@@ -31,6 +33,7 @@ export const renameWorksheetAction = createAction({
   async run(context) {
     const { storageSource, siteId, documentId, workbookId, worksheetId, new_name } = context.propsValue;
     const { access_token } = context.auth;
+    const cloud = (context.auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
     if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
       throw new Error('please select SharePoint site and document library.');
@@ -39,7 +42,7 @@ export const renameWorksheetAction = createAction({
 
     // The worksheet_id prop from excelCommon returns the worksheet's current name,
     // which can be used to identify it in the API URL.
-    const client = createMSGraphClient(access_token);
+    const client = createMSGraphClient(access_token, cloud);
     const response = await client
       .api(`${drivePath}/items/${workbookId}/workbook/worksheets/${worksheetId}`)
       .patch({ name: new_name });

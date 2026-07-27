@@ -1,7 +1,7 @@
 import { createAction, Property } from '@activepieces/pieces-framework';
 import { InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { ModelModality } from '@aws-sdk/client-bedrock';
-import { awsBedrockAuth } from '../auth';
+import { awsBedrockCombinedAuth } from '../auth';
 import {
   createBedrockRuntimeClient,
   getBedrockModelOptions,
@@ -9,19 +9,21 @@ import {
 } from '../common';
 
 export const generateEmbeddings = createAction({
-  auth: awsBedrockAuth,
+  audience: 'both',
+  auth: awsBedrockCombinedAuth,
   name: 'generate_embeddings',
   displayName: 'Generate Embeddings',
   description:
     'Generate vector embeddings from text using Amazon Titan Embed, Cohere Embed, or Amazon Nova Multimodal Embeddings models.',
+  aiMetadata: { description: 'Converts one text string into a numeric embedding vector using a Bedrock embedding model (Amazon Titan Embed, Cohere Embed, Nova Multimodal, or TwelveLabs), returning the vector and its dimension count; the request shape is adapted per model family, so Vector Dimensions, Normalize, and Embedding Purpose only take effect on the families that support them. Pick this for semantic search, similarity, or clustering pipelines rather than Ask Bedrock, which returns prose. Handles a single text per call - loop for batches - and requires an embedding-capable model enabled in the connected AWS region. Deterministic stateless inference, so repeat calls with the same input are idempotent.', idempotent: true },
   props: {
     model: Property.Dropdown({
       displayName: 'Model',
       required: true,
-      auth: awsBedrockAuth,
+      auth: awsBedrockCombinedAuth,
       description: 'The embedding model to use.',
       refreshers: [],
-      options: async ({ auth }) => {
+      options: async ({ auth }, { server }) => {
         if (!auth) {
           return {
             disabled: true,
@@ -31,7 +33,7 @@ export const generateEmbeddings = createAction({
         }
         return getBedrockModelOptions(auth.props, {
           outputModality: ModelModality.EMBEDDING,
-        });
+        }, server);
       },
     }),
     inputText: Property.LongText({
@@ -43,7 +45,7 @@ export const generateEmbeddings = createAction({
       displayName: 'Embedding Purpose',
       required: false,
       description:
-        'Optimize embeddings for your use case. Only used by Nova Multimodal Embeddings.',
+        'How the embeddings will be used — helps the model optimize the output. Only applies to Nova Multimodal Embeddings models. Leave as "Generic Index" if unsure.',
       defaultValue: 'GENERIC_INDEX',
       options: {
         options: [
@@ -56,21 +58,21 @@ export const generateEmbeddings = createAction({
       },
     }),
     dimensions: Property.Number({
-      displayName: 'Dimensions',
+      displayName: 'Vector Dimensions',
       required: false,
       description:
-        'The number of dimensions for the output embedding vector. Titan Embed v2: 256, 512, 1024. Nova Multimodal: 256, 384, 1024, 3072.',
+        'Size of the output vector. Larger = more accurate but slower/costlier. Titan Embed v2 supports: 256, 512, 1024. Nova Multimodal supports: 256, 384, 1024, 3072. Leave blank to use the model default.',
     }),
     normalize: Property.Checkbox({
-      displayName: 'Normalize',
+      displayName: 'Normalize Output',
       required: false,
       description:
-        'Whether to normalize the output embedding vector. Supported by Titan Embed v2.',
+        'Scale the output vector so its values range between -1 and 1. Recommended for similarity comparisons. Only supported by Titan Embed v2.',
       defaultValue: true,
     }),
   },
-  async run({ auth, propsValue }) {
-    const client = createBedrockRuntimeClient(auth.props);
+  async run({ auth, propsValue, server }) {
+    const client = await createBedrockRuntimeClient({ auth: auth.props, server });
     const { model, inputText, dimensions, normalize } = propsValue;
 
     const isTitan = model.startsWith('amazon.titan-embed');

@@ -1,4 +1,5 @@
-import { FlowOperationType, FlowState, FlowStatus, flowStructureUtil, FlowSyncError, isNil, PopulatedFlow } from '@activepieces/shared'
+import { isNil } from '@activepieces/core-utils'
+import { FlowOperationType, FlowState, FlowStatus, flowStructureUtil, FlowSyncError, PopulatedFlow } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import { flowService } from '../../../../flows/flow/flow.service'
 import { projectService } from '../../../../project/project-service'
@@ -32,7 +33,7 @@ export const projectStateHelper = (log: FastifyBaseLogger) => ({
             id: originalFlow.id,
             projectId,
             platformId: project.platformId,
-            userId: project.ownerId,
+            userId: null,
             operation: {
                 type: FlowOperationType.IMPORT_FLOW,
                 request: {
@@ -49,7 +50,7 @@ export const projectStateHelper = (log: FastifyBaseLogger) => ({
                 id: updatedFlow.id,
                 projectId,
                 platformId: project.platformId,
-                userId: project.ownerId,
+                userId: null,
                 operation: {
                     type: FlowOperationType.CHANGE_STATUS,
                     request: {
@@ -75,7 +76,7 @@ export const projectStateHelper = (log: FastifyBaseLogger) => ({
                 id: flow.id,
                 projectId,
                 platformId: project.platformId,
-                userId: project.ownerId,
+                userId: null,
                 operation: {
                     type: FlowOperationType.LOCK_AND_PUBLISH,
                     request: {

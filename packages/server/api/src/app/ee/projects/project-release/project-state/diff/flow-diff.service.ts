@@ -1,6 +1,6 @@
-import { assertNotNullOrUndefined, DEFAULT_SAMPLE_DATA_SETTINGS, FlowActionType, flowPieceUtil, FlowProjectOperationType, FlowState, flowStructureUtil, FlowTriggerType, FlowVersion, isNil, mapsAreSame, ProjectOperation, ProjectState, Step } from '@activepieces/shared'
+import { assertNotNullOrUndefined, isNil, mapsAreSame } from '@activepieces/core-utils'
+import { DEFAULT_SAMPLE_DATA_SETTINGS, FlowActionType, flowPieceUtil, FlowProjectOperationType, FlowState, flowStructureUtil, FlowTriggerType, FlowVersion, ProjectOperation, ProjectState, Step } from '@activepieces/shared'
 import deepEqual from 'deep-equal'
-import semver from 'semver'
 
 export const flowDiffService = {
     async diff({ newState, currentState }: DiffParams): Promise<ProjectOperation[]> {
@@ -61,21 +61,7 @@ function searchInFlowForFlowByIdOrExternalId(flows: FlowState[], externalId: str
 function isSameVersion(versionOne: string, versionTwo: string): boolean {
     const cleanedVersionOne = flowPieceUtil.getExactVersion(versionOne)
     const cleanedVersionTwo = flowPieceUtil.getExactVersion(versionTwo)
-    
-    const versionOneObj = semver.parse(cleanedVersionOne)
-    const versionTwoObj = semver.parse(cleanedVersionTwo)
-    
-    if (!versionOneObj || !versionTwoObj) {
-        return cleanedVersionOne === cleanedVersionTwo
-    }
-    
-    if (versionOneObj.major >= 1 || versionTwoObj.major >= 1) {
-        return versionOneObj.major === versionTwoObj.major
-    }
-    else {
-        return versionOneObj.major === versionTwoObj.major && 
-               versionOneObj.minor === versionTwoObj.minor
-    }
+    return cleanedVersionOne === cleanedVersionTwo
 }
 
 async function isFlowChanged(fromFlow: FlowState, targetFlow: FlowState): Promise<boolean> {
@@ -119,12 +105,12 @@ async function isFlowChanged(fromFlow: FlowState, targetFlow: FlowState): Promis
 }
 
 async function normalize(flowVersion: FlowVersion): Promise<FlowVersion> {
-    const flowUpgradable = flowPieceUtil.makeFlowAutoUpgradable(flowVersion)
-    return flowStructureUtil.transferFlow(flowUpgradable, (step) => {
+    return flowStructureUtil.transferFlow(flowVersion, (step) => {
         const clonedStep: Step = JSON.parse(JSON.stringify(step))
         clonedStep.settings.sampleData = DEFAULT_SAMPLE_DATA_SETTINGS
+        clonedStep.lastUpdatedDate = ''
         const authExists = clonedStep?.settings?.input?.auth
-        
+
         if ([FlowActionType.PIECE, FlowTriggerType.PIECE].includes(step.type)) {
             clonedStep.settings.pieceVersion = ''
             if (authExists) {

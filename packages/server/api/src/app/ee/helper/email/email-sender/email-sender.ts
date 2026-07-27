@@ -12,7 +12,15 @@ export type EmailSender = {
 const getEmailSenderInstance = (log: FastifyBaseLogger): EmailSender => {
     const env = system.get(AppSystemProp.ENVIRONMENT)
 
-    if (env === ApEnvironment.PRODUCTION) {
+    // The automated test suite must never send real mail.
+    if (env === ApEnvironment.TESTING) {
+        return logEmailSender(log)
+    }
+
+    // Production always sends; any other environment (e.g. local dev) also sends once SMTP
+    // is actually configured, so a deliberately-configured mail server really delivers. With
+    // no SMTP configured we fall back to the log sender, preserving zero-setup dev behavior.
+    if (env === ApEnvironment.PRODUCTION || smtpEmailSender(log).isSmtpConfigured()) {
         return smtpEmailSender(log)
     }
 
@@ -27,7 +35,6 @@ type BaseEmailTemplateData<Name extends string, Vars extends Record<string, stri
 
 type InvitationEmailTemplateData = BaseEmailTemplateData<'invitation-email', {
     projectName: string
-    role: string
     setupLink: string
 }>
 
@@ -46,26 +53,24 @@ type VerifyEmailTemplateData = BaseEmailTemplateData<'verify-email', {
 }>
 
 type IssueCreatedTemplateData = BaseEmailTemplateData<'issue-created', {
-    issueUrl: string
-    flowName: string
-    isIssue: string
-    createdAt: string
-}>
-
-type TriggerFailureThresholdTemplateData = BaseEmailTemplateData<'trigger-failure', {
-    flowName: string
+    runUrl: string
     projectName: string
-}>
-
-type BadgeAwardedTemplateData = BaseEmailTemplateData<'badge-awarded', {
-    badgeTitle: string
-    badgeDescription: string
-    badgeImageUrl: string
-    firstName: string
+    flowName: string
+    createdAt: string
+    failedStepDisplayName: string
+    failedStepNumber: string
+    failedStepMessage: string
 }>
 
 type ScimUserWelcomeTemplateData = BaseEmailTemplateData<'scim-user-welcome', {
     loginLink: string
+}>
+
+type ChatNotificationTemplateData = BaseEmailTemplateData<'chat-notification', {
+    subject: string
+    body: string
+    senderName: string
+    senderEmail: string
 }>
 
 export type EmailTemplateData =
@@ -74,12 +79,12 @@ export type EmailTemplateData =
   | ResetPasswordEmailTemplateData
   | VerifyEmailTemplateData
   | IssueCreatedTemplateData
-  | TriggerFailureThresholdTemplateData
-  | BadgeAwardedTemplateData
   | ScimUserWelcomeTemplateData
+  | ChatNotificationTemplateData
 
 type SendArgs = {
     emails: string[]
     platformId: string | undefined
     templateData: EmailTemplateData
+    replyTo?: string
 }

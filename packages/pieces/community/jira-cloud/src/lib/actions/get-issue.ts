@@ -1,33 +1,20 @@
 import { createAction, Property } from '@activepieces/pieces-framework';
 import { jiraCloudAuth } from '../../auth';
 import { HttpMethod, QueryParams } from '@activepieces/pieces-common';
-import { sendJiraRequest } from '../common';
+import { mapFieldNames, sendJiraRequest } from '../common';
 import { getIssueIdDropdown, getProjectIdDropdown } from '../common/props';
-
-function mapFieldNames(
-  fields: Record<string, any>,
-  fieldNames: Record<string, string>
-) {
-  const mappedFields = {} as Record<string, any>;
-
-  for (const [fieldId, fieldValue] of Object.entries(fields)) {
-    const fieldName = fieldNames?.[fieldId];
-    if (fieldName) {
-      mappedFields[fieldName] = fieldValue;
-    } else {
-      // fallback in case field cannot be mapped (but this should not happen)
-      mappedFields[fieldId] = fieldValue;
-    }
-  }
-
-  return mappedFields;
-}
 
 export const getIssueAction = createAction({
   auth: jiraCloudAuth,
   name: 'get_issue',
   displayName: 'Get Issue',
   description: 'Get issue data.',
+  audience: 'both',
+  aiMetadata: {
+    description:
+      'Fetch a single Jira issue by project and issue, optionally expanding extras like rendered fields, transitions, edit metadata, or changelog, and optionally remapping cryptic field/transition IDs to human-readable names. Use when you know which issue you want; to find issues by criteria use Search Issues instead. Read-only and idempotent.',
+    idempotent: true,
+  },
   props: {
     projectId: getProjectIdDropdown(),
     issueId: getIssueIdDropdown({ refreshers: ['projectId'] }),

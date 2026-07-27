@@ -8,6 +8,11 @@ export const findAffiliate = createAction({
   name: 'find_affiliate',
   displayName: 'Find Affiliate',
   description: 'Get details of a specific affiliate by ID.',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Fetch a single affiliate by its PromoteKit affiliate ID. Use when you already have the exact ID and need that affiliate\'s details; to discover IDs, list affiliates first. Read-only and safe to repeat.',
+    idempotent: true,
+  },
   props: {
     affiliate_id: Property.ShortText({
       displayName: 'Affiliate ID',
@@ -19,7 +24,7 @@ export const findAffiliate = createAction({
     const response = await promotekitApiCall<{
       data: Record<string, unknown>;
     }>({
-      token: context.auth as unknown as string,
+      token: context.auth.secret_text,
       method: HttpMethod.GET,
       path: `/affiliates/${context.propsValue.affiliate_id}`,
     });

@@ -3,7 +3,8 @@ import {
   createPiece,
   OAuth2PropertyValue,
 } from '@activepieces/pieces-framework';
-import { PieceCategory } from '@activepieces/shared';
+import { PieceCategory } from '@activepieces/pieces-framework';
+import { copyFile } from './lib/actions/copy-file';
 import { downloadFile } from './lib/actions/download-file';
 import { listFiles } from './lib/actions/list-files';
 import { listFolders } from './lib/actions/list-folders';
@@ -23,10 +24,14 @@ export const microsoftOneDrive = createPiece({
   actions: [
     uploadFile,
     downloadFile,
+    copyFile,
     listFiles,
     listFolders,
     createCustomApiCallAction({
-      baseUrl: () => oneDriveCommon.baseUrl,
+      baseUrl: (auth) => {
+        const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
+        return oneDriveCommon.getBaseUrl(cloud);
+      },
       auth: oneDriveAuth,
       authMapping: async (auth) => ({
         Authorization: `Bearer ${(auth as OAuth2PropertyValue).access_token}`,

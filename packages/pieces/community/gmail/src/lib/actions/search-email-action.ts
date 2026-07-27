@@ -1,17 +1,23 @@
 import { createAction, Property } from '@activepieces/pieces-framework';
-import { gmailAuth } from '../auth';
-import { google } from 'googleapis';
-import { OAuth2Client } from 'googleapis-common';
+import { gmailAuth, createGoogleClient } from '../auth';
+import { gmail as googleGmail } from '@googleapis/gmail';
 import { convertAttachment, parseStream } from '../common/data';
 import { GmailProps } from '../common/props';
 import { GmailLabel } from '../common/models';
+import { gmailSearchMailActionOutputSchema } from '../output-schemas';
 
 export const gmailSearchMailAction = createAction({
   auth: gmailAuth,
   name: 'gmail_search_mail',
   displayName: 'Find Email',
   description:
-    'Find emails using advanced search criteria. At least one search filter (from, to, subject, label, category, date, content, or attachment) is required.',
+    'Find emails using advanced search criteria. If no filters are provided, the latest emails are returned.',
+  audience: 'both',
+  aiMetadata: {
+    description:
+      'Searches the mailbox for emails matching combinable filters (sender, recipient, subject, body text, label, category, date range, attachment presence/name) and returns the matched messages with parsed contents. Use this to locate messages or discover their IDs before reading or replying; with no filters it returns the most recent emails. Bound results with Max Results (1-500, default 10). Idempotent: a read-only search that does not modify the mailbox.',
+    idempotent: true,
+  },
   props: {
     from: GmailProps.from,
     to: GmailProps.to,
@@ -32,7 +38,7 @@ export const gmailSearchMailAction = createAction({
       description: 'Search for emails with specific attachment filename',
       required: false,
     }),
-    label: GmailProps.label,
+    label: GmailProps.label({ required: false }),
     category: GmailProps.category,
     after_date: Property.DateTime({
       displayName: 'After Date',
@@ -59,11 +65,11 @@ export const gmailSearchMailAction = createAction({
       defaultValue: 10,
     }),
   },
+  outputSchema: gmailSearchMailActionOutputSchema,
   async run(context) {
-    const authClient = new OAuth2Client();
-    authClient.setCredentials(context.auth);
+    const authClient = await createGoogleClient(context.auth);
 
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+    const gmail = googleGmail({ version: 'v1', auth: authClient });
 
     const queryParts: string[] = [];
 
@@ -116,10 +122,6 @@ export const gmailSearchMailAction = createAction({
 
     const searchQuery = queryParts.join(' ');
 
-    if (!searchQuery.trim()) {
-      throw new Error('Please provide at least one search criterion');
-    }
-
     const maxResults = Math.min(
       Math.max(context.propsValue.max_results || 10, 1),
       500
@@ -128,7 +130,7 @@ export const gmailSearchMailAction = createAction({
     try {
       const searchResponse = await gmail.users.messages.list({
         userId: 'me',
-        q: searchQuery,
+        ...(searchQuery.trim() ? { q: searchQuery } : {}),
         maxResults: maxResults,
         includeSpamTrash: context.propsValue.include_spam_trash,
       });

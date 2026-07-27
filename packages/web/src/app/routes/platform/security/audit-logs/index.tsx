@@ -1,8 +1,8 @@
+import { isNil } from '@activepieces/core-utils';
 import {
   ApplicationEvent,
   ApplicationEventName,
   summarizeApplicationEvent,
-  isNil,
 } from '@activepieces/shared';
 import { t } from 'i18next';
 import {
@@ -342,6 +342,8 @@ function convertToIcon(event: ApplicationEvent) {
   switch (event.action) {
     case ApplicationEventName.FLOW_RUN_FINISHED:
     case ApplicationEventName.FLOW_RUN_STARTED:
+    case ApplicationEventName.FLOW_RUN_RESUMED:
+    case ApplicationEventName.FLOW_RUN_RETRIED:
       return {
         icon: <Logs className="size-4" />,
         tooltip: t('Flow Run'),
@@ -349,6 +351,9 @@ function convertToIcon(event: ApplicationEvent) {
     case ApplicationEventName.FLOW_CREATED:
     case ApplicationEventName.FLOW_DELETED:
     case ApplicationEventName.FLOW_UPDATED:
+    case ApplicationEventName.FLOW_PUBLISHED:
+    case ApplicationEventName.FLOW_ACTIVATED:
+    case ApplicationEventName.FLOW_DEACTIVATED:
       return {
         icon: <Workflow className="size-4" />,
         tooltip: t('Flow'),
@@ -365,6 +370,13 @@ function convertToIcon(event: ApplicationEvent) {
       return {
         icon: <Link2 className="size-4" />,
         tooltip: t('Connection'),
+      };
+    case ApplicationEventName.VARIABLE_UPSERTED:
+    case ApplicationEventName.VARIABLE_DELETED:
+    case ApplicationEventName.VARIABLE_VALUE_REVEALED:
+      return {
+        icon: <Link2 className="size-4" />,
+        tooltip: t('Variable'),
       };
     case ApplicationEventName.USER_SIGNED_UP:
     case ApplicationEventName.USER_SIGNED_IN:
@@ -398,6 +410,10 @@ function convertToDetails(event: ApplicationEvent): string {
       return `Flow run resumed in ${formatUtils.convertEnumToHumanReadable(
         event.data.flowRun.environment,
       )} environment`;
+    case ApplicationEventName.FLOW_RUN_RETRIED:
+      return `Flow run retried from failed step in ${formatUtils.convertEnumToHumanReadable(
+        event.data.flowRun.environment,
+      )} environment`;
     case ApplicationEventName.FLOW_CREATED:
       return t('A new flow was created');
     case ApplicationEventName.FLOW_DELETED:
@@ -411,7 +427,8 @@ function extractEventDetails(event: ApplicationEvent): EventDetailRow[] {
   switch (event.action) {
     case ApplicationEventName.FLOW_RUN_STARTED:
     case ApplicationEventName.FLOW_RUN_FINISHED:
-    case ApplicationEventName.FLOW_RUN_RESUMED: {
+    case ApplicationEventName.FLOW_RUN_RESUMED:
+    case ApplicationEventName.FLOW_RUN_RETRIED: {
       const { flowRun } = event.data;
       const rows: EventDetailRow[] = [
         {
@@ -447,13 +464,16 @@ function extractEventDetails(event: ApplicationEvent): EventDetailRow[] {
       return [];
     case ApplicationEventName.FLOW_DELETED:
     case ApplicationEventName.FLOW_UPDATED:
+    case ApplicationEventName.FLOW_PUBLISHED:
+    case ApplicationEventName.FLOW_ACTIVATED:
+    case ApplicationEventName.FLOW_DEACTIVATED:
       return [{ label: t('Flow'), value: event.data.flowVersion.displayName }];
     case ApplicationEventName.CONNECTION_UPSERTED:
     case ApplicationEventName.CONNECTION_DELETED: {
       const { connection } = event.data;
       return [
         { label: t('Connection'), value: connection.displayName },
-        { label: t('Piece'), value: connection.pieceName },
+        { label: t('Piece'), value: connection.pieceName ?? t('N/A') },
         {
           label: t('Type'),
           value: formatUtils.convertEnumToHumanReadable(connection.type),
@@ -463,6 +483,12 @@ function extractEventDetails(event: ApplicationEvent): EventDetailRow[] {
           value: formatUtils.convertEnumToHumanReadable(connection.status),
         },
       ];
+    }
+    case ApplicationEventName.VARIABLE_UPSERTED:
+    case ApplicationEventName.VARIABLE_DELETED:
+    case ApplicationEventName.VARIABLE_VALUE_REVEALED: {
+      const { variable } = event.data;
+      return [{ label: t('Variable'), value: variable.name }];
     }
     case ApplicationEventName.FOLDER_CREATED:
     case ApplicationEventName.FOLDER_UPDATED:
@@ -510,6 +536,29 @@ function extractEventDetails(event: ApplicationEvent): EventDetailRow[] {
         rows.push({ label: t('Description'), value: release.description });
       }
       return rows;
+    }
+    case ApplicationEventName.PROJECT_REPLACED: {
+      const { applied, failedCount, outcome, durationMs } = event.data;
+      return [
+        {
+          label: t('Outcome'),
+          value: formatUtils.convertEnumToHumanReadable(outcome),
+        },
+        { label: t('Duration'), value: `${durationMs}ms` },
+        {
+          label: t('Flows'),
+          value: `${applied.flowsCreated} created, ${applied.flowsUpdated} updated, ${applied.flowsDeleted} deleted`,
+        },
+        {
+          label: t('Tables'),
+          value: `${applied.tablesCreated} created, ${applied.tablesUpdated} updated, ${applied.tablesDeleted} deleted`,
+        },
+        {
+          label: t('Folders'),
+          value: `${applied.foldersCreated} created, ${applied.foldersUpdated} updated, ${applied.foldersDeleted} deleted`,
+        },
+        { label: t('Failed'), value: String(failedCount) },
+      ];
     }
   }
 }

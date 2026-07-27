@@ -8,6 +8,11 @@ export const createReferral = createAction({
   name: 'create_referral',
   displayName: 'Create Referral',
   description: 'Create a new referral in PromoteKit.',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Create a new referral attributing a referred person (by email) to an affiliate. Both the email and the affiliate ID are required. Not idempotent: each call records another referral, so check for an existing one before repeating.',
+    idempotent: false,
+  },
   props: {
     email: Property.ShortText({
       displayName: 'Email',
@@ -20,7 +25,7 @@ export const createReferral = createAction({
     const response = await promotekitApiCall<{
       data: Record<string, unknown>;
     }>({
-      token: context.auth as unknown as string,
+      token: context.auth.secret_text,
       method: HttpMethod.POST,
       path: '/referrals',
       body: {

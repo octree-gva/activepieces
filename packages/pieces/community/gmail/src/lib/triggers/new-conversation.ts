@@ -5,9 +5,8 @@ import {
   Property,
 } from '@activepieces/pieces-framework';
 import { GmailProps } from '../common/props';
-import { gmailAuth } from '../auth';
-import { google } from 'googleapis';
-import { OAuth2Client } from 'googleapis-common';
+import { gmailAuth, createGoogleClient } from '../auth';
+import { gmail as googleGmail } from '@googleapis/gmail';
 import { parseStream, convertAttachment } from '../common/data';
 
 async function enrichNewConversation({
@@ -162,9 +161,8 @@ export const gmailNewConversationTrigger = createTrigger({
   sampleData: {},
   type: TriggerStrategy.POLLING,
   onEnable: async (context) => {
-    const authClient = new OAuth2Client();
-    authClient.setCredentials(context.auth);
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+    const authClient = await createGoogleClient(context.auth);
+    const gmail = googleGmail({ version: 'v1', auth: authClient });
 
     const profile = await gmail.users.getProfile({ userId: 'me' });
     await context.store.put('lastHistoryId', profile.data.historyId);
@@ -175,9 +173,8 @@ export const gmailNewConversationTrigger = createTrigger({
     await context.store.delete('processedThreads');
   },
   run: async (context) => {
-    const authClient = new OAuth2Client();
-    authClient.setCredentials(context.auth);
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+    const authClient = await createGoogleClient(context.auth);
+    const gmail = googleGmail({ version: 'v1', auth: authClient });
 
     const lastHistoryId = await context.store.get('lastHistoryId');
     const processedThreads =
@@ -324,9 +321,8 @@ export const gmailNewConversationTrigger = createTrigger({
     }
   },
   test: async (context) => {
-    const authClient = new OAuth2Client();
-    authClient.setCredentials(context.auth);
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+    const authClient = await createGoogleClient(context.auth);
+    const gmail = googleGmail({ version: 'v1', auth: authClient });
 
     const maxAge = (context.propsValue.maxAgeHours || 24) * 60 * 60 * 1000;
     const cutoffSeconds = Math.floor((Date.now() - maxAge) / 1000);

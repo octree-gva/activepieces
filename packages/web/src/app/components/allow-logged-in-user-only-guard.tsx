@@ -8,8 +8,6 @@ import { platformHooks } from '@/hooks/platform-hooks';
 
 import { authenticationSession } from '../../lib/authentication-session';
 
-import { BadgeCelebrate } from './badge-celebrate';
-
 type AllowOnlyLoggedInUserOnlyGuardProps = {
   children: React.ReactNode;
 };
@@ -25,13 +23,11 @@ export const AllowOnlyLoggedInUserOnlyGuard = ({
     searchParams.set('from', location.pathname + location.search);
     return <Navigate to={`/sign-in?${searchParams.toString()}`} replace />;
   }
+  if (authenticationSession.isOnboarding()) {
+    return <Navigate to="/create-platform" replace />;
+  }
   platformHooks.useCurrentPlatform();
   flagsHooks.useFlags();
   projectCollectionUtils.useCurrentProject();
-  return (
-    <SocketProvider>
-      <BadgeCelebrate />
-      {children}
-    </SocketProvider>
-  );
+  return <SocketProvider>{children}</SocketProvider>;
 };

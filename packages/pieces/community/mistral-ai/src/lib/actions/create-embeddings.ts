@@ -1,13 +1,16 @@
 import { createAction, Property } from '@activepieces/pieces-framework';
-import { HttpMethod, httpClient, AuthenticationType } from '@activepieces/pieces-common';
+import { HttpMethod, httpClient } from '@activepieces/pieces-common';
 import { mistralAuth } from '../common/auth';
 import { parseMistralError } from '../common/props';
+import { mistralRequest } from '../common/request';
 
 export const createEmbeddings = createAction({
+  audience: 'both',
 	auth: mistralAuth,
 	name: 'create_embeddings',
 	displayName: 'Create Embeddings',
 	description: 'Creates new embedding in Mistral AI.',
+	aiMetadata: { description: 'Converts an array of text strings into numeric embedding vectors using Mistral\'s fixed mistral-embed model; the model is not selectable here, unlike the sibling Ask Mistral action, and a whole batch of strings is embedded in one call. Use it for semantic search, similarity, or clustering pipelines, and pick Ask Mistral when you need generated prose rather than numbers. Requires a non-empty array of input strings; idempotent: nothing is created server-side and the same input yields the same vectors.', idempotent: true },
 	props: {
 		input: Property.Array({
 			displayName: 'Input',
@@ -18,6 +21,7 @@ export const createEmbeddings = createAction({
 	},
 	async run(context) {
 		const { input, timeout } = context.propsValue;
+		const { baseUrl, headers } = mistralRequest.getConfig(context.auth);
 		let inputArr: string[] = [];
 		try {
 			if (typeof input === 'string') {
@@ -40,11 +44,8 @@ export const createEmbeddings = createAction({
 			try {
 				const response = await httpClient.sendRequest({
 					method: HttpMethod.POST,
-					url: 'https://api.mistral.ai/v1/embeddings',
-					authentication: {
-						type: AuthenticationType.BEARER_TOKEN,
-						token: context.auth.secret_text,
-					},
+					url: `${baseUrl}/embeddings`,
+					headers,
 					body,
 					timeout: timeout ?? 30000,
 				});

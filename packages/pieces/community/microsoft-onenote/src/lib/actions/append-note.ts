@@ -1,4 +1,5 @@
 import { Property, createAction, OAuth2PropertyValue } from '@activepieces/pieces-framework';
+import { getGraphBaseUrl } from '../common/microsoft-cloud';
 import { getNotebooksDropdown, getSectionsByNotebookDropdown, getPagesBySectionDropdown } from '../common';
 import { oneNoteAuth } from '../auth';
 import { Client } from '@microsoft/microsoft-graph-client';
@@ -8,6 +9,8 @@ export const appendNote = createAction({
 	name: 'append_note',
 	displayName: 'Append Note',
 	description: 'Append content to the end of an existing note.',
+	audience: 'both',
+	aiMetadata: { description: 'Appends content to the body of an existing OneNote page (note), identified by notebook, section, and page. Use to add to a note rather than replace it; the content type can be a paragraph, list item, heading, or raw HTML. Not idempotent: each call appends again, so repeating duplicates the content.', idempotent: false },
 	props: {
 		notebook_id: Property.Dropdown({
 			auth: oneNoteAuth,
@@ -114,10 +117,13 @@ export const appendNote = createAction({
 		const { auth, propsValue } = context;
 		const { page_id, content_type, content, heading_level } = propsValue;
 
+		const authValue = auth as OAuth2PropertyValue;
+		const cloud = authValue.props?.['cloud'] as string | undefined;
 		const client = Client.initWithMiddleware({
 			authProvider: {
-				getAccessToken: () => Promise.resolve((auth as OAuth2PropertyValue).access_token),
+				getAccessToken: () => Promise.resolve(authValue.access_token),
 			},
+			baseUrl: getGraphBaseUrl(cloud),
 		});
 
 		let htmlContent: string;

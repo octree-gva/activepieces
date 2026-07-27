@@ -1,17 +1,7 @@
 import { createHash, randomBytes } from 'crypto'
+import { ActivepiecesError, assertNotNullOrUndefined, deleteProps, ErrorCode, PlatformId } from '@activepieces/core-utils'
 import { PropertyType } from '@activepieces/pieces-framework'
-import { ActivepiecesError,
-    AppConnection,
-    AppConnectionType,
-    assertNotNullOrUndefined,
-    BaseOAuth2ConnectionValue,
-    deleteProps,
-    ErrorCode,
-    GetOAuth2AuthorizationUrlResponse,
-    OAuth2GrantType,
-    PlatformId,
-    resolveValueFromProps,
-} from '@activepieces/shared'
+import { AppConnection, AppConnectionType, BaseOAuth2ConnectionValue, GetOAuth2AuthorizationUrlResponse, OAuth2GrantType, resolveValueFromProps } from '@activepieces/shared'
 import { isAxiosError } from 'axios'
 import { FastifyBaseLogger } from 'fastify'
 import { nanoid } from 'nanoid'
@@ -71,12 +61,13 @@ export const oauth2Util = (log: FastifyBaseLogger) => ({
     getOAuth2TokenUrl: async ({
         platformId,
         pieceName,
+        pieceVersion,
         props,
     }: OAuth2TokenUrlParams): Promise<string> => {
         const pieceMetadata = await pieceMetadataService(log).getOrThrow({
             name: pieceName,
             platformId,
-            version: undefined,
+            version: pieceVersion,
         })
         const pieceAuth = Array.isArray(pieceMetadata.auth) ? pieceMetadata.auth.find(auth => auth.type === PropertyType.OAUTH2) : pieceMetadata.auth
         assertNotNullOrUndefined(pieceAuth, 'auth')
@@ -100,6 +91,7 @@ export const oauth2Util = (log: FastifyBaseLogger) => ({
         redirectUrl,
         projectId,
         props,
+        scopes,
     }: BuildAuthorizationUrlParams): Promise<GetOAuth2AuthorizationUrlResponse> => {
         const pieceMetadata = await pieceMetadataService(log).getOrThrow({
             name: pieceName,
@@ -124,7 +116,8 @@ export const oauth2Util = (log: FastifyBaseLogger) => ({
             projectIds: projectId ? [projectId] : undefined,
         })
         const authUrl = resolveValueFromProps(props, pieceAuth.authUrl)
-        const scope = resolveValueFromProps(props, pieceAuth.scope.join(' '))
+        const selectedScopes = resolveSelectedScopes(scopes, pieceAuth.scope)
+        const scope = resolveValueFromProps(props, selectedScopes.join(' '))
 
         const queryParams: Record<string, string> = {
             response_type: 'code',
@@ -190,7 +183,29 @@ export const oauth2Util = (log: FastifyBaseLogger) => ({
 type OAuth2TokenUrlParams = {
     platformId: PlatformId
     pieceName: string
+    pieceVersion?: string
     props?: Record<string, unknown>
+}
+
+const resolveSelectedScopes = (requested: string[] | undefined, allowed: string[]): string[] => {
+    if (requested === undefined) {
+        return allowed
+    }
+    const allowedSet = new Set(allowed)
+    const invalid = requested.filter(scope => !allowedSet.has(scope))
+    if (invalid.length > 0) {
+        throw new ActivepiecesError({
+            code: ErrorCode.INVALID_APP_CONNECTION,
+            params: { error: `requested scopes are not declared by the piece: ${invalid.join(', ')}` },
+        })
+    }
+    if (requested.length === 0) {
+        throw new ActivepiecesError({
+            code: ErrorCode.INVALID_APP_CONNECTION,
+            params: { error: 'at least one scope must be selected' },
+        })
+    }
+    return requested
 }
 
 type BuildAuthorizationUrlParams = {
@@ -201,4 +216,5 @@ type BuildAuthorizationUrlParams = {
     redirectUrl: string
     props?: Record<string, unknown>
     projectId?: string
+    scopes?: string[]
 }

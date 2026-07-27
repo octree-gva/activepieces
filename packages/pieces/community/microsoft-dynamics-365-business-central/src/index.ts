@@ -3,7 +3,7 @@ import {
   createPiece,
   OAuth2PropertyValue,
 } from '@activepieces/pieces-framework';
-import { PieceCategory } from '@activepieces/shared';
+import { PieceCategory } from '@activepieces/pieces-framework';
 import { createRecordAction } from './lib/actions/create-record.action';
 import { deleteRecordAction } from './lib/actions/delete-record.action';
 import { getRecordAction } from './lib/actions/get-record.action';
@@ -30,9 +30,12 @@ export const microsoftDynamics365BusinessCentral = createPiece({
     createCustomApiCallAction({
       auth: businessCentralAuth,
       baseUrl: (auth) => {
-        return `https://api.businesscentral.dynamics.com/v2.0/${
-          (auth as OAuth2PropertyValue).props?.['environment']
-        }/api/v2.0`;
+        const authValue = auth as OAuth2PropertyValue;
+        const cloud = authValue.props?.['cloud'] as string | undefined;
+        const host = cloud === 'login.microsoftonline.us'
+          ? 'api.businesscentral.dynamics.us'
+          : 'api.businesscentral.dynamics.com';
+        return `https://${host}/v2.0/${authValue.props?.['environment']}/api/v2.0`;
       },
       authMapping: async (auth) => ({
         Authorization: `Bearer  ${(auth as OAuth2PropertyValue).access_token}`,

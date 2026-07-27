@@ -11,12 +11,6 @@ import { zendeskAuth } from '../..';
 
 const WEBHOOK_TRIGGER_KEY = 'zendesk_new_organization_webhook';
 
-type AuthProps = {
-  email: string;
-  token: string;
-  subdomain: string;
-};
-
 interface ZendeskOrganization {
   id: number;
   name: string;
@@ -36,6 +30,9 @@ export const newOrganization = createTrigger({
   name: 'new_organization',
   displayName: 'New Organization',
   description: 'Fires when a new organization record is created. Uses Zendesk event webhook (no Trigger needed).',
+  aiMetadata: {
+    description: 'Fires when a new organization record is created in Zendesk. Represents a newly added company/account. Uses a Zendesk event-type webhook registered automatically, so no manual Zendesk Trigger setup is needed.',
+  },
   auth: zendeskAuth,
   props: {},
   type: TriggerStrategy.WEBHOOK,

@@ -1,9 +1,8 @@
-import { Property, OAuth2PropertyValue } from '@activepieces/pieces-framework';
+import { Property } from '@activepieces/pieces-framework';
 import { GmailRequests } from './data';
 import { GmailLabel } from './models';
-import { gmailAuth } from '../auth';
-import { google } from 'googleapis';
-import { OAuth2Client } from 'googleapis-common';
+import { gmailAuth, createGoogleClient, GmailAuthValue } from '../auth';
+import { gmail as googleGmail } from '@googleapis/gmail';
 
 export const GmailProps = {
   from: Property.ShortText({
@@ -44,34 +43,40 @@ export const GmailProps = {
       ],
     },
   }),
-  label: Property.Dropdown<GmailLabel, false, typeof gmailAuth>({
-    auth: gmailAuth,
-    displayName: 'Label',
-    description:
-      'Optional filteration, leave unselected to filter based on the email label',
-    required: false,
-    defaultValue: '',
-    refreshers: [],
-    options: async ({ auth }) => {
-      if (!auth) {
+  label: <R extends boolean = false>(overrides: {
+    displayName?: string;
+    description?: string;
+    required: R;
+  }) =>
+    Property.Dropdown<GmailLabel, R, typeof gmailAuth>({
+      auth: gmailAuth,
+      displayName: overrides.displayName ?? 'Label',
+      description:
+        overrides.description ??
+        'Optional filteration, leave unselected to filter based on the email label',
+      required: overrides.required,
+      defaultValue: '',
+      refreshers: [],
+      options: async ({ auth }) => {
+        if (!auth) {
+          return {
+            disabled: true,
+            options: [],
+            placeholder: 'please authenticate first',
+          };
+        }
+
+        const response = await GmailRequests.getLabels(auth);
+
         return {
-          disabled: true,
-          options: [],
-          placeholder: 'please authenticate first',
+          disabled: false,
+          options: response.body.labels.map((label) => ({
+            label: label.name,
+            value: label,
+          })),
         };
-      }
-
-      const response = await GmailRequests.getLabels(auth);
-
-      return {
-        disabled: false,
-        options: response.body.labels.map((label) => ({
-          label: label.name,
-          value: label,
-        })),
-      };
-    },
-  }),
+      },
+    }),
   unread: (required = false) =>
     Property.Checkbox({
       displayName: 'Is unread?',
@@ -96,14 +101,13 @@ export const GmailProps = {
       }
 
       try {
-        const authValue = auth as OAuth2PropertyValue;
-        const authClient = new OAuth2Client();
-        authClient.setCredentials(authValue);
+        const authValue = auth as GmailAuthValue;
+        const authClient = await createGoogleClient(authValue);
 
-        const gmail = google.gmail({ version: 'v1', auth: authClient });
+        const gmail = googleGmail({ version: 'v1', auth: authClient });
 
         const response = await GmailRequests.getRecentMessages(
-          auth as OAuth2PropertyValue,
+          authValue,
           20 // Get last 20 messages
         );
 
@@ -184,14 +188,13 @@ export const GmailProps = {
       }
 
       try {
-        const authValue = auth as OAuth2PropertyValue;
-        const authClient = new OAuth2Client();
-        authClient.setCredentials(authValue);
+        const authValue = auth as GmailAuthValue;
+        const authClient = await createGoogleClient(authValue);
 
-        const gmail = google.gmail({ version: 'v1', auth: authClient });
+        const gmail = googleGmail({ version: 'v1', auth: authClient });
 
         const response = await GmailRequests.getRecentThreads(
-          auth as OAuth2PropertyValue,
+          authValue,
           15 // Get last 15 threads
         );
 

@@ -1,11 +1,7 @@
-import {
-  createPiece,
-  PieceAuth,
-  Property,
-} from '@activepieces/pieces-framework';
+import { createPiece } from '@activepieces/pieces-framework';
 import { runMultipleQueries } from './lib/actions/run-multiple-queries';
 import { runQuery } from './lib/actions/run-query';
-import { PieceCategory } from '@activepieces/shared';
+import { PieceCategory } from '@activepieces/pieces-framework';
 import { insertRowAction } from './lib/actions/insert-row';
 import { updateRowAction } from './lib/actions/update-row';
 import { deleteRowAction } from './lib/actions/delete-row';
@@ -19,6 +15,11 @@ import { executeStoredProcedureAction } from './lib/actions/execute-stored-proce
 import { createDynamicTableAction } from './lib/actions/create-dynamic-table';
 import { loadDataFromStageAction } from './lib/actions/load-data-from-stage';
 import { snowflakeAuth } from './lib/auth';
+import { newColumnTrigger } from './lib/triggers/new-column';
+import { newTableTrigger } from './lib/triggers/new-table';
+import { newViewTrigger } from './lib/triggers/new-view';
+import { newRowTrigger } from './lib/triggers/new-row';
+import { newOrUpdatedRowTrigger } from './lib/triggers/new-or-updated-row';
 
 export const snowflake = createPiece({
   displayName: 'Snowflake',
@@ -50,5 +51,11 @@ export const snowflake = createPiece({
     createDynamicTableAction,
     loadDataFromStageAction,
   ],
-  triggers: [],
+  triggers: [
+    newRowTrigger,
+    newOrUpdatedRowTrigger,
+    newColumnTrigger,
+    newTableTrigger,
+    newViewTrigger,
+  ],
 });

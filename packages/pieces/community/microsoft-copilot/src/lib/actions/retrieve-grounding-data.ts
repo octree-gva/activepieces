@@ -1,8 +1,10 @@
 import { createAction, Property } from '@activepieces/pieces-framework';
 import { microsoft365CopilotAuth } from '../common/auth';
 import { httpClient, HttpMethod } from '@activepieces/pieces-common';
+import { getGraphBaseUrl, getMicrosoftCloudFromAuth } from '../common/microsoft-cloud';
 
 export const retrieveGroundingData = createAction({
+  audience: 'human',
   auth: microsoft365CopilotAuth,
   name: 'retrieveGroundingData',
   displayName: 'Retrieve Grounding Data',
@@ -71,6 +73,9 @@ export const retrieveGroundingData = createAction({
       connectionIds,
     } = context.propsValue;
 
+    const cloud = getMicrosoftCloudFromAuth(context.auth);
+    const graphBaseUrl = getGraphBaseUrl(cloud);
+
     const body: any = {
       queryString,
       dataSource: dataSource as
@@ -114,7 +119,7 @@ export const retrieveGroundingData = createAction({
 
     const response: any = await httpClient.sendRequest({
       method: HttpMethod.POST,
-      url: 'https://graph.microsoft.com/beta/copilot/retrieval',
+      url: `${graphBaseUrl}/beta/copilot/retrieval`,
       headers: {
         Authorization: `Bearer ${context.auth.access_token}`,
         'Content-Type': 'application/json',

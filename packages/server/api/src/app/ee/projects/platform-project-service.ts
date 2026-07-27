@@ -1,21 +1,6 @@
+import { ActivepiecesError, apId, Cursor, ErrorCode, isNil, Metadata, PlatformId, ProjectId, SeekPage, spreadIfDefined, UserId } from '@activepieces/core-utils'
 import { apDayjs } from '@activepieces/server-utils'
-import {
-    apId,
-    AppConnectionScope,
-    Cursor,
-    isNil,
-    Metadata,
-    PiecesFilterType,
-    PlatformId,
-    Project,
-    ProjectId,
-    ProjectType,
-    ProjectWithLimits,
-    SeekPage,
-    spreadIfDefined,
-    TeamProjectsLimit,
-    UpdateProjectPlatformRequest,
-    UserId } from '@activepieces/shared'
+import { AppConnectionScope, PiecesFilterType, PrincipalType, Project, ProjectType, ProjectWithLimits, TeamProjectsLimit, UpdateProjectPlatformRequest } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import { ArrayContains, Equal, ILike, In, IsNull } from 'typeorm'
 import { appConnectionsRepo } from '../../app-connection/app-connection-service/app-connection-service'
@@ -30,6 +15,8 @@ import { systemJobsSchedule } from '../../helper/system-jobs/system-job'
 import { platformService } from '../../platform/platform.service'
 import { ProjectEntity } from '../../project/project-entity'
 import { applyProjectsAccessFilters, projectService } from '../../project/project-service'
+import { userService } from '../../user/user-service'
+import { concurrencyPoolService } from '../platform/concurrency-pool/concurrency-pool.service'
 import { platformPlanService } from '../platform/platform-plan/platform-plan.service'
 import { projectMemberService } from './project-members/project-member.service'
 import { ProjectPlanEntity } from './project-plan/project-plan.entity'
@@ -39,7 +26,12 @@ const projectPlanRepo = repoFactory(ProjectPlanEntity)
 
 export const platformProjectService = (log: FastifyBaseLogger) => ({
     async getForPlatform(params: GetAllForParamsAndUser): Promise<SeekPage<ProjectWithLimits>> {
-        const { cursorRequest, limit, platformId, displayName, externalId, userId, types, isPrivileged } = params
+        const { cursorRequest, limit, platformId, displayName, externalId, externalUserId, userId, types, isPrivileged, principalType } = params
+        const accessFilterUser = await resolveAccessFilterUser({ platformId, externalUserId, callerUserId: userId, callerIsPrivileged: isPrivileged, principalType, log })
+        if (isNil(accessFilterUser)) {
+            return paginationHelper.createPage<ProjectWithLimits>([], null)
+        }
+
         const decodedCursor = paginationHelper.decodeCursor(cursorRequest)
         const paginator = buildPaginator({
             entity: ProjectEntity,
@@ -67,7 +59,10 @@ export const platformProjectService = (log: FastifyBaseLogger) => ({
             .createQueryBuilder('project')
             .where(filters)
 
-        await applyProjectsAccessFilters(queryBuilder, { platformId, userId, isPrivileged })
+        await applyProjectsAccessFilters(queryBuilder, {
+            platformId,
+            ...accessFilterUser,
+        })
 
         const { data, cursor } = await paginator.paginate(queryBuilder)
         const projects: ProjectWithLimits[] = await enrichProjects(data, log)
@@ -120,7 +115,9 @@ export const platformProjectService = (log: FastifyBaseLogger) => ({
             return savedProject
         })
 
-        await projectService(log).callProjectPostCreateHooks(project)
+        await projectService(log).callProjectPostCreateHooks(project, {
+            alertReceiverEmail: params.alertReceiverEmail,
+        })
 
         return this.getWithPlanAndUsageOrThrow(project.id)
     },
@@ -130,11 +127,16 @@ export const platformProjectService = (log: FastifyBaseLogger) => ({
     }: UpdateParams): Promise<ProjectWithLimits> {
         const project = await projectService(log).getOneOrThrow(projectId)
         const platformPlan = await platformPlanService(log).getOrCreateForPlatform(project.platformId)
-        const { globalConnectionExternalIds, ...rest } = request
+        const { globalConnectionExternalIds, maxConcurrentJobs, workerGroupId, ...rest } = request
+        let resolvedPoolId: string | null | undefined
         await transaction(async (entityManager) => {
+            resolvedPoolId = await resolvePoolId({ platformId: project.platformId, projectId, maxConcurrentJobs, log })
             await projectService(log).update(projectId, {
                 type: project.type,
                 ...rest,
+                ...(resolvedPoolId !== undefined ? { poolId: resolvedPoolId } : {}),
+                ...(maxConcurrentJobs !== undefined ? { maxConcurrentJobs } : {}),
+                ...(platformPlan.workerGroupsEnabled && workerGroupId !== undefined ? { workerGroupId } : {}),
             }, entityManager)
             if (platformPlan.globalConnectionsEnabled && globalConnectionExternalIds) {
                 const projectGlobalConnections = await appConnectionsRepo(entityManager).find({
@@ -177,20 +179,20 @@ export const platformProjectService = (log: FastifyBaseLogger) => ({
                         .execute()
                 }
             }
-            if (!isNil(request.plan)) {
+            if (!isNil(request.plan) && request.plan.activeFlowsLimit !== undefined) {
                 const platform = await platformService(log).getOneWithPlanOrThrow(project.platformId)
                 if (platform.plan.teamProjectsLimit !== TeamProjectsLimit.NONE) {
-                    await projectLimitsService(log).upsert(
-                        {
-                            ...spreadIfDefined('pieces', request.plan.pieces),
-                            ...spreadIfDefined('piecesFilterType', request.plan.piecesFilterType),
-                        },
+                    await projectLimitsService(log).updateActiveFlowsLimit({
                         projectId,
+                        activeFlowsLimit: request.plan.activeFlowsLimit,
                         entityManager,
-                    )
+                    })
                 }
             }
         })
+        if (resolvedPoolId !== undefined) {
+            await concurrencyPoolService(log).assignProject({ projectId, poolId: resolvedPoolId })
+        }
         return this.getWithPlanAndUsageOrThrow(projectId)
     },
     async getWithPlanAndUsageOrThrow(
@@ -207,37 +209,57 @@ export const platformProjectService = (log: FastifyBaseLogger) => ({
             ownerId: userId,
             type: ProjectType.PERSONAL,
         })
-        if (!isNil(personalProject)) {
-            await this.markForDeletion({ id: personalProject.id, platformId })
+        if (isNil(personalProject)) {
+            return
         }
+        
+        const platform = await platformService(log).getOneOrThrow(platformId)
+        await transaction(async (entityManager) => {
+            await projectRepo(entityManager).update({ id: personalProject.id, platformId }, { ownerId: platform.ownerId })
+            await projectRepo(entityManager).softDelete({ id: personalProject.id, platformId })
+        })
+        await scheduleHardDeleteProjectJob({ id: personalProject.id, platformId, log })
     },
 
     async markForDeletion({ id, platformId }: DeleteProjectParams): Promise<void> {
-        await projectRepo().softDelete({ id, platformId })
-        await systemJobsSchedule(log).upsertJob({
-            job: {
-                name: SystemJobName.HARD_DELETE_PROJECT,
-                data: {
-                    projectId: id,
-                    platformId,
-                    preDeletedFlowIds: [],
+        const result = await projectRepo().softDelete({ id, platformId })
+        if (result.affected === 0) {
+            throw new ActivepiecesError({
+                code: ErrorCode.ENTITY_NOT_FOUND,
+                params: {
+                    entityType: 'project',
+                    entityId: id,
                 },
-                jobId: `hard-delete-project-${id}`,
-            },
-            schedule: {
-                type: 'one-time',
-                date: apDayjs(),
-            },
-            customConfig: {
-                attempts: 25,
-                backoff: {
-                    type: 'fixed',
-                    delay: 60000,
-                },
-            },
-        })
+            })
+        }
+        await scheduleHardDeleteProjectJob({ id, platformId, log })
     },
 })
+
+async function scheduleHardDeleteProjectJob({ id, platformId, log }: ScheduleHardDeleteProjectJobParams): Promise<void> {
+    await systemJobsSchedule(log).upsertJob({
+        job: {
+            name: SystemJobName.HARD_DELETE_PROJECT,
+            data: {
+                projectId: id,
+                platformId,
+                preDeletedFlowIds: [],
+            },
+            jobId: `hard-delete-project-${id}`,
+        },
+        schedule: {
+            type: 'one-time',
+            date: apDayjs(),
+        },
+        customConfig: {
+            attempts: 25,
+            backoff: {
+                type: 'fixed',
+                delay: 60000,
+            },
+        },
+    })
+}
 
 async function enrichProjects(
     projects: Project[],
@@ -269,16 +291,70 @@ async function enrichProjects(
     })
 }
 
+async function resolveAccessFilterUser({ platformId, externalUserId, callerUserId, callerIsPrivileged, principalType, log }: ResolveAccessFilterUserParams): Promise<AccessFilterUser | null> {
+    if (isNil(externalUserId)) {
+        return { userId: callerUserId, isPrivileged: callerIsPrivileged }
+    }
+    if (principalType !== PrincipalType.SERVICE) {
+        throw new ActivepiecesError({
+            code: ErrorCode.AUTHORIZATION,
+            params: {},
+        })
+    }
+    const user = await userService(log).getByPlatformAndExternalId({ platformId, externalId: externalUserId })
+    if (isNil(user)) {
+        return null
+    }
+    return { userId: user.id, isPrivileged: false }
+}
+
+async function resolvePoolId({ platformId, projectId, maxConcurrentJobs, log }: ResolvePoolIdParams): Promise<string | null | undefined> {
+    if (typeof maxConcurrentJobs === 'number') {
+        const { poolId } = await concurrencyPoolService(log).upsertPool({
+            platformId,
+            key: projectId,
+            maxConcurrentJobs,
+        })
+        return poolId
+    }
+    if (maxConcurrentJobs === null) {
+        return null
+    }
+    return undefined
+}
+
+type ResolvePoolIdParams = {
+    platformId: string
+    projectId: string
+    maxConcurrentJobs: number | null | undefined
+    log: FastifyBaseLogger
+}
+
+type AccessFilterUser = {
+    userId: string
+    isPrivileged: boolean
+}
+
+type ResolveAccessFilterUserParams = {
+    platformId: string
+    externalUserId: string | undefined
+    callerUserId: string
+    callerIsPrivileged: boolean
+    principalType?: PrincipalType
+    log: FastifyBaseLogger
+}
 
 type GetAllForParamsAndUser = {
     userId: string
     platformId: string
     displayName?: string
     externalId?: string
+    externalUserId?: string
     cursorRequest: Cursor | null
     limit: number
     types?: ProjectType[]
     isPrivileged: boolean
+    principalType?: PrincipalType
 }
 
 type DeletePersonalProjectForUserParams = {
@@ -299,9 +375,16 @@ type CreateProjectParams = {
     metadata?: Metadata
     maxConcurrentJobs?: number
     globalConnectionExternalIds?: string[]
+    alertReceiverEmail?: string | null
 }
 
 type DeleteProjectParams = {
     id: ProjectId
     platformId: PlatformId
+}
+
+type ScheduleHardDeleteProjectJobParams = {
+    id: ProjectId
+    platformId: PlatformId
+    log: FastifyBaseLogger
 }

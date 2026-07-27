@@ -1,13 +1,16 @@
 import { createAction, Property } from '@activepieces/pieces-framework';
-import { HttpMethod, httpClient, AuthenticationType } from '@activepieces/pieces-common';
+import { HttpMethod, httpClient } from '@activepieces/pieces-common';
 import { mistralAuth } from '../common/auth';
 import { modelDropdown, parseMistralError } from '../common/props';
+import { mistralRequest } from '../common/request';
 
 export const createChatCompletion = createAction({
+  audience: 'both',
 	auth: mistralAuth,
 	name: 'create_chat_completion',
 	displayName: 'Ask Mistral',
 	description: 'Ask Mistral anything you want!',
+	aiMetadata: { description: 'Sends one user prompt to a Mistral chat model through the chat-completions endpoint and returns only the assistant text of the first choice, with optional temperature, top-p, max-token and random-seed controls; it is stateless, with no conversation memory or system message. This is the piece\'s only text-generation action - prefer Create Embeddings when you need vectors rather than prose, and Run OCR when the text must be pulled out of a PDF or image instead of generated. Requires a model id from the account\'s live model list and a question; not idempotent: each call bills a fresh completion and the wording varies unless a random seed is pinned.', idempotent: false },
 	props: {
 		model: modelDropdown,
 		prompt: Property.LongText({
@@ -34,6 +37,7 @@ export const createChatCompletion = createAction({
 	},
 	async run(context) {
 		const { model, temperature, top_p, max_tokens, random_seed, timeout, prompt } = context.propsValue;
+		const { baseUrl, headers } = mistralRequest.getConfig(context.auth);
 
 		const body: Record<string, any> = {
 			model,
@@ -46,18 +50,15 @@ export const createChatCompletion = createAction({
 			temperature,
 			top_p,
 			max_tokens,
-			random_seed
+			random_seed,
 		};
 		let lastErr;
 		for (let attempt = 0; attempt <= 3; ++attempt) {
 			try {
-				const response = await httpClient.sendRequest<{choices:{message:{content:string}}[]}>({
+				const response = await httpClient.sendRequest<{ choices: { message: { content: string } }[] }>({
 					method: HttpMethod.POST,
-					url: 'https://api.mistral.ai/v1/chat/completions',
-					authentication: {
-						type: AuthenticationType.BEARER_TOKEN,
-						token: context.auth.secret_text,
-					},
+					url: `${baseUrl}/chat/completions`,
+					headers,
 					body,
 					timeout: timeout ?? 30000,
 				});

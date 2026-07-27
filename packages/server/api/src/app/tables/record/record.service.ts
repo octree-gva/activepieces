@@ -1,20 +1,5 @@
-import {
-    ActivepiecesError,
-    apId,
-    Cell,
-    chunk,
-    CreateRecordsRequest,
-    Cursor,
-    ErrorCode,
-    Field,
-    Filter,
-    FilterOperator,
-    isNil,
-    PopulatedRecord,
-    SeekPage,
-    TableWebhookEventType,
-    UpdateRecordRequest,
-} from '@activepieces/shared'
+import { ActivepiecesError, apId, chunk, Cursor, ErrorCode, isNil, SeekPage } from '@activepieces/core-utils'
+import { Cell, CreateRecordsRequest, Field, Filter, FilterOperator, PopulatedRecord, TableWebhookEventType, UpdateRecordRequest } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import { EntityManager, In } from 'typeorm'
 import { repoFactory } from '../../core/db/repo-factory'
@@ -109,18 +94,26 @@ export const recordService = {
                 recordId: In(records.map((record) => record.id)),
             },
         })
-        records.map((record) => {
-            record.cells = cells.filter((cell) => cell.recordId === record.id)
-        })
+        const cellsByRecordId = new Map<string, typeof cells>()
+        for (const cell of cells) {
+            const group = cellsByRecordId.get(cell.recordId)
+            if (group) {
+                group.push(cell)
+            }
+            else {
+                cellsByRecordId.set(cell.recordId, [cell])
+            }
+        }
+        for (const record of records) {
+            record.cells = cellsByRecordId.get(record.id) ?? []
+        }
         const filteredOutRecords = records.filter((record) => {
             if (!filters || filters.length === 0) {
                 return true
             }
             return filters.every((filter) => {
                 const cell = record.cells.find(c => c.fieldId === filter.fieldId)
-                if (!cell) {
-                    return filter.operator === FilterOperator.NOT_EXISTS
-                }
+                    ?? { fieldId: filter.fieldId, value: '' }
                 return doesCellValueMatchFilters(cell, [filter])
             })
         })
@@ -465,22 +458,33 @@ function formatRecords(records: RecordSchema[], fields: Field[]): PopulatedRecor
         return acc
     }, {} as Record<string, string>)
     return records.map((record) => {
+        const cells = record.cells.reduce<PopulatedRecord['cells']>((acc, cell) => {
+            acc[cell.fieldId] = {
+                fieldName: fieldsNamesMap[cell.fieldId],
+                value: cell.value,
+                updated: cell.updated,
+                created: cell.created,
+            }
+            return acc
+        }, {})
+        for (const field of fields) {
+            if (!(field.id in cells)) {
+                cells[field.id] = {
+                    fieldName: field.name,
+                    value: null,
+                    updated: record.updated,
+                    created: record.created,
+                }
+            }
+        }
         return {
             ...record,
-            cells: record.cells.reduce<PopulatedRecord['cells']>((acc, cell) => {
-                acc[cell.fieldId] = {
-                    fieldName: fieldsNamesMap[cell.fieldId],
-                    value: cell.value,
-                    updated: cell.updated,
-                    created: cell.created,
-                }
-                return acc
-            }, {}),
+            cells,
         }
     })
 }
 
-function doesCellValueMatchFilters(cell: Cell, filters: Filter[]): boolean {
+function doesCellValueMatchFilters(cell: Pick<Cell, 'fieldId' | 'value'>, filters: Filter[]): boolean {
     if (filters.length === 0) {
         return true
     }

@@ -29,7 +29,8 @@ async function getWorksheets(
   if (!workbookId) return [];
 
   try {
-    const client = createMSGraphClient(auth.access_token);
+    const cloud = auth.props?.['cloud'] as string | undefined;
+    const client = createMSGraphClient(auth.access_token, cloud);
     const response = await client
       .api(`${drivePath}/items/${workbookId}/workbook/worksheets`)
       .get();
@@ -67,6 +68,9 @@ export const newWorksheetTrigger = createTrigger({
   name: 'new_worksheet',
   displayName: 'New Worksheet',
   description: 'Fires when a new worksheet is created in a workbook.',
+  aiMetadata: {
+    description: 'Fires when a new worksheet (tab) is added to the selected Excel workbook. Each event represents one newly created worksheet and returns its id, name, position, and visibility. Use this to react to sheets being added to a workbook.',
+  },
   props: {
     storageSource: commonProps.storageSource,
     siteId: commonProps.siteId,

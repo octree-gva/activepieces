@@ -1,9 +1,10 @@
 import { createCustomApiCallAction } from '@activepieces/pieces-common';
+import { getGraphBaseUrl } from './lib/common/microsoft-cloud';
 import {
   createPiece,
   OAuth2PropertyValue,
 } from '@activepieces/pieces-framework';
-import { PieceCategory } from '@activepieces/shared';
+import { PieceCategory } from '@activepieces/pieces-framework';
 
 import { addAttachmentAction } from './lib/actions/add-attachment';
 import { completeTaskAction } from './lib/actions/complete-task';
@@ -46,7 +47,10 @@ export const microsoftTodo = createPiece({
     findTaskListByNameAction,
     findTaskByTitleAction,
     createCustomApiCallAction({
-      baseUrl: () => 'https://graph.microsoft.com/v1.0/me/todo',
+      baseUrl: (auth) => {
+        const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
+        return getGraphBaseUrl(cloud) + '/v1.0/me/todo';
+      },
       auth: microsoftToDoAuth,
       authMapping: async (auth) => ({
         Authorization: `Bearer ${(auth as OAuth2PropertyValue).access_token}`,

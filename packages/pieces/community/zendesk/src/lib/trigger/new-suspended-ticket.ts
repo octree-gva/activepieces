@@ -12,12 +12,6 @@ import { zendeskAuth } from '../..';
 
 const WEBHOOK_TRIGGER_KEY = 'zendesk_suspended_ticket_webhook';
 
-type AuthProps = {
-  email: string;
-  token: string;
-  subdomain: string;
-};
-
 interface ZendeskTicket {
   id: number;
   subject: string;
@@ -36,6 +30,9 @@ export const newSuspendedTicket = createTrigger({
   name: 'new_suspended_ticket',
   displayName: 'New Suspended Ticket',
   description: 'Fires when a ticket is suspended. Requires a Zendesk Trigger with Notify active webhook. Suspended tickets auto-delete after 14 days.',
+  aiMetadata: {
+    description: 'Fires when a ticket transitions to suspended status in Zendesk, delivered via a registered webhook. Represents a ticket flagged as suspended (which auto-deletes after 14 days); can optionally be scoped to a single organization ID. Requires a Zendesk Trigger configured to notify the active webhook.',
+  },
   auth: zendeskAuth,
   props: {
     organization_filter: Property.ShortText({

@@ -8,6 +8,11 @@ export const findCommission = createAction({
   name: 'find_commission',
   displayName: 'Find Commission',
   description: 'Get details of a specific commission by ID.',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Fetch a single commission by its PromoteKit commission ID. Use when you already have the exact ID and need that commission\'s details; to discover IDs, list commissions first. Read-only and safe to repeat.',
+    idempotent: true,
+  },
   props: {
     commission_id: Property.ShortText({
       displayName: 'Commission ID',
@@ -19,7 +24,7 @@ export const findCommission = createAction({
     const response = await promotekitApiCall<{
       data: Record<string, unknown>;
     }>({
-      token: context.auth as unknown as string,
+      token: context.auth.secret_text,
       method: HttpMethod.GET,
       path: `/commissions/${context.propsValue.commission_id}`,
     });

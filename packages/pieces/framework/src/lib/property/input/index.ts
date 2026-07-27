@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from "zod/mini";
 import { ArrayProperty } from './array-property';
 import { CheckboxProperty } from './checkbox-property';
 import { DateTimeProperty } from './date-time-property';
@@ -14,7 +14,7 @@ import { DynamicProperties } from './dynamic-prop';
 import { FileProperty } from './file-property';
 import { JsonProperty } from './json-property';
 import { MarkDownProperty } from './markdown-property';
-import { MarkdownVariant } from '@activepieces/shared';
+import { MarkdownVariant } from '@activepieces/core-piece-types';
 import { NumberProperty } from './number-property';
 import { ObjectProperty } from './object-property';
 import { PropertyType } from './property-type';
@@ -58,7 +58,7 @@ export type InputProperty =
   | StaticMultiSelectDropdownProperty<any, boolean>
   | DynamicProperties<boolean, PieceAuthProperty | PieceAuthProperty[] | undefined>
   | DateTimeProperty<boolean>
-  | FileProperty<boolean>
+  | FileProperty<boolean, boolean>
   | CustomProperty<boolean>
   | ColorProperty<boolean>;
 
@@ -228,14 +228,14 @@ export const Property = {
       ? DateTimeProperty<true>
       : DateTimeProperty<false>;
   },
-  File<R extends boolean>(
-    request: Properties<FileProperty<R>>
-  ): R extends true ? FileProperty<true> : FileProperty<false> {
+  File<R extends boolean, S extends boolean = false>(
+    request: Properties<FileProperty<R, S>>
+  ): FileProperty<R extends true ? true : false, S extends true ? true : false> {
     return {
       ...request,
       valueSchema: undefined,
       type: PropertyType.FILE,
-    } as unknown as R extends true ? FileProperty<true> : FileProperty<false>;
+    } as unknown as FileProperty<R extends true ? true : false, S extends true ? true : false>;
   },
   Custom<R extends boolean>(
     request: Omit<Properties<CustomProperty<R>>, 'code'> & {

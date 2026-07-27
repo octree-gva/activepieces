@@ -1,9 +1,10 @@
 import { createCustomApiCallAction } from '@activepieces/pieces-common';
+import { getGraphBaseUrl } from './lib/common/microsoft-cloud';
 import {
   createPiece,
   OAuth2PropertyValue,
 } from '@activepieces/pieces-framework';
-import { PieceCategory } from '@activepieces/shared';
+import { PieceCategory } from '@activepieces/pieces-framework';
 
 import { createFolderAction } from './lib/actions/create-folder';
 import { createListAction } from './lib/actions/create-list';
@@ -57,7 +58,10 @@ export const microsoftSharePoint = createPiece({
     findSiteAction,
     createCustomApiCallAction({
       auth: microsoftSharePointAuth,
-      baseUrl: () => 'https://graph.microsoft.com/v1.0',
+      baseUrl: (auth) => {
+        const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
+        return getGraphBaseUrl(cloud) + '/v1.0';
+      },
       authMapping: async (auth) => ({
         Authorization: `Bearer ${(auth as OAuth2PropertyValue).access_token}`,
       }),

@@ -1,4 +1,4 @@
-import { createAction, Property } from '@activepieces/pieces-framework';
+import { createAction, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
 import { excelAuth } from '../auth';
 import { commonProps } from '../common/props';
 import { getDrivePath, createMSGraphClient } from '../common/helpers';
@@ -11,6 +11,8 @@ export const getRowAction = createAction({
   name: 'getRowById',
   displayName: 'Get Row by ID',
   description: '  Retrieve the entire content of a row by its row ID.',
+  audience: 'both',
+  aiMetadata: { description: 'Retrieve the full contents of a single table row by its zero-based index within the table. Pick this when you already know the row position; use Find Row instead to locate a row by a column value. Read-only and idempotent.', idempotent: true },
   props: {
     storageSource: commonProps.storageSource,
     siteId: commonProps.siteId,
@@ -28,6 +30,7 @@ export const getRowAction = createAction({
   async run(context) {
     const { storageSource, siteId, documentId, workbookId, tableId, row_id } = context.propsValue;
     const { access_token } = context.auth;
+    const cloud = (context.auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
     if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
       throw new Error('please select SharePoint site and document library.');
@@ -37,7 +40,7 @@ export const getRowAction = createAction({
     const maxRetries = 3;
     let attempt = 0;
 
-    const client = createMSGraphClient(access_token);
+    const client = createMSGraphClient(access_token, cloud);
 
     while (attempt < maxRetries) {
       try {

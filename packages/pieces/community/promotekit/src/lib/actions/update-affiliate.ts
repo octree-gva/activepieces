@@ -8,6 +8,11 @@ export const updateAffiliate = createAction({
   name: 'update_affiliate',
   displayName: 'Update Affiliate',
   description: 'Update an existing affiliate in PromoteKit.',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Update an existing affiliate identified by affiliate ID, changing only the fields you supply (name, payout email, approved, banned); omitted fields are left untouched. Use to approve, ban, or edit an affiliate. Idempotent: re-sending the same field values leaves the affiliate in the same state.',
+    idempotent: true,
+  },
   props: {
     affiliate_id: Property.ShortText({
       displayName: 'Affiliate ID',
@@ -49,7 +54,7 @@ export const updateAffiliate = createAction({
     const response = await promotekitApiCall<{
       data: Record<string, unknown>;
     }>({
-      token: context.auth as unknown as string,
+      token: context.auth.secret_text,
       method: HttpMethod.PUT,
       path: `/affiliates/${context.propsValue.affiliate_id}`,
       body,

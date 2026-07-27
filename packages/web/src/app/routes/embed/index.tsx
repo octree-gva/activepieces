@@ -124,7 +124,9 @@ const EmbedPage = React.memo(() => {
               authenticationSession.saveResponse(data, true);
               const configuredRoute = event.data.data.initialRoute ?? '/';
 
-              const defaultRoute = determineDefaultRoute(checkAccess);
+              const defaultRoute = determineDefaultRoute({
+                checkAccess,
+              });
               const initialRoute =
                 configuredRoute === '/' ? defaultRoute : configuredRoute;
               //must use it to ensure that the correct router in RouterProvider is used before navigation
@@ -137,6 +139,7 @@ const EmbedPage = React.memo(() => {
                   disableNavigationInBuilder:
                     event.data.data.disableNavigationInBuilder !== false,
                   hideFolders: event.data.data.hideFolders ?? false,
+                  hideTables: event.data.data.hideTables ?? false,
                   sdkVersion: event.data.data.sdkVersion,
                   fontUrl: event.data.data.fontUrl,
                   fontFamily: event.data.data.fontFamily,
@@ -156,10 +159,14 @@ const EmbedPage = React.memo(() => {
                   hideFlowsPageNavbar:
                     event.data.data.hideFlowsPageNavbar ?? false,
                   hidePageHeader: event.data.data.hidePageHeader ?? false,
+                  hideActiveUsers: event.data.data.hideActiveUsers ?? false,
+                  hideGlobalSearch: event.data.data.hideGlobalSearch ?? false,
                 });
               });
               memoryRouter.navigate(initialRoute);
-              handleVendorNavigation({ projectId: data.projectId });
+              if (data.projectId) {
+                handleVendorNavigation({ projectId: data.projectId });
+              }
               handleClientNavigation();
               notifyVendorPostAuthentication();
             },

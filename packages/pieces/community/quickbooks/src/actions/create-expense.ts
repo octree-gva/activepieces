@@ -14,6 +14,11 @@ export const createExpenseAction = createAction({
 	name: 'create_expense',
 	displayName: 'Create Expense',
 	description: 'Creates an expense transaction (purchase) in QuickBooks.',
+	audience: 'both',
+	aiMetadata: {
+		description: 'Record a new expense (purchase) paid from a chosen bank or credit-card account, with one or more account-based line items (each needs an amount and an expense account Id) and a payment type of cash, check, or credit card. Optionally attach a payee/vendor, payment date, and memo. Not idempotent: each call creates a new purchase, so guard against duplicates.',
+		idempotent: false,
+	},
 	props: {
 		accountRef: Property.Dropdown({
 			auth: quickbooksAuth,
@@ -152,7 +157,7 @@ export const createExpenseAction = createAction({
 				expenseAccountId: Property.ShortText({
 					displayName: 'Expense Category/Account ID',
 					description:
-						'Enter the ID of the Expense Account. Required for AccountBasedExpenseLineDetail.',
+						'The Id of the expense account. Use the "Find Account" action (filter by type Expense) to look this up.',
 					required: true,
 				}),
 			},

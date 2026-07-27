@@ -1,4 +1,5 @@
-import { ActivepiecesError, ApEdition, CreateTrialLicenseKeyRequestBody, ErrorCode, isNil, LicenseKeyEntity, PlanName, TeamProjectsLimit, TelemetryEventName } from '@activepieces/shared'
+import { ActivepiecesError, ErrorCode, isNil } from '@activepieces/core-utils'
+import { ApEdition, CreateTrialLicenseKeyRequestBody, LicenseKeyEntity, PlanName, TeamProjectsLimit, TelemetryEventName } from '@activepieces/shared'
 import dayjs from 'dayjs'
 import { FastifyBaseLogger } from 'fastify'
 import { StatusCodes } from 'http-status-codes'
@@ -154,12 +155,14 @@ export const licenseKeysService = (log: FastifyBaseLogger) => ({
                 stripeSubscriptionStatus: undefined,
                 manageTemplatesEnabled: key.manageTemplatesEnabled,
                 apiKeysEnabled: key.apiKeysEnabled,
-                customDomainsEnabled: key.customDomainsEnabled,
                 projectRolesEnabled: key.projectRolesEnabled,
                 analyticsEnabled: key.analyticsEnabled,
                 eventStreamingEnabled: key.eventStreamingEnabled,
                 secretManagersEnabled: key.secretManagersEnabled,
                 agentsEnabled: key.agentsEnabled,
+                aiProvidersEnabled: key.aiProvidersEnabled ?? true,
+                chatEnabled: key.chatEnabled ?? false,
+                workerGroupsEnabled: key.workerGroupsEnabled ?? false,
             },
         })
     },
@@ -178,11 +181,13 @@ const turnedOffFeatures: Omit<LicenseKeyEntity, 'id' | 'createdAt' | 'expiresAt'
     managePiecesEnabled: false,
     manageTemplatesEnabled: false,
     apiKeysEnabled: false,
-    customDomainsEnabled: false,
     globalConnectionsEnabled: false,
     customRolesEnabled: false,
     projectRolesEnabled: false,
     eventStreamingEnabled: false,
     secretManagersEnabled: false,
     agentsEnabled: false,
+    aiProvidersEnabled: false,
+    chatEnabled: false,
+    workerGroupsEnabled: false,
 }

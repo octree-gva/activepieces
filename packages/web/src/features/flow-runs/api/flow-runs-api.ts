@@ -1,4 +1,7 @@
+import { SeekPage } from '@activepieces/core-utils';
 import {
+  CountFlowRunsByStatusRequest,
+  CountFlowRunsByStatusResponse,
   FlowRun,
   FlowRunWithRetryError,
   ListFlowRunsRequestQuery,
@@ -7,7 +10,6 @@ import {
   WebsocketServerEvent,
   WebsocketClientEvent,
   CreateStepRunRequestBody,
-  SeekPage,
   BulkActionOnRunsRequestBody,
   BulkArchiveActionOnRunsRequestBody,
   BulkCancelFlowRequestBody,
@@ -23,6 +25,14 @@ type TestStepParams = {
 export const flowRunsApi = {
   list(request: ListFlowRunsRequestQuery): Promise<SeekPage<FlowRun>> {
     return api.get<SeekPage<FlowRun>>('/v1/flow-runs', request);
+  },
+  countByStatus(
+    request: CountFlowRunsByStatusRequest,
+  ): Promise<CountFlowRunsByStatusResponse> {
+    return api.get<CountFlowRunsByStatusResponse>(
+      '/v1/flow-runs/count-by-status',
+      request,
+    );
   },
   getPopulated(id: string): Promise<FlowRun> {
     return api.get<FlowRun>(`/v1/flow-runs/${id}`);

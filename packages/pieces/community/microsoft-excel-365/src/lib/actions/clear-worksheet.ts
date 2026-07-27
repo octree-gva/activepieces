@@ -1,4 +1,4 @@
-import { createAction, Property } from '@activepieces/pieces-framework';
+import { createAction, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
 import { excelAuth } from '../auth';
 import { commonProps } from '../common/props';
 import { getDrivePath, createMSGraphClient } from '../common/helpers';
@@ -7,6 +7,8 @@ export const clearWorksheetAction = createAction({
   auth: excelAuth,
   name: 'clear_worksheet',
   description: 'Clear a worksheet',
+  audience: 'both',
+  aiMetadata: { description: 'Clear cell contents from a worksheet — either a specific A1-notation range (e.g. A2:B2) or, when no range is given, the entire used range. Removes values only (not formatting) and does not delete rows or shift cells. Idempotent — re-running over the same area has no further effect.', idempotent: true },
   displayName: 'Clear Worksheet',
   props: {
     storageSource: commonProps.storageSource,
@@ -24,6 +26,7 @@ export const clearWorksheetAction = createAction({
   async run({ propsValue, auth }) {
     const { storageSource, siteId, documentId, workbookId, worksheetId } = propsValue;
     const range = propsValue['range'];
+    const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
     if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
       throw new Error('please select SharePoint site and document library.');
@@ -39,7 +42,7 @@ export const clearWorksheetAction = createAction({
       url += `range(address = '${range}')/clear`;
     }
 
-    const client = createMSGraphClient(auth['access_token']);
+    const client = createMSGraphClient(auth['access_token'], cloud);
     await client.api(url).post({ applyTo: 'contents' });
     return {};
   },

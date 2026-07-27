@@ -1,4 +1,4 @@
-import { createAction, Property } from '@activepieces/pieces-framework';
+import { createAction, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
 import { excelAuth } from '../auth';
 import { commonProps } from '../common/props';
 import { getDrivePath, createMSGraphClient } from '../common/helpers';
@@ -7,6 +7,8 @@ export const getWorkbooksAction = createAction({
   auth: excelAuth,
   name: 'get_workbooks',
   description: 'Retrieve a list of workbooks',
+  audience: 'both',
+  aiMetadata: { description: 'List .xlsx workbooks in a OneDrive or SharePoint drive, returning id, name, and webUrl for each. Use to browse or enumerate available spreadsheets; to find one specific file by exact name use Find Workbook. Read-only and idempotent; an optional limit caps results, otherwise all matches are returned.', idempotent: true },
   displayName: 'Get Workbooks',
   props: {
     storageSource: commonProps.storageSource,
@@ -22,6 +24,7 @@ export const getWorkbooksAction = createAction({
   async run({ propsValue, auth }) {
     const { storageSource, siteId, documentId } = propsValue;
     const limit = propsValue['limit'];
+    const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
     if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
       throw new Error('please select SharePoint site and document library.');
@@ -29,7 +32,7 @@ export const getWorkbooksAction = createAction({
 
     const drivePath = getDrivePath(storageSource, siteId as string, documentId as string);
 
-    const client = createMSGraphClient(auth['access_token']);
+    const client = createMSGraphClient(auth['access_token'], cloud);
     let apiCall = client.api(`${drivePath}/root/search(q='.xlsx')`);
 
     if (limit !== null && limit !== undefined) {

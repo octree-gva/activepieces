@@ -1,4 +1,4 @@
-import { createAction, Property } from '@activepieces/pieces-framework';
+import { createAction, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
 import { excelAuth } from '../auth';
 import { commonProps } from '../common/props';
 import { getDrivePath, createMSGraphClient } from '../common/helpers';
@@ -8,6 +8,8 @@ export const clearRowAction = createAction({
     name: 'clear_row',
     displayName: 'Clear Row by ID',
     description: 'Clear contents/formatting of an entire row by its ID.',
+    audience: 'both',
+    aiMetadata: { description: 'Clear an entire row in a worksheet by its 1-based row number. Choose what to remove via Clear Type: contents, formats, or both. Clears in place without deleting the row or shifting cells up — use Delete Row when you need the row removed and rows below shifted. Idempotent — re-running on an already-cleared row has no further effect.', idempotent: true },
     props: {
         storageSource: commonProps.storageSource,
         siteId: commonProps.siteId,
@@ -45,6 +47,7 @@ export const clearRowAction = createAction({
     async run(context) {
         const { storageSource, siteId, documentId, workbookId, worksheetId, row_id, applyTo } = context.propsValue;
         const { access_token } = context.auth;
+        const cloud = (context.auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
         if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
             throw new Error('please select SharePoint site and document library.');
@@ -59,7 +62,7 @@ export const clearRowAction = createAction({
         // Construct the range address for the entire row, e.g., '5:5'
         const rowAddress = `${row_id}:${row_id}`;
 
-        const client = createMSGraphClient(access_token);
+        const client = createMSGraphClient(access_token, cloud);
         await client
             .api(`${drivePath}/items/${workbookId}/workbook/worksheets/${worksheetId}/range(address='${rowAddress}')/clear`)
             .post({ applyTo: applyTo });

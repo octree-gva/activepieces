@@ -1,4 +1,5 @@
-import { Permission, PrincipalType } from '@activepieces/shared'
+import { Permission } from '@activepieces/core-utils'
+import { PrincipalType } from '@activepieces/shared'
 import { EntitySchema } from 'typeorm'
 
 export enum AuthorizationType {
@@ -56,6 +57,7 @@ export type ProjectResource = ProjectTableResource | ProjectQueryResource | Proj
 export type PlatformAuthorization = {
     type: AuthorizationType.PLATFORM
     adminOnly: boolean
+    nonEmbedUsersOnly?: boolean
     allowedPrincipals: readonly (PrincipalType.USER | PrincipalType.ENGINE | PrincipalType.SERVICE)[]
     projectResource?: ProjectResource
 }

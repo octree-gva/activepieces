@@ -1,10 +1,12 @@
 import { microsoftSharePointAuth } from '../auth';
 import {
   createAction,
+  OAuth2PropertyValue,
   Property,
   DropdownOption,
   PiecePropValueSchema,
 } from '@activepieces/pieces-framework';
+import { getGraphBaseUrl } from '../common/microsoft-cloud';
 import { microsoftSharePointCommon } from '../common';
 import { Client, PageCollection } from '@microsoft/microsoft-graph-client';
 import { DriveItem } from '@microsoft/microsoft-graph-types';
@@ -14,6 +16,11 @@ export const moveFileAction = createAction({
   name: 'microsoft_sharepoint_move_file',
   displayName: 'Move File',
   description: 'Move a file from one folder to another within the same drive.',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Moves a file to a different folder within the same SharePoint drive, optionally renaming it in the process; select the root to move to the drive top level. Use to relocate an existing file rather than copy it. Idempotent: moving a file already at the destination (with the same name) leaves it where it is.',
+    idempotent: true,
+  },
   props: {
     siteId: microsoftSharePointCommon.siteId,
     driveId: microsoftSharePointCommon.driveId,
@@ -34,10 +41,12 @@ export const moveFileAction = createAction({
         const authValue = auth as PiecePropValueSchema<
           typeof microsoftSharePointAuth
         >;
+        const cloud = (authValue as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
         const client = Client.initWithMiddleware({
           authProvider: {
             getAccessToken: () => Promise.resolve(authValue.access_token),
           },
+          baseUrl: getGraphBaseUrl(cloud),
         });
         const options: DropdownOption<string>[] = [];
         let response: PageCollection = await client
@@ -78,10 +87,12 @@ export const moveFileAction = createAction({
         const authValue = auth as PiecePropValueSchema<
           typeof microsoftSharePointAuth
         >;
+        const cloud = (authValue as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
         const client = Client.initWithMiddleware({
           authProvider: {
             getAccessToken: () => Promise.resolve(authValue.access_token),
           },
+          baseUrl: getGraphBaseUrl(cloud),
         });
         const options: DropdownOption<string>[] = [
           { label: 'Root', value: 'root' },
@@ -115,10 +126,12 @@ export const moveFileAction = createAction({
     const { driveId, fileId, destinationFolderId, newName } =
       context.propsValue;
 
+    const cloud = context.auth.props?.['cloud'] as string | undefined;
     const client = Client.initWithMiddleware({
       authProvider: {
         getAccessToken: () => Promise.resolve(context.auth.access_token),
       },
+      baseUrl: getGraphBaseUrl(cloud),
     });
 
     try {

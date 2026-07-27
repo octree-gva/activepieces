@@ -1,21 +1,15 @@
-import { setupTestEnvironment, teardownTestEnvironment } from '../../../helpers/test-setup'
-import { apId, ApEdition, FilteredPieceBehavior,
-    FlowOperationStatus,
-    FlowStatus,
-    PlanName,
-    PlatformRole,
-    PrincipalType,
-    UpdatePlatformRequestBody,
-} from '@activepieces/shared'
+import { apId } from '@activepieces/core-utils'
+import { ApEdition, FileCompression, FileLocation, FileType, FlowOperationStatus, FlowStatus, PlanName, PlatformRole, PrincipalType, UpdatePlatformRequestBody, UserIdentityProvider } from '@activepieces/shared'
 import { faker } from '@faker-js/faker'
 import { FastifyInstance } from 'fastify'
 import { StatusCodes } from 'http-status-codes'
 import { databaseConnection } from '../../../../src/app/database/database-connection'
 import { system } from '../../../../src/app/helper/system/system'
 import { systemJobsQueue } from '../../../../src/app/helper/system-jobs/system-job'
-import { db } from '../../../helpers/db'
 import { generateMockToken } from '../../../helpers/auth'
-import { checkIfSolutionExistsInDb, createMockConnection, createMockFlow, createMockFlowRun, createMockFlowVersion, createMockSolutionAndSave, createMockUser, mockAndSaveBasicSetup, mockBasicUser } from '../../../helpers/mocks'
+import { db } from '../../../helpers/db'
+import { checkIfSolutionExistsInDb, createMockConnection, createMockFile, createMockFlow, createMockFlowRun, createMockFlowVersion, createMockSolutionAndSave, createMockUser, mockAndSaveBasicSetup, mockBasicUser } from '../../../helpers/mocks'
+import { setupTestEnvironment, teardownTestEnvironment } from '../../../helpers/test-setup'
 
 let app: FastifyInstance | null = null
 
@@ -69,14 +63,12 @@ describe('Platform API', () => {
             const testToken = await generateMockToken({
                 type: PrincipalType.USER,
                 id: mockOwner.id,
-                
+
                 platform: { id: mockPlatform.id },
             })
             const requestBody: UpdatePlatformRequestBody = {
                 name: 'updated name',
                 primaryColor: 'updated primary color',
-                filteredPieceNames: ['updated filtered piece names'],
-                filteredPieceBehavior: FilteredPieceBehavior.ALLOWED,
                 enforceAllowedAuthDomains: true,
                 allowedAuthDomains: ['yahoo.com'],
                 cloudAuthEnabled: false,
@@ -109,14 +101,8 @@ describe('Platform API', () => {
             expect(responseBody.emailAuthEnabled).toBe(requestBody.emailAuthEnabled)
             expect(responseBody.name).toBe('updated name')
             expect(responseBody.primaryColor).toBe('updated primary color')
-            expect(responseBody.filteredPieceNames).toStrictEqual([
-                'updated filtered piece names',
-            ])
-            expect(responseBody.filteredPieceBehavior).toBe('ALLOWED')
             expect(responseBody.emailAuthEnabled).toBe(false)
             expect(responseBody.federatedAuthProviders).toStrictEqual({
-                google: null,
-                github: null,
                 saml: null,
             })
             expect(responseBody.cloudAuthEnabled).toBe(false)
@@ -133,7 +119,7 @@ describe('Platform API', () => {
             const testToken = await generateMockToken({
                 type: PrincipalType.USER,
                 id: mockOwner.id,
-                
+
                 platform: { id: mockPlatform.id },
             })
             const formData = new FormData()
@@ -186,11 +172,9 @@ describe('Platform API', () => {
             formData.append('cloudAuthEnabled', 'false')
             formData.append('emailAuthEnabled', 'false')
             formData.append('enforceAllowedAuthDomains', 'true')
-            formData.append('filteredPieceNames', 'piece-1')
             formData.append('allowedAuthDomains', 'example.com')
             formData.append('pinnedPieces', 'pinned-1')
             formData.append('name', 'updated name')
-            formData.append('filteredPieceBehavior', 'ALLOWED')
 
             // act
             const response = await app?.inject({
@@ -209,16 +193,277 @@ describe('Platform API', () => {
             expect(responseBody.cloudAuthEnabled).toBe(false)
             expect(responseBody.emailAuthEnabled).toBe(false)
             expect(responseBody.enforceAllowedAuthDomains).toBe(true)
-            expect(responseBody.filteredPieceNames).toStrictEqual(['piece-1'])
             expect(responseBody.allowedAuthDomains).toStrictEqual(['example.com'])
             expect(responseBody.pinnedPieces).toStrictEqual(['pinned-1'])
             expect(responseBody.name).toBe('updated name')
-            expect(responseBody.filteredPieceBehavior).toBe('ALLOWED')
 
             const baseUrl = 'http://localhost:4200/api/v1/platforms/assets'
             expect(responseBody.logoIconUrl.startsWith(baseUrl)).toBeTruthy()
             expect(responseBody.fullLogoUrl.startsWith(baseUrl)).toBeTruthy()
             expect(responseBody.favIconUrl.startsWith(baseUrl)).toBeTruthy()
+        }),
+
+        it('updates platform theme colors', async () => {
+            // arrange
+            const { mockOwner, mockPlatform } = await mockAndSaveBasicSetup({
+                plan: {
+                    embeddingEnabled: false,
+                },
+                platform: {
+                },
+            })
+            const testToken = await generateMockToken({
+                type: PrincipalType.USER,
+                id: mockOwner.id,
+                platform: { id: mockPlatform.id },
+            })
+            const requestBody: UpdatePlatformRequestBody = {
+                themeColors: {
+                    'blue-link': '#434fef',
+                    danger: '#e82c51',
+                    primary: {
+                        dark: '#ca6716',
+                    },
+                    warn: {
+                        default: '#fa9d52',
+                    },
+                },
+            }
+
+            // act
+            const response = await app?.inject({
+                method: 'POST',
+                url: `/api/v1/platforms/${mockPlatform.id}`,
+                headers: {
+                    authorization: `Bearer ${testToken}`,
+                },
+                body: requestBody,
+            })
+
+            // assert
+            const responseBody = response?.json()
+
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+            expect(responseBody.themeColors).toStrictEqual(requestBody.themeColors)
+        }),
+
+        it('updates and clears theme colors via multipart form data', async () => {
+            // arrange
+            const { mockOwner, mockPlatform } = await mockAndSaveBasicSetup({
+                plan: {
+                    embeddingEnabled: false,
+                },
+                platform: {
+                },
+            })
+            const testToken = await generateMockToken({
+                type: PrincipalType.USER,
+                id: mockOwner.id,
+                platform: { id: mockPlatform.id },
+            })
+            const formData = new FormData()
+            formData.append('name', 'updated name')
+            formData.append('themeColors', JSON.stringify({ danger: '#e82c51' }))
+
+            // act
+            const response = await app?.inject({
+                method: 'POST',
+                url: `/api/v1/platforms/${mockPlatform.id}`,
+                headers: {
+                    authorization: `Bearer ${testToken}`,
+                },
+                body: formData,
+            })
+
+            // assert
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+            expect(response?.json().themeColors).toStrictEqual({ danger: '#e82c51' })
+
+            // act - clear the overrides
+            const clearFormData = new FormData()
+            clearFormData.append('name', 'updated name')
+            clearFormData.append('themeColors', 'null')
+
+            const clearResponse = await app?.inject({
+                method: 'POST',
+                url: `/api/v1/platforms/${mockPlatform.id}`,
+                headers: {
+                    authorization: `Bearer ${testToken}`,
+                },
+                body: clearFormData,
+            })
+
+            // assert
+            expect(clearResponse?.statusCode).toBe(StatusCodes.OK)
+            expect(clearResponse?.json().themeColors).toBeNull()
+        }),
+
+        it('rejects invalid theme colors', async () => {
+            // arrange
+            const { mockOwner, mockPlatform } = await mockAndSaveBasicSetup({
+                plan: {
+                    embeddingEnabled: false,
+                },
+                platform: {
+                },
+            })
+            const testToken = await generateMockToken({
+                type: PrincipalType.USER,
+                id: mockOwner.id,
+                platform: { id: mockPlatform.id },
+            })
+
+            // act
+            const response = await app?.inject({
+                method: 'POST',
+                url: `/api/v1/platforms/${mockPlatform.id}`,
+                headers: {
+                    authorization: `Bearer ${testToken}`,
+                },
+                body: {
+                    themeColors: {
+                        danger: 'red',
+                    },
+                },
+            })
+
+            // assert
+            expect(response?.statusCode).toBe(StatusCodes.BAD_REQUEST)
+        }),
+
+        it('updates and clears piece selector config', async () => {
+            // arrange
+            const { mockOwner, mockPlatform } = await mockAndSaveBasicSetup({
+                plan: {
+                    embeddingEnabled: false,
+                },
+                platform: {
+                },
+            })
+            const testToken = await generateMockToken({
+                type: PrincipalType.USER,
+                id: mockOwner.id,
+                platform: { id: mockPlatform.id },
+            })
+            const pieceSelectorConfig = {
+                tabs: [
+                    { id: 'EXPLORE', kind: 'BUILTIN', builtinTab: 'EXPLORE', hidden: false },
+                    { id: 'APPS', kind: 'BUILTIN', builtinTab: 'APPS', hidden: true },
+                    {
+                        id: apId(),
+                        kind: 'CUSTOM',
+                        title: 'Internal Tools',
+                        icon: 'Star',
+                        hidden: false,
+                        pieceNames: ['@activepieces/piece-internal-a', '@activepieces/piece-internal-b'],
+                        sections: [
+                            {
+                                id: apId(),
+                                title: 'CRM',
+                                pieceNames: ['@activepieces/piece-internal-crm'],
+                            },
+                        ],
+                    },
+                ],
+            }
+
+            // act
+            const response = await app?.inject({
+                method: 'POST',
+                url: `/api/v1/platforms/${mockPlatform.id}`,
+                headers: {
+                    authorization: `Bearer ${testToken}`,
+                },
+                body: { pieceSelectorConfig },
+            })
+
+            // assert
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+            expect(response?.json().pieceSelectorConfig).toStrictEqual(pieceSelectorConfig)
+
+            // act - clear the config
+            const clearResponse = await app?.inject({
+                method: 'POST',
+                url: `/api/v1/platforms/${mockPlatform.id}`,
+                headers: {
+                    authorization: `Bearer ${testToken}`,
+                },
+                body: { pieceSelectorConfig: null },
+            })
+
+            // assert
+            expect(clearResponse?.statusCode).toBe(StatusCodes.OK)
+            expect(clearResponse?.json().pieceSelectorConfig).toBeNull()
+        }),
+
+        it('rejects invalid piece selector config', async () => {
+            // arrange
+            const { mockOwner, mockPlatform } = await mockAndSaveBasicSetup({
+                plan: {
+                    embeddingEnabled: false,
+                },
+                platform: {
+                },
+            })
+            const testToken = await generateMockToken({
+                type: PrincipalType.USER,
+                id: mockOwner.id,
+                platform: { id: mockPlatform.id },
+            })
+
+            // act
+            const response = await app?.inject({
+                method: 'POST',
+                url: `/api/v1/platforms/${mockPlatform.id}`,
+                headers: {
+                    authorization: `Bearer ${testToken}`,
+                },
+                body: {
+                    pieceSelectorConfig: {
+                        tabs: [
+                            { id: 'x', kind: 'BUILTIN', builtinTab: 'NOT_A_REAL_TAB', hidden: false },
+                        ],
+                    },
+                },
+            })
+
+            // assert
+            expect(response?.statusCode).toBe(StatusCodes.BAD_REQUEST)
+        }),
+
+        it('rejects a custom piece selector tab without a name', async () => {
+            // arrange
+            const { mockOwner, mockPlatform } = await mockAndSaveBasicSetup({
+                plan: {
+                    embeddingEnabled: false,
+                },
+                platform: {
+                },
+            })
+            const testToken = await generateMockToken({
+                type: PrincipalType.USER,
+                id: mockOwner.id,
+                platform: { id: mockPlatform.id },
+            })
+
+            // act
+            const response = await app?.inject({
+                method: 'POST',
+                url: `/api/v1/platforms/${mockPlatform.id}`,
+                headers: {
+                    authorization: `Bearer ${testToken}`,
+                },
+                body: {
+                    pieceSelectorConfig: {
+                        tabs: [
+                            { id: apId(), kind: 'CUSTOM', title: '   ', hidden: false, pieceNames: [] },
+                        ],
+                    },
+                },
+            })
+
+            // assert
+            expect(response?.statusCode).toBe(StatusCodes.BAD_REQUEST)
         }),
 
         it('fails if user is not owner', async () => {
@@ -235,7 +480,7 @@ describe('Platform API', () => {
             const testToken = await generateMockToken({
                 type: PrincipalType.USER,
                 id: mockUser.id,
-                
+
                 platform: { id: mockPlatform.id },
             })
 
@@ -255,6 +500,45 @@ describe('Platform API', () => {
             expect(response?.statusCode).toBe(StatusCodes.FORBIDDEN)
         })
 
+        it('rejects cross-tenant platform update (IDOR)', async () => {
+            // arrange — two independent platforms with their own admin owners
+            const { mockOwner: ownerOfPlatformA, mockPlatform: platformA } = await mockAndSaveBasicSetup()
+            const { mockOwner: ownerOfPlatformB, mockPlatform: platformB } = await mockAndSaveBasicSetup({
+                platform: { name: 'platform-b-original-name' },
+            })
+
+            const attackerToken = await generateMockToken({
+                type: PrincipalType.USER,
+                id: ownerOfPlatformA.id,
+                platform: { id: platformA.id },
+            })
+
+            // act — attacker (admin of platform A) points the write at platform B
+            const attackResponse = await app?.inject({
+                method: 'POST',
+                url: `/api/v1/platforms/${platformB.id}`,
+                headers: { authorization: `Bearer ${attackerToken}` },
+                body: { name: 'pwned' },
+            })
+
+            // assert — request is rejected
+            expect(attackResponse?.statusCode).toBe(StatusCodes.FORBIDDEN)
+
+            // assert — platform B was NOT mutated (defense-in-depth check)
+            const victimToken = await generateMockToken({
+                type: PrincipalType.USER,
+                id: ownerOfPlatformB.id,
+                platform: { id: platformB.id },
+            })
+            const victimReadResponse = await app?.inject({
+                method: 'GET',
+                url: `/api/v1/platforms/${platformB.id}`,
+                headers: { authorization: `Bearer ${victimToken}` },
+            })
+            expect(victimReadResponse?.statusCode).toBe(StatusCodes.OK)
+            expect(victimReadResponse?.json().name).toBe('platform-b-original-name')
+        })
+
     })
 
     describe('get platform endpoint', () => {
@@ -263,10 +547,6 @@ describe('Platform API', () => {
             const { mockOwner, mockPlatform } = await mockAndSaveBasicSetup({
                 platform: {
                     federatedAuthProviders: {
-                        google: {
-                            clientId: faker.internet.password(),
-                            clientSecret: faker.internet.password(),
-                        },
                         saml: {
                             idpCertificate: faker.internet.password(),
                             idpMetadata: faker.internet.password(),
@@ -278,7 +558,7 @@ describe('Platform API', () => {
             const mockToken = await generateMockToken({
                 type: PrincipalType.USER,
                 id: mockOwner.id,
-                
+
                 platform: {
                     id: mockPlatform.id,
                 },
@@ -298,20 +578,93 @@ describe('Platform API', () => {
             // assert
             expect(response?.statusCode).toBe(StatusCodes.OK)
 
-            expect(Object.keys(responseBody).length).toBe(19)
+            expect(Object.keys(responseBody).length).toBe(23)
             expect(responseBody.id).toBe(mockPlatform.id)
             expect(responseBody.ownerId).toBe(mockOwner.id)
             expect(responseBody.name).toBe(mockPlatform.name)
-            expect(responseBody.federatedAuthProviders.google).toStrictEqual({
-                clientId: mockPlatform.federatedAuthProviders?.google?.clientId,
-            })
             expect(responseBody.federatedAuthProviders.saml).toStrictEqual({})
             expect(responseBody.primaryColor).toBe(mockPlatform.primaryColor)
+            expect(responseBody.themeColors).toBeNull()
+            expect(responseBody.pieceSelectorConfig).toBeNull()
             expect(responseBody.logoIconUrl).toBe(mockPlatform.logoIconUrl)
             expect(responseBody.fullLogoUrl).toBe(mockPlatform.fullLogoUrl)
             expect(responseBody.favIconUrl).toBe(mockPlatform.favIconUrl)
         })
 
+
+        it('Hides license key from JWT provider (embedded) users', async () => {
+            // arrange
+            const { mockPlatform } = await mockAndSaveBasicSetup({
+                plan: {
+                    licenseKey: 'test-license-key',
+                },
+            })
+
+            const { mockUser: embeddedUser } = await mockBasicUser({
+                userIdentity: {
+                    provider: UserIdentityProvider.JWT,
+                },
+                user: {
+                    platformId: mockPlatform.id,
+                    platformRole: PlatformRole.MEMBER,
+                },
+            })
+
+            const mockToken = await generateMockToken({
+                type: PrincipalType.USER,
+                id: embeddedUser.id,
+                platform: {
+                    id: mockPlatform.id,
+                },
+            })
+
+            // act
+            const response = await app?.inject({
+                method: 'GET',
+                url: `/api/v1/platforms/${mockPlatform.id}`,
+                headers: {
+                    authorization: `Bearer ${mockToken}`,
+                },
+            })
+
+            const responseBody = response?.json()
+
+            // assert
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+            expect(responseBody.plan.licenseKey).toBeNull()
+        })
+
+        it('Returns license key for non-embedded users', async () => {
+            // arrange
+            const { mockOwner, mockPlatform } = await mockAndSaveBasicSetup({
+                plan: {
+                    licenseKey: 'test-license-key',
+                },
+            })
+
+            const mockToken = await generateMockToken({
+                type: PrincipalType.USER,
+                id: mockOwner.id,
+                platform: {
+                    id: mockPlatform.id,
+                },
+            })
+
+            // act
+            const response = await app?.inject({
+                method: 'GET',
+                url: `/api/v1/platforms/${mockPlatform.id}`,
+                headers: {
+                    authorization: `Bearer ${mockToken}`,
+                },
+            })
+
+            const responseBody = response?.json()
+
+            // assert
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+            expect(responseBody.plan.licenseKey).toBe('test-license-key')
+        })
 
         it('Fails if user is not a platform member', async () => {
             const { mockOwner: mockOwner1, mockPlatform: mockPlatform1 } = await mockAndSaveBasicSetup()
@@ -604,7 +957,7 @@ describe('Platform API', () => {
             const testToken = await generateMockToken({
                 type: PrincipalType.USER,
                 id: mockOwner.id,
-                
+
                 platform: { id: mockPlatform.id },
             })
             // act
@@ -632,7 +985,7 @@ describe('Platform API', () => {
         const testToken = await generateMockToken({
             type: PrincipalType.USER,
             id: mockUser.id,
-            
+
             platform: { id: mockPlatform.id },
         })
         // act
@@ -645,5 +998,97 @@ describe('Platform API', () => {
         })
         // assert
         expect(response?.statusCode).toBe(StatusCodes.OK)
+    })
+
+    describe('get platform asset endpoint', () => {
+        it('serves a public platform asset', async () => {
+            // arrange
+            const { mockPlatform } = await mockAndSaveBasicSetup()
+            const assetData = Buffer.from('public-logo-bytes')
+            const assetFile = createMockFile({
+                platformId: mockPlatform.id,
+                projectId: null,
+                type: FileType.PLATFORM_ASSET,
+                compression: FileCompression.NONE,
+                location: FileLocation.DB,
+                data: assetData,
+                fileName: 'logo.png',
+                metadata: { mimetype: 'image/png' },
+            })
+            await db.save('file', assetFile)
+
+            // act — public endpoint, no auth
+            const response = await app?.inject({
+                method: 'GET',
+                url: `/api/v1/platforms/assets/${assetFile.id}`,
+            })
+
+            // assert
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+            expect(response?.headers['content-type']).toContain('image/png')
+            expect(response?.rawPayload.equals(assetData)).toBe(true)
+        })
+
+        it('serves a public user profile picture', async () => {
+            // arrange
+            const { mockPlatform } = await mockAndSaveBasicSetup()
+            const pictureData = Buffer.from('user-profile-picture-bytes')
+            const pictureFile = createMockFile({
+                platformId: mockPlatform.id,
+                projectId: null,
+                type: FileType.USER_PROFILE_PICTURE,
+                compression: FileCompression.NONE,
+                location: FileLocation.DB,
+                data: pictureData,
+                fileName: 'avatar.png',
+                metadata: { mimetype: 'image/png' },
+            })
+            await db.save('file', pictureFile)
+
+            // act — public endpoint, no auth
+            const response = await app?.inject({
+                method: 'GET',
+                url: `/api/v1/platforms/assets/${pictureFile.id}`,
+            })
+
+            // assert
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+            expect(response?.headers['content-type']).toContain('image/png')
+            expect(response?.rawPayload.equals(pictureData)).toBe(true)
+        })
+
+        it('rejects access to non-PLATFORM_ASSET files (IDOR via public asset endpoint)', async () => {
+            // arrange — a sensitive flow run log file stored under a project
+            const { mockProject } = await mockAndSaveBasicSetup()
+            const sensitiveData = Buffer.from(JSON.stringify({ secret: 'super-secret-api-key' }))
+            const sensitiveFile = createMockFile({
+                projectId: mockProject.id,
+                type: FileType.FLOW_RUN_LOG,
+                compression: FileCompression.NONE,
+                location: FileLocation.DB,
+                data: sensitiveData,
+                fileName: 'flow-run.json',
+                metadata: { mimetype: 'application/json' },
+            })
+            await db.save('file', sensitiveFile)
+
+            // act — unauthenticated attacker hits the public asset endpoint
+            const response = await app?.inject({
+                method: 'GET',
+                url: `/api/v1/platforms/assets/${sensitiveFile.id}`,
+            })
+
+            // assert — non-asset file types must NOT be served by this endpoint
+            expect(response?.statusCode).toBe(StatusCodes.NOT_FOUND)
+            expect(response?.rawPayload.includes(sensitiveData)).toBe(false)
+        })
+
+        it('returns 404 for unknown asset ids', async () => {
+            const response = await app?.inject({
+                method: 'GET',
+                url: `/api/v1/platforms/assets/${apId()}`,
+            })
+            expect(response?.statusCode).toBe(StatusCodes.NOT_FOUND)
+        })
     })
 })

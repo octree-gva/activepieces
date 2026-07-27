@@ -1,5 +1,6 @@
 import { microsoftSharePointAuth } from '../auth';
 import { createAction, Property } from '@activepieces/pieces-framework';
+import { getGraphBaseUrl } from '../common/microsoft-cloud';
 import { Client, PageCollection } from '@microsoft/microsoft-graph-client';
 import { Site } from '@microsoft/microsoft-graph-types';
 
@@ -8,6 +9,11 @@ export const findSiteAction = createAction({
   name: 'microsoft_sharepoint_find_site',
   displayName: 'Find Site',
   description: 'Search for SharePoint sites by name and return matching results.',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Searches SharePoint sites across the tenant by a name keyword and returns matching sites with their IDs, names, and URLs. Use as the entry point to resolve a site ID needed by other SharePoint actions. Read-only and idempotent.',
+    idempotent: true,
+  },
   props: {
     searchTerm: Property.ShortText({
       displayName: 'Site Name',
@@ -18,10 +24,12 @@ export const findSiteAction = createAction({
   async run(context) {
     const { searchTerm } = context.propsValue;
 
+    const cloud = context.auth.props?.['cloud'] as string | undefined;
     const client = Client.initWithMiddleware({
       authProvider: {
         getAccessToken: () => Promise.resolve(context.auth.access_token),
       },
+      baseUrl: getGraphBaseUrl(cloud),
     });
 
     const sites: Pick<Site, 'id' | 'displayName' | 'name' | 'webUrl'>[] = [];

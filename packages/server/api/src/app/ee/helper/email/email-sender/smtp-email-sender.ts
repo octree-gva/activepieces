@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { ActivepiecesError, ApEdition, ApEnvironment, ErrorCode, isNil, Platform } from '@activepieces/shared'
+import { ActivepiecesError, ErrorCode, isNil } from '@activepieces/core-utils'
+import { ApEdition, ApEnvironment, PlatformWithoutFederatedAuth } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import Mustache from 'mustache'
 import nodemailer, { Transporter } from 'nodemailer'
@@ -31,7 +32,7 @@ export const smtpEmailSender = (log: FastifyBaseLogger): SMTPEmailSender => {
                 })
             }
         },
-        async send({ emails, platformId, templateData }) {
+        async send({ emails, platformId, templateData, replyTo }) {
             try {
                 const platform = await getPlatform(platformId, log)
                 const emailSubject = getEmailSubject(templateData.name, templateData.vars)
@@ -51,7 +52,7 @@ export const smtpEmailSender = (log: FastifyBaseLogger): SMTPEmailSender => {
                 const smtpClient = initSmtpClient()
                 log.info({
                     emails,
-                    platformId,
+                    platform: { id: platformId },
                     templateData,
                 }, '[smtpEmailSender#send] sending email')
                 await smtpClient.sendMail({
@@ -59,13 +60,14 @@ export const smtpEmailSender = (log: FastifyBaseLogger): SMTPEmailSender => {
                     to: emails.join(','),
                     subject: emailSubject,
                     html: emailBody,
+                    ...(replyTo ? { replyTo } : {}),
                 })
             }
             catch (e) {
                 log.error({
                     error: e,
                     emails,
-                    platformId,
+                    platform: { id: platformId },
                     title: templateData.name,
                 }, '[smtpEmailSender#send] error sending email')
                 throw e
@@ -80,7 +82,7 @@ export const smtpEmailSender = (log: FastifyBaseLogger): SMTPEmailSender => {
     }
 }
 
-const getPlatform = async (platformId: string | undefined, log: FastifyBaseLogger): Promise<Platform | null> => {
+const getPlatform = async (platformId: string | undefined, log: FastifyBaseLogger): Promise<PlatformWithoutFederatedAuth | null> => {
     return platformId ? platformService(log).getOne(platformId) : null
 }
 
@@ -91,21 +93,17 @@ const renderEmailBody = async ({ platform, templateData }: RenderEmailBodyArgs):
     const footer = await readFile(footerPath, 'utf-8')
     const edition = system.getEdition()
     const primaryColor = platform?.primaryColor ?? defaultTheme.colors.primary.default
+    const primaryColorLight = hexToLightTint({ hex: primaryColor, opacity: 0.08 })
     const fullLogoUrl = platform?.fullLogoUrl ?? defaultTheme.logos.fullLogoUrl
     const platformName = platform?.name ?? defaultTheme.websiteName
 
     return Mustache.render(template, {
         ...templateData.vars,
         primaryColor,
+        primaryColorLight,
         fullLogoUrl,
         platformName,
-        checkIssuesEnabled() {
-            return templateData.name === 'issue-created' && templateData.vars.isIssue === 'true'
-        },
-        footerContent() {
-            return edition === ApEdition.CLOUD ? `   Activepieces, Inc. 398 11th Street,
-                    2nd floor, San Francisco, CA 94103` : ''
-        },
+        footerContent: edition === ApEdition.CLOUD ? 'Activepieces, Inc. 398 11th Street, 2nd floor, San Francisco, CA 94103' : '',
     },
     {
         footer,
@@ -115,6 +113,7 @@ const renderEmailBody = async ({ platform, templateData }: RenderEmailBodyArgs):
 
 const initSmtpClient = (): Transporter => {
     const smtpPort = Number.parseInt(system.getOrThrow(AppSystemProp.SMTP_PORT))
+    const rejectUnauthorized = system.getBoolean(AppSystemProp.SMTP_TLS_REJECT_UNAUTHORIZED) ?? true
     return nodemailer.createTransport({
         host: system.getOrThrow(AppSystemProp.SMTP_HOST),
         port: smtpPort,
@@ -123,25 +122,41 @@ const initSmtpClient = (): Transporter => {
             user: system.getOrThrow(AppSystemProp.SMTP_USERNAME),
             pass: system.getOrThrow(AppSystemProp.SMTP_PASSWORD),
         },
+        tls: {
+            rejectUnauthorized,
+        },
     })
 }
 
 const getEmailSubject = (templateName: EmailTemplateData['name'], vars: Record<string, string>): string => {
     const templateToSubject: Record<EmailTemplateData['name'], string> = {
-        'invitation-email': 'You have been invited to a team',
-        'project-member-added': `You've been added to ${vars.projectName}`,
-        'badge-awarded': 'You earned a new badge',
-        'verify-email': 'Verify your email address',
-        'reset-password': 'Reset your password',
-        'issue-created': `[ACTION REQUIRED] New issue in ${vars.flowName}`,
-        'trigger-failure': `[ACTION REQUIRED] ${vars.flowName} trigger is failing`,
-        'scim-user-welcome': 'Welcome! Your account has been created',
+        'invitation-email': `You have been invited to "${vars.projectName}" project ✉️`,
+        'project-member-added': `Welcome to ${vars.projectName} 🎉`,
+        'verify-email': 'Verify your email address ✅',
+        'reset-password': 'Reset your password 🔑',
+        'issue-created': `[${vars.projectName}] Flow has an issue "${vars.flowName}" ⚠️`,
+        'scim-user-welcome': 'Welcome! Your account has been created 🎉',
+        'chat-notification': vars.subject,
     }
 
     return templateToSubject[templateName]
 }
 
+const hexToLightTint = ({ hex, opacity }: { hex: string, opacity: number }): string => {
+    let raw = hex.replace('#', '')
+    if (raw.length === 3) {
+        raw = raw[0] + raw[0] + raw[1] + raw[1] + raw[2] + raw[2]
+    }
+    if (raw.length !== 6) {
+        return '#ffffff'
+    }
+    const r = Math.round(255 - (255 - parseInt(raw.substring(0, 2), 16)) * opacity)
+    const g = Math.round(255 - (255 - parseInt(raw.substring(2, 4), 16)) * opacity)
+    const b = Math.round(255 - (255 - parseInt(raw.substring(4, 6), 16)) * opacity)
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
+}
+
 type RenderEmailBodyArgs = {
-    platform: Platform | null
+    platform: PlatformWithoutFederatedAuth | null
     templateData: EmailTemplateData
 }

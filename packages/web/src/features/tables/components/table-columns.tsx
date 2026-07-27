@@ -1,4 +1,5 @@
-import { ApFlagId, isNil, Permission } from '@activepieces/shared';
+import { isNil, Permission } from '@activepieces/core-utils';
+import { ApFlagId } from '@activepieces/shared';
 import { Plus } from 'lucide-react';
 import { ReactNode } from 'react';
 import { Column, RenderCellProps } from 'react-data-grid';
@@ -25,11 +26,13 @@ export function useTableColumns(createEmptyRecord: () => void) {
     ApFlagId.MAX_FIELDS_PER_TABLE,
   );
 
+  const lockedByOtherUser = useTableState((state) => state.lockedByOtherUser);
   const userHasTableWritePermission = useAuthorization().checkAccess(
     Permission.WRITE_TABLE,
   );
+  const canEdit = userHasTableWritePermission && !lockedByOtherUser;
   const isAllowedToCreateField =
-    userHasTableWritePermission && maxFields && fields.length < maxFields;
+    canEdit && maxFields && fields.length < maxFields;
 
   const newFieldColumn: Column<Row, { id: string }> = {
     key: 'new-field',
@@ -90,7 +93,7 @@ export function useTableColumns(createEmptyRecord: () => void) {
           row={row}
           column={column}
           rowIdx={rowIdx}
-          disabled={!userHasTableWritePermission}
+          disabled={!canEdit}
           locked={row.locked}
           onClick={() => {
             if (row.locked && row.agentRunId) {

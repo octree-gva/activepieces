@@ -3,13 +3,17 @@ import { TriggerStrategy } from '@activepieces/pieces-framework';
 import { stripeCommon } from '../common';
 import { stripeAuth } from '../..';
 import { httpClient, HttpMethod } from '@activepieces/pieces-common';
-import { isEmpty } from '@activepieces/shared';
+import { isEmpty } from '@activepieces/pieces-framework';
 
 export const stripeNewCustomer = createTrigger({
   auth: stripeAuth,
   name: 'new_customer',
   displayName: 'New Customer',
   description: 'Triggers when a new customer is created',
+  aiMetadata: {
+    description:
+      'Fires when a new customer is created in Stripe (the customer.created event), emitting the new customer record. Use to react to customer onboarding, such as syncing them to a CRM or sending a welcome flow.',
+  },
   props: {},
   sampleData: {
     id: 'cus_NGtyEf4hNGTj3p',
@@ -67,6 +71,7 @@ export const stripeNewCustomer = createTrigger({
       headers: {
         Authorization: 'Bearer ' + context.auth.secret_text,
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Stripe-Version': "2026-02-25.clover",
       },
       queryParams: {
         limit: '5',

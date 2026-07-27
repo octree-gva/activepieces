@@ -1,4 +1,4 @@
-import { createAction, Property } from '@activepieces/pieces-framework';
+import { createAction, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
 import { excelAuth } from '../auth';
 import { commonProps } from '../common/props';
 import { getDrivePath, createMSGraphClient } from '../common/helpers';
@@ -18,6 +18,8 @@ export const createWorksheetAction = createAction({
   displayName: 'Create Worksheet',
   description:
     'Add a new worksheet (tab) to an existing workbook with optional default headers.',
+  audience: 'both',
+  aiMetadata: { description: 'Add a new worksheet (tab) to an existing workbook, optionally writing a header row and creating an Excel table from it. Use to provision a sheet for new data; to add data to an existing sheet use the append/update actions. Not idempotent — re-running creates another worksheet (Excel auto-assigns a default name like Sheet1 when none is given).', idempotent: false },
   props: {
     storageSource: commonProps.storageSource,
     siteId: commonProps.siteId,
@@ -39,13 +41,14 @@ export const createWorksheetAction = createAction({
   async run(context) {
     const { storageSource, siteId, documentId, workbookId, name, headers } = context.propsValue;
     const { access_token } = context.auth;
+    const cloud = (context.auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
     if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
       throw new Error('please select SharePoint site and document library.');
     }
     const drivePath = getDrivePath(storageSource, siteId as string, documentId as string);
 
-    const client = createMSGraphClient(access_token);
+    const client = createMSGraphClient(access_token, cloud);
 
     // Step 1: Create the new worksheet
     const createWorksheetResponse: CreateWorksheetResponse = await client

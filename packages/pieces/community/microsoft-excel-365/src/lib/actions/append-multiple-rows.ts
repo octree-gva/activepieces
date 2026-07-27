@@ -1,5 +1,5 @@
-import { createAction, DynamicPropsValue, Property } from '@activepieces/pieces-framework';
-import { MarkdownVariant } from '@activepieces/shared';
+import { createAction, DynamicPropsValue, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
+import { MarkdownVariant } from '@activepieces/pieces-framework';
 import { WorkbookRange } from '@microsoft/microsoft-graph-types';
 import {
 	createMSGraphClient,
@@ -41,6 +41,8 @@ export const appendMultipleRowsAction = createAction({
 	auth: excelAuth,
 	name: 'append_multiple_rows',
 	description: 'Appends multiple row of values to a worksheet.',
+	audience: 'both',
+	aiMetadata: { description: 'Append several rows of cell values to the bottom of a worksheet in one call, after the last used row. Use for bulk inserts into a plain (non-table) worksheet; for a defined Excel table use Append Rows to a Table instead. Not idempotent — re-running adds duplicate rows. Supports an optional filter to insert only rows whose chosen column matches/does not match a value.', idempotent: false },
 	displayName: 'Append Multiple Rows',
 	props: {
 		storageSource: commonProps.storageSource,
@@ -171,6 +173,7 @@ export const appendMultipleRowsAction = createAction({
 		} = propsValue;
 		const rawFilterValue = propsValue.filterValue?.['value'];
 		const inputValues: Array<Record<string, any>> = propsValue.values['values'] ?? [];
+		const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
 		if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
 			throw new Error('please select SharePoint site and document library.');
@@ -183,7 +186,8 @@ export const appendMultipleRowsAction = createAction({
 			auth.access_token,
 			drivePath,
 			workbookId as unknown as string,
-			worksheetId as unknown as string
+			worksheetId as unknown as string,
+			cloud
 		);
 
 		const columnCount = firstRow.length;
@@ -241,7 +245,8 @@ export const appendMultipleRowsAction = createAction({
 			auth.access_token,
 			drivePath,
 			workbookId,
-			worksheetId
+			worksheetId,
+			cloud
 		);
 
 		const lastUsedColumn = numberToColumnName(columnCount);
@@ -249,7 +254,7 @@ export const appendMultipleRowsAction = createAction({
 		const rangeFrom = `A${lastUsedRow + 1}`;
 		const rangeTo = `${lastUsedColumn}${lastUsedRow + formattedValues.length}`;
 
-		const client = createMSGraphClient(auth.access_token);
+		const client = createMSGraphClient(auth.access_token, cloud);
 
 		const url = `${drivePath}/items/${workbookId}/workbook/worksheets/${worksheetId}/range(address='${rangeFrom}:${rangeTo}')`;
 

@@ -1,6 +1,7 @@
 import { createAction, Property } from '@activepieces/pieces-framework';
 import { HttpMethod, httpClient, HttpRequest } from '@activepieces/pieces-common';
-import { awsBedrockAuth } from '../auth';
+import { awsBedrockCombinedAuth } from '../auth';
+import { getTemporaryCredentials, isOidcAuth } from '../common';
 import { SignatureV4 } from '@smithy/signature-v4';
 import { HttpRequest as AwsHttpRequest } from '@smithy/protocol-http';
 import { Sha256 } from '@aws-crypto/sha256-js';
@@ -18,6 +19,7 @@ const AWS_BEDROCK_SERVICES = [
 async function signAwsRequest({
   accessKeyId,
   secretAccessKey,
+  sessionToken,
   region,
   service,
   method,
@@ -27,6 +29,7 @@ async function signAwsRequest({
 }: {
   accessKeyId: string;
   secretAccessKey: string;
+  sessionToken?: string;
   region: string;
   service: string;
   method: string;
@@ -51,10 +54,7 @@ async function signAwsRequest({
   });
 
   const signer = new SignatureV4({
-    credentials: {
-      accessKeyId,
-      secretAccessKey,
-    },
+    credentials: { accessKeyId, secretAccessKey, sessionToken },
     region,
     service,
     sha256: Sha256,
@@ -68,11 +68,13 @@ async function signAwsRequest({
 }
 
 export const customApiCall = createAction({
+  audience: 'human',
   name: 'custom_api_call',
   displayName: 'Custom API Call',
   description:
     'Make a custom API call to any AWS Bedrock endpoint. Requests are automatically signed with AWS Signature V4.',
-  auth: awsBedrockAuth,
+  aiMetadata: { description: 'Makes an arbitrary AWS SigV4-signed HTTP request to a chosen Bedrock endpoint - the Bedrock control plane, Bedrock Runtime, Bedrock Agent control plane, or Bedrock Agent Runtime - with your own method, path, query parameters, headers, and JSON body, optionally returning errors as output instead of failing the step. Use as an escape hatch for Bedrock operations this piece does not wrap, such as knowledge bases, guardrails, or agent invocation. Requires the service and path to match the AWS Bedrock API reference for the connected region. Idempotency depends on the call made: GET reads are safe to repeat, while model invocations and mutating writes are not.', idempotent: false },
+  auth: awsBedrockCombinedAuth,
   requireAuth: true,
   props: {
     service: Property.StaticDropdown({
@@ -88,6 +90,7 @@ export const customApiCall = createAction({
     }),
     method: Property.StaticDropdown({
       displayName: 'Method',
+      description: 'HTTP method for the request. Use GET to fetch data, POST/PUT to create or update, DELETE to remove.',
       required: true,
       defaultValue: HttpMethod.GET,
       options: {
@@ -122,12 +125,14 @@ export const customApiCall = createAction({
       required: false,
     }),
     failsafe: Property.Checkbox({
-      displayName: 'No Error on Failure',
+      displayName: 'Return Error as Output',
+      description: 'When enabled, errors (e.g. 4xx/5xx responses) are returned as output instead of stopping the flow. Useful when you want to handle errors in a later step.',
       required: false,
       defaultValue: false,
     }),
     timeout: Property.Number({
       displayName: 'Timeout (in seconds)',
+      description: 'How long to wait for a response before the request is cancelled. Defaults to 30 seconds.',
       required: false,
       defaultValue: 30,
     }),
@@ -135,9 +140,17 @@ export const customApiCall = createAction({
   async run(context) {
     const { service, method, path, headers, queryParams, body, failsafe, timeout } =
       context.propsValue;
-    const auth = context.auth.props;
+    const authProps = context.auth.props;
+    const region = authProps.region;
 
-    const baseUrl = `https://${service}.${auth.region}.amazonaws.com`;
+    let creds: { accessKeyId: string; secretAccessKey: string; sessionToken?: string };
+    if (isOidcAuth(authProps)) {
+      creds = await getTemporaryCredentials({ auth: authProps, server: context.server });
+    } else {
+      creds = { accessKeyId: authProps.accessKeyId, secretAccessKey: authProps.secretAccessKey };
+    }
+
+    const baseUrl = `https://${service}.${region}.amazonaws.com`;
     let fullUrl = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
     if (queryParams && Object.keys(queryParams).length > 0) {
@@ -164,9 +177,10 @@ export const customApiCall = createAction({
     }
 
     const signed = await signAwsRequest({
-      accessKeyId: auth.accessKeyId,
-      secretAccessKey: auth.secretAccessKey,
-      region: auth.region,
+      accessKeyId: creds.accessKeyId,
+      secretAccessKey: creds.secretAccessKey,
+      sessionToken: creds.sessionToken,
+      region,
       service,
       method,
       url: fullUrl,

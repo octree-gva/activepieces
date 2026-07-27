@@ -1,10 +1,9 @@
-import { fathomAuth } from '../..';
+import { fathomAuth, getFathomClient } from '../common/auth';
 import {
   createTrigger,
   TriggerStrategy,
   Property
 } from '@activepieces/pieces-framework';
-import { Fathom } from 'fathom-typescript';
 import { CreateWebhookRequest } from 'fathom-typescript/dist/esm/sdk/models/operations';
 
 interface WebhookInformation {
@@ -17,6 +16,9 @@ export const newRecording = createTrigger({
   displayName: 'New Recording',
   description:
     'Fires when a meeting is recorded (i.e. a new meeting recording is produced)',
+  aiMetadata: {
+    description: 'Fires when Fathom finishes producing a new meeting recording, delivering the meeting metadata (and optionally the transcript, summary, action items, and CRM matches). Scope is configurable to any combination of your own recordings, shared external recordings, recordings you shared with your team, and recordings shared across the team.',
+  },
   props: {
     triggered_for: Property.MultiSelectDropdown({
       auth: fathomAuth,
@@ -78,9 +80,7 @@ export const newRecording = createTrigger({
   },
   type: TriggerStrategy.WEBHOOK,
   async onEnable(context) {
-    const fathom = new Fathom({
-      security: { apiKeyAuth: context.auth.secret_text }
-    });
+    const fathom = getFathomClient(context.auth);
 
     const webhookParams: CreateWebhookRequest = {
       destinationUrl: context.webhookUrl,
@@ -105,17 +105,13 @@ export const newRecording = createTrigger({
     );
 
     if (webhookInfo?.webhookId) {
-      const fathom = new Fathom({
-        security: { apiKeyAuth: context.auth.secret_text }
-      });
+      const fathom = getFathomClient(context.auth);
 
       await fathom.deleteWebhook({ id: webhookInfo.webhookId });
     }
   },
   async test(context) {
-    const fathom = new Fathom({
-      security: { apiKeyAuth: context.auth.secret_text }
-    });
+    const fathom = getFathomClient(context.auth);
 
     const params = {
       includeTranscript: context.propsValue.include_transcript || false,

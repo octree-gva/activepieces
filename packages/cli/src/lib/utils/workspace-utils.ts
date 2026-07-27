@@ -1,5 +1,25 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+
+// Walk up from a piece folder to the monorepo root (the package.json that declares
+// `workspaces`). Lets bundling run from any cwd — e.g. a per-package turbo task.
+export function findRepoRoot(startDir: string): string {
+  let dir = startDir
+  while (true) {
+    const pkgPath = join(dir, 'package.json')
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath).toString())
+      if (Array.isArray(pkg.workspaces)) {
+        return dir
+      }
+    }
+    const parent = dirname(dir)
+    if (parent === dir) {
+      throw new Error(`[findRepoRoot] no workspace root found above ${startDir}`)
+    }
+    dir = parent
+  }
+}
 
 export function buildWorkspaceVersionMap(rootDir: string): Map<string, string> {
   const versionMap = new Map<string, string>()
@@ -54,4 +74,25 @@ export function resolveWorkspaceDependencies(
     }
   }
   return resolved
+}
+
+export function isExactVersion(version: string): boolean {
+  return /^\d+(\.\d+){0,2}(-[\w.]+)?$/.test(version)
+}
+
+export function stripSemverRanges(
+  deps: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!deps) {
+    return deps
+  }
+  const stripped: Record<string, string> = {}
+  for (const [name, version] of Object.entries(deps)) {
+    const pinned = version.replace(/^[\^~]/, '')
+    if (!isExactVersion(pinned)) {
+      throw new Error(`[stripSemverRanges] unsupported version range for ${name}: "${version}"`)
+    }
+    stripped[name] = pinned
+  }
+  return stripped
 }

@@ -2,6 +2,7 @@ import {
 	createAction,
 	DropdownOption,
 	DynamicPropsValue,
+	OAuth2PropertyValue,
 	Property,
 } from '@activepieces/pieces-framework';
 import { commonProps } from '../common/props';
@@ -9,6 +10,7 @@ import { getDrivePath } from '../common/helpers';
 import { excelAuth } from '../auth';
 import { getHeaders } from '../common/helpers';
 import { FilterOperator, filterOperatorLabels } from '../common/constants';
+import { getGraphBaseUrl } from '../common/microsoft-cloud';
 import { Client } from '@microsoft/microsoft-graph-client';
 import { WorkbookRange } from '@microsoft/microsoft-graph-types';
 import dayjs from 'dayjs';
@@ -22,6 +24,8 @@ dayjs.extend(isSameOrBefore);
 		auth: excelAuth,
 		name: 'get_worksheet_rows',
 		description: 'Retrieve rows from a worksheet',
+		audience: 'both',
+		aiMetadata: { description: 'Read rows from a worksheet — either a specific A1-notation range or the entire used range — with optional header-row keying and column filters (text/number/date comparisons, in-list, exists). Use for general worksheet reads; for a defined Excel table use Get Table Rows, or Get Cells in Range for a fixed block. Read-only and idempotent.', idempotent: true },
 		displayName: 'Get Worksheet Rows',
 		props: {
 			storageSource: commonProps.storageSource,
@@ -63,12 +67,14 @@ dayjs.extend(isSameOrBefore);
 				const drivePath = getDrivePath(storageSource as string, siteId as string, documentId as string);
 
 				const fields: DynamicPropsValue = {};
+				const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
 				const firstRow = await getHeaders(
 					auth['access_token'],
 					drivePath,
 					workbookId as unknown as string,
-					worksheetId as unknown as string
+					worksheetId as unknown as string,
+					cloud
 				);
 
 				const filterColumnOptions: DropdownOption<number>[] = firstRow.map(
@@ -137,10 +143,12 @@ dayjs.extend(isSameOrBefore);
 			url += `range(address = '${range}')`;
 		}
 
+		const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 		const client = Client.initWithMiddleware({
 			authProvider: {
 				getAccessToken: () => Promise.resolve(auth.access_token),
 			},
+			baseUrl: getGraphBaseUrl(cloud),
 		});
 
 		const response: WorkbookRange = await client.api(url).get();

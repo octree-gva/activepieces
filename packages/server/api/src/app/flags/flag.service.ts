@@ -1,12 +1,17 @@
-import { ApEdition, ApFlagId, ExecutionMode, Flag, isNil } from '@activepieces/shared'
+import { isNil } from '@activepieces/core-utils'
+import { apVersionUtil } from '@activepieces/server-utils'
+import { ApEdition, ApFlagId, ExecutionMode, Flag } from '@activepieces/shared'
 import dayjs from 'dayjs'
 import { FastifyBaseLogger } from 'fastify'
 import { In } from 'typeorm'
 import { repoFactory } from '../core/db/repo-factory'
 import { federatedAuthnService } from '../ee/authentication/federated-authn/federated-authn-service'
-import { domainHelper } from '../ee/custom-domains/domain-helper'
+import { smtpEmailSender } from '../ee/helper/email/email-sender/smtp-email-sender'
+import { domainHelper } from '../helper/domain-helper'
 import { system } from '../helper/system/system'
-import { AppSystemProp, apVersionUtil } from '../helper/system/system-props'
+import { AppSystemProp } from '../helper/system/system-props'
+import { knowledgeBaseSchema } from '../knowledge-base/knowledge-base-schema'
+import { isToolSearchEnabled } from '../tool-search/tool-search-flag'
 import { FlagEntity } from './flag.entity'
 import { defaultTheme } from './theme'
 import { webhookSecretsUtils } from './webhook-secrets-util'
@@ -34,7 +39,6 @@ export const flagService = (log: FastifyBaseLogger) => ({
                 ApFlagId.EXECUTION_DATA_RETENTION_DAYS,
                 ApFlagId.ENVIRONMENT,
                 ApFlagId.PUBLIC_URL,
-                ApFlagId.LATEST_VERSION,
                 ApFlagId.PRIVACY_POLICY_URL,
                 ApFlagId.PIECES_SYNC_MODE,
                 ApFlagId.PRIVATE_PIECES_ENABLED,
@@ -60,12 +64,17 @@ export const flagService = (log: FastifyBaseLogger) => ({
         const now = dayjs().toISOString()
         const created = now
         const updated = now
-        const currentVersion = await apVersionUtil.getCurrentRelease()
-        const latestVersion = await apVersionUtil.getLatestRelease()
+        const currentVersion = apVersionUtil.getCurrentRelease()
         flags.push(
             {
                 id: ApFlagId.ENVIRONMENT,
                 value: system.get(AppSystemProp.ENVIRONMENT),
+                created,
+                updated,
+            },
+            {
+                id: ApFlagId.FRONTEND_SENTRY_DSN,
+                value: system.get(AppSystemProp.FRONTEND_SENTRY_DSN) ?? null,
                 created,
                 updated,
             },
@@ -85,18 +94,6 @@ export const flagService = (log: FastifyBaseLogger) => ({
             {
                 id: ApFlagId.SHOW_PROJECT_MEMBERS,
                 value: system.getEdition() !== ApEdition.COMMUNITY,
-                created,
-                updated,
-            },
-            {
-                id: ApFlagId.CAN_CONFIGURE_AI_PROVIDER,
-                value: true,
-                created,
-                updated,
-            },
-            {
-                id: ApFlagId.SHOW_BADGES,
-                value: true,
                 created,
                 updated,
             },
@@ -168,7 +165,7 @@ export const flagService = (log: FastifyBaseLogger) => ({
             },
             {
                 id: ApFlagId.THIRD_PARTY_AUTH_PROVIDER_REDIRECT_URL,
-                value: await federatedAuthnService(log).getThirdPartyRedirectUrl(undefined),
+                value: await federatedAuthnService(log).getThirdPartyRedirectUrl(),
                 created,
                 updated,
             },
@@ -211,6 +208,12 @@ export const flagService = (log: FastifyBaseLogger) => ({
             {
                 id: ApFlagId.TELEMETRY_ENABLED,
                 value: system.getBoolean(AppSystemProp.TELEMETRY_ENABLED) ?? true,
+                created,
+                updated,
+            },
+            {
+                id: ApFlagId.TOOL_SEARCH_ENABLED,
+                value: isToolSearchEnabled(),
                 created,
                 updated,
             },
@@ -265,12 +268,6 @@ export const flagService = (log: FastifyBaseLogger) => ({
                 updated,
             },
             {
-                id: ApFlagId.LATEST_VERSION,
-                value: latestVersion,
-                created,
-                updated,
-            },
-            {
                 id: ApFlagId.ALLOW_NPM_PACKAGES_IN_CODE_STEP,
                 value: system.get(AppSystemProp.EXECUTION_MODE) !== ExecutionMode.SANDBOX_CODE_ONLY,
                 created,
@@ -291,6 +288,30 @@ export const flagService = (log: FastifyBaseLogger) => ({
             {
                 id: ApFlagId.MAX_FILE_SIZE_MB,
                 value: system.getNumber(AppSystemProp.MAX_FILE_SIZE_MB),
+                created,
+                updated,
+            },
+            {
+                id: ApFlagId.PROJECT_RATE_LIMITER_ENABLED,
+                value: system.getBoolean(AppSystemProp.PROJECT_RATE_LIMITER_ENABLED) ?? false,
+                created,
+                updated,
+            },
+            {
+                id: ApFlagId.DEFAULT_CONCURRENT_JOBS_LIMIT,
+                value: system.getNumber(AppSystemProp.DEFAULT_CONCURRENT_JOBS_LIMIT),
+                created,
+                updated,
+            },
+            {
+                id: ApFlagId.SMTP_CONFIGURED,
+                value: smtpEmailSender(log).isSmtpConfigured(),
+                created,
+                updated,
+            },
+            {
+                id: ApFlagId.PGVECTOR_AVAILABLE,
+                value: await knowledgeBaseSchema.isVectorExtensionInstalled(),
                 created,
                 updated,
             },

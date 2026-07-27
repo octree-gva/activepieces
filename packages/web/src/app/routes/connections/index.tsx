@@ -1,8 +1,8 @@
+import { Permission } from '@activepieces/core-utils';
 import {
   AppConnectionScope,
   AppConnectionStatus,
   AppConnectionWithoutSensitiveData,
-  Permission,
   PlatformRole,
 } from '@activepieces/shared';
 import { ColumnDef } from '@tanstack/react-table';
@@ -38,6 +38,7 @@ import { FormattedDate } from '@/components/custom/formatted-date';
 import { DeleteConnectionWarning } from '@/components/custom/global-connection-utils';
 import { PermissionNeededTooltip } from '@/components/custom/permission-needed-tooltip';
 import { StatusIconWithText } from '@/components/custom/status-icon-with-text';
+import { TextWithTooltip } from '@/components/custom/text-with-tooltip';
 import { PlusIcon } from '@/components/icons/plus';
 import { ReplaceIcon } from '@/components/icons/replace';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,7 @@ import {
 import {
   EditGlobalConnectionDialog,
   RenameConnectionDialog,
+  RevalidateConnectionButton,
   appConnectionsMutations,
   appConnectionsQueries,
   appConnectionUtils,
@@ -100,6 +102,7 @@ function AppConnectionsPage() {
       displayName,
     },
     extraKeys: [location.search, projectId],
+    showErrorDialog: true,
   });
 
   const { mutateAsync: deleteConnections } =
@@ -176,22 +179,22 @@ function AppConnectionsPage() {
         cell: ({ row }) => {
           const isPlatformConnection = row.original.scope === 'PLATFORM';
           return (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <CopyTextTooltip
                 title={t('External ID')}
                 text={row.original.externalId || ''}
               >
-                <div className="flex items-center gap-2 w-fit">
+                <span className="shrink-0">
                   <PieceIconWithPieceName
                     pieceName={row.original.pieceName}
                     showTooltip={false}
                     size="sm"
                   />
-                  <span className="truncate max-w-[120px] 2xl:max-w-[250px]">
-                    {row.original.displayName}
-                  </span>
-                </div>
+                </span>
               </CopyTextTooltip>
+              <TextWithTooltip tooltipMessage={row.original.displayName}>
+                <span className="min-w-0">{row.original.displayName}</span>
+              </TextWithTooltip>
               {isPlatformConnection && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -289,6 +292,9 @@ function AppConnectionsPage() {
             : userHasPermissionToWriteAppConnection;
           return (
             <div className="flex items-center gap-2 justify-end">
+              {userHasPermissionToRename && (
+                <RevalidateConnectionButton connectionId={row.original.id} />
+              )}
               {row.original.scope === AppConnectionScope.PROJECT ? (
                 <RenameConnectionDialog
                   connectionId={row.original.id}
@@ -331,9 +337,12 @@ function AppConnectionsPage() {
     () => [
       {
         render: (_, resetSelection) => {
+          const deletableRows = selectedRows.filter(
+            (row) => row.scope === AppConnectionScope.PROJECT,
+          );
           return (
             <>
-              {selectedRows.length > 0 && (
+              {deletableRows.length > 0 && (
                 <ConfirmationDeleteDialog
                   title={t('Delete Connections')}
                   message={t(
@@ -341,7 +350,7 @@ function AppConnectionsPage() {
                   )}
                   warning={<DeleteConnectionWarning />}
                   mutationFn={async () => {
-                    await deleteConnections(selectedRows.map((row) => row.id));
+                    await deleteConnections(deletableRows.map((row) => row.id));
                     refetch();
                     resetSelection();
                     setSelectedRows([]);
@@ -359,7 +368,7 @@ function AppConnectionsPage() {
                     onClick={() => setShowDeleteDialog(true)}
                   >
                     <Trash2 className="h-4 w-4 mr-1" />
-                    {t('Delete')} ({selectedRows.length})
+                    {t('Delete')} ({deletableRows.length})
                   </Button>
                 </ConfirmationDeleteDialog>
               )}

@@ -1,43 +1,30 @@
-import {
-    ActivepiecesError,
-    ApId,
-    apId,
-    assertNotNullOrUndefined,
-    ColorName,
-    ErrorCode,
-    isNil,
-    Metadata,
-    Project,
-    ProjectIcon,
-    ProjectId,
-    ProjectType,
-    spreadIfDefined,
-    UserId,
-} from '@activepieces/shared'
+import { ActivepiecesError, ApId, apId, assertNotNullOrUndefined, ErrorCode, isNil, Metadata, ProjectId, spreadIfDefined, spreadIfNotUndefined, UserId } from '@activepieces/core-utils'
+import { ColorName, Project, ProjectIcon, ProjectType } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import { Brackets, EntityManager, IsNull, Not, ObjectLiteral, SelectQueryBuilder } from 'typeorm'
-import { repoFactory } from '../core/db/repo-factory'
-import { getProjectMaxConcurrentJobsKey } from '../database/redis/keys'
-import { distributedStore } from '../database/redis-connections'
+import { system } from '../helper/system/system'
+import { AppSystemProp } from '../helper/system/system-props'
 import { userService } from '../user/user-service'
-import { ProjectEntity } from './project-entity'
-import { projectHooks } from './project-hooks'
+import { projectHooks, ProjectPostCreateContext } from './project-hooks'
+import { projectRepo } from './project-repo'
+import { projectWorkerGroupService } from './project-worker-group.service'
 
-export const projectRepo = repoFactory(ProjectEntity)
+export { projectRepo }
 
 export const projectService = (log: FastifyBaseLogger) => ({
     async create(params: CreateParams): Promise<Project> {
-        const { callPostCreateHooks = true, entityManager, ...rest } = params
+        const { callPostCreateHooks = true, entityManager, postCreateContext, ...rest } = params
         const icon = this.createProjectIcon()
         const newProject: NewProject = {
             id: apId(),
             ...rest,
             icon,
             releasesEnabled: false,
+            notifyFlowOwnerOnFailure: false,
         }
         const savedProject = await projectRepo(entityManager).save(newProject)
         if (callPostCreateHooks) {
-            await this.callProjectPostCreateHooks(savedProject)
+            await this.callProjectPostCreateHooks(savedProject, postCreateContext)
         }
         return savedProject
     },
@@ -81,12 +68,17 @@ export const projectService = (log: FastifyBaseLogger) => ({
     async update(projectId: ProjectId, request: UpdateParams, entityManager?: EntityManager): Promise<Project> {
         const externalId = request.externalId?.trim() !== '' ? request.externalId : undefined
         await assertExternalIdIsUnique(externalId, projectId)
+        assertRetentionDaysWithinInstanceBounds(request.executionDataRetentionDays)
 
         const baseUpdate = {
             ...spreadIfDefined('externalId', externalId),
             ...spreadIfDefined('releasesEnabled', request.releasesEnabled),
+            ...spreadIfDefined('notifyFlowOwnerOnFailure', request.notifyFlowOwnerOnFailure),
             ...spreadIfDefined('metadata', request.metadata),
-            ...spreadIfDefined('maxConcurrentJobs', request.maxConcurrentJobs),
+            ...(request.poolId !== undefined ? { poolId: request.poolId } : {}),
+            ...(request.maxConcurrentJobs !== undefined ? { maxConcurrentJobs: request.maxConcurrentJobs } : {}),
+            ...(request.workerGroupId !== undefined ? { workerGroupId: request.workerGroupId } : {}),
+            ...spreadIfNotUndefined('executionDataRetentionDays', request.executionDataRetentionDays),
         }
 
         const teamUpdate = request.type === ProjectType.TEAM ? {
@@ -95,6 +87,9 @@ export const projectService = (log: FastifyBaseLogger) => ({
         } : {}
 
         await projectRepo(entityManager).update({ id: projectId }, { ...baseUpdate, ...teamUpdate })
+        if (request.workerGroupId !== undefined) {
+            await projectWorkerGroupService(log).invalidate({ projectId })
+        }
         return this.getOneOrThrow(projectId)
     },
 
@@ -155,7 +150,7 @@ export const projectService = (log: FastifyBaseLogger) => ({
 
     async getAllForUser(params: GetAllForUserParams): Promise<Project[]> {
         assertNotNullOrUndefined(params.platformId, 'platformId is undefined')
-        
+
         const queryBuilder = projectRepo()
             .createQueryBuilder('project')
             .where('project."platformId" = :platformId', { platformId: params.platformId })
@@ -174,7 +169,7 @@ export const projectService = (log: FastifyBaseLogger) => ({
     },
     async userHasProjects(params: GetAllForUserParams): Promise<boolean> {
         assertNotNullOrUndefined(params.platformId, 'platformId is undefined')
-        
+
         const queryBuilder = projectRepo()
             .createQueryBuilder('project')
             .where('project."platformId" = :platformId', { platformId: params.platformId })
@@ -211,11 +206,8 @@ export const projectService = (log: FastifyBaseLogger) => ({
         }
         return icon
     },
-    callProjectPostCreateHooks: async (savedProject: Project)=>{
-        await projectHooks.get(log).postCreate(savedProject)
-        if (!isNil(savedProject.maxConcurrentJobs)) {
-            await distributedStore.put(getProjectMaxConcurrentJobsKey(savedProject.id), savedProject.maxConcurrentJobs)
-        }
+    callProjectPostCreateHooks: async (savedProject: Project, context?: ProjectPostCreateContext)=>{
+        await projectHooks.get(log).postCreate(savedProject, context)
     },
 })
 
@@ -257,6 +249,22 @@ async function assertExternalIdIsUnique(externalId: string | undefined | null, p
     }
 }
 
+function assertRetentionDaysWithinInstanceBounds(executionDataRetentionDays: number | null | undefined): void {
+    if (isNil(executionDataRetentionDays)) {
+        return
+    }
+    const instanceRetentionDays = system.getNumberOrThrow(AppSystemProp.EXECUTION_DATA_RETENTION_DAYS)
+    const pausedFlowTimeoutDays = system.getNumberOrThrow(AppSystemProp.PAUSED_FLOW_TIMEOUT_DAYS)
+    if (executionDataRetentionDays < pausedFlowTimeoutDays || executionDataRetentionDays > instanceRetentionDays) {
+        throw new ActivepiecesError({
+            code: ErrorCode.VALIDATION,
+            params: {
+                message: `executionDataRetentionDays must be between AP_PAUSED_FLOW_TIMEOUT_DAYS (${pausedFlowTimeoutDays}) and AP_EXECUTION_DATA_RETENTION_DAYS (${instanceRetentionDays})`,
+            },
+        })
+    }
+}
+
 type GetAllForUserParams = {
     platformId: string
     userId: string
@@ -279,8 +287,12 @@ type UpdateTeamProjectParams = {
     displayName?: string
     externalId?: string
     releasesEnabled?: boolean
+    notifyFlowOwnerOnFailure?: boolean
     metadata?: Metadata
-    maxConcurrentJobs?: number
+    poolId?: string | null
+    maxConcurrentJobs?: number | null
+    workerGroupId?: string | null
+    executionDataRetentionDays?: number | null
     icon?: ProjectIcon
 }
 
@@ -288,8 +300,12 @@ type UpdatePersonalProjectParams = {
     type: ProjectType.PERSONAL
     externalId?: string
     releasesEnabled?: boolean
+    notifyFlowOwnerOnFailure?: boolean
     metadata?: Metadata
-    maxConcurrentJobs?: number
+    poolId?: string | null
+    maxConcurrentJobs?: number | null
+    workerGroupId?: string | null
+    executionDataRetentionDays?: number | null
 }
 
 type UpdateParams = UpdateTeamProjectParams | UpdatePersonalProjectParams
@@ -303,6 +319,7 @@ type CreateParams = {
     metadata?: Metadata
     maxConcurrentJobs?: number
     callPostCreateHooks?: boolean
+    postCreateContext?: ProjectPostCreateContext
     entityManager?: EntityManager
 }
 

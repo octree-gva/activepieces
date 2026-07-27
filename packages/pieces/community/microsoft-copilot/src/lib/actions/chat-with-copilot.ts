@@ -1,13 +1,19 @@
 import { createAction, Property } from '@activepieces/pieces-framework';
 import { microsoft365CopilotAuth } from '../common/auth';
 import { httpClient, HttpMethod } from '@activepieces/pieces-common';
+import { getGraphBaseUrl, getMicrosoftCloudFromAuth } from '../common/microsoft-cloud';
 
 export const chatWithCopilot = createAction({
+  audience: 'both',
   auth: microsoft365CopilotAuth,
   name: 'chatWithCopilot',
   displayName: 'Chat with Copilot',
   description:
     'Send a message to an existing Copilot conversation or creating a new one and get a response',
+  aiMetadata: {
+    description: 'Sends a prompt to Microsoft 365 Copilot and returns its reply, running in one of two modes: continuing an existing thread when a conversation ID is supplied, or silently creating a new conversation first when it is omitted. Use it when you want Copilot itself to reason over Microsoft 365 data and answer; prefer Search Copilot when you only need the matching OneDrive files back. Requires the message text and an IANA time zone, and can optionally ground the answer in web search. Not idempotent: each call posts a new message and, without a conversation ID, creates another conversation.',
+    idempotent: false,
+  },
   props: {
     conversationId: Property.ShortText({
       displayName: 'Conversation ID',
@@ -54,18 +60,21 @@ export const chatWithCopilot = createAction({
       enableWebSearch,
     } = context.propsValue;
 
+    const cloud = getMicrosoftCloudFromAuth(context.auth);
+    const graphBaseUrl = getGraphBaseUrl(cloud);
+
     let activeConversationId = conversationId;
     if (!activeConversationId) {
       const createResponse = await httpClient.sendRequest({
         method: HttpMethod.POST,
-        url: 'https://graph.microsoft.com/beta/copilot/conversations',
+        url: `${graphBaseUrl}/beta/copilot/conversations`,
         headers: {
           Authorization: `Bearer ${context.auth.access_token}`,
           'Content-Type': 'application/json',
         },
         body: {}
       });
-      
+
       activeConversationId = createResponse.body.id;
     }
 
@@ -110,7 +119,7 @@ export const chatWithCopilot = createAction({
 
     const response: any = await httpClient.sendRequest({
       method: HttpMethod.POST,
-      url: `https://graph.microsoft.com/beta/copilot/conversations/${activeConversationId}/chat`,
+      url: `${graphBaseUrl}/beta/copilot/conversations/${activeConversationId}/chat`,
       headers: {
         Authorization: `Bearer ${context.auth.access_token}`,
         'Content-Type': 'application/json',

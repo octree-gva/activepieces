@@ -1,4 +1,4 @@
-import { createAction, Property } from '@activepieces/pieces-framework';
+import { createAction, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
 import { excelAuth } from '../auth';
 import { commonProps } from '../common/props';
 import { getDrivePath, createMSGraphClient } from '../common/helpers';
@@ -8,6 +8,8 @@ export const createTableAction = createAction({
   auth: excelAuth,
   name: 'create_table',
   description: 'Create a table in a worksheet',
+  audience: 'both',
+  aiMetadata: { description: 'Create a structured Excel table from a cell range in a worksheet. Pick this to formalize raw cells into a named table so row/column actions can target it. Choose the range automatically from the worksheet used range or supply it manually in A1 notation, and indicate whether the first row holds column headers. Not idempotent: each run adds a new table.', idempotent: false },
   displayName: 'Create Table',
   props: {
     storageSource: commonProps.storageSource,
@@ -53,13 +55,14 @@ export const createTableAction = createAction({
     const { storageSource, siteId, documentId, workbookId, worksheetId } = propsValue;
     const selectRange = propsValue['selectRange'];
     const hasHeaders = propsValue['hasHeaders'];
+    const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
     if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
       throw new Error('please select SharePoint site and document library.');
     }
     const drivePath = getDrivePath(storageSource, siteId as string, documentId as string);
 
-    const client = createMSGraphClient(auth['access_token']);
+    const client = createMSGraphClient(auth['access_token'], cloud);
 
     let range: string | undefined;
     if (selectRange === 'auto') {

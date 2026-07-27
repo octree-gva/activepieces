@@ -8,6 +8,11 @@ export const listPayouts = createAction({
   name: 'list_payouts',
   displayName: 'List Payouts',
   description: 'List all payouts in your PromoteKit account.',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Retrieve a paginated list of payouts to affiliates in the PromoteKit account. Use to enumerate or browse payouts rather than look one up by a known ID. Supports page and per-page limit (max 100); read-only and safe to repeat.',
+    idempotent: true,
+  },
   props: {
     page: Property.Number({
       displayName: 'Page',
@@ -26,7 +31,7 @@ export const listPayouts = createAction({
     const response = await promotekitApiCall<{
       data: Array<Record<string, unknown>>;
     }>({
-      token: context.auth as unknown as string,
+      token: context.auth.secret_text,
       method: HttpMethod.GET,
       path: '/payouts',
       queryParams: {

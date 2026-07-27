@@ -1,25 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import {
-    ActivepiecesError,
-    ErrorCode,
-    ExecutionType,
-    FlowRunStatus,
-    FlowTriggerType,
-    FlowVersionState,
-    ProgressUpdateType,
-    RunEnvironment,
-    StepOutputStatus,
-    WorkerJobType,
-} from '@activepieces/shared'
+import { ActivepiecesError, ErrorCode } from '@activepieces/core-utils';
+import { EngineResponseStatus, ExecutionType, FlowActionType, FlowRunStatus, FlowTriggerType, FlowVersionState, StreamStepProgress, RunEnvironment, WorkerJobType } from '@activepieces/shared';
 import type { ExecuteFlowJobData, FlowVersion } from '@activepieces/shared'
-
-const mockGetVersion = vi.fn()
-
-vi.mock('../../../../src/lib/cache/flow/flow-cache', () => ({
-    flowCache: () => ({
-        getVersion: mockGetVersion,
-    }),
-}))
 
 vi.mock('../../../../src/lib/config/worker-settings', () => ({
     workerSettings: {
@@ -27,15 +9,8 @@ vi.mock('../../../../src/lib/config/worker-settings', () => ({
     },
 }))
 
-vi.mock('../../../../src/lib/execute/utils/flow-helpers', () => ({
-    provisionFlowPieces: vi.fn().mockResolvedValue(true),
-}))
-
-vi.mock('../../../../src/lib/execute/utils/resolve-payload', () => ({
-    resolvePayload: vi.fn().mockImplementation((payload: unknown) => Promise.resolve(payload)),
-}))
-
 import { executeFlowJob } from '../../../../src/lib/execute/jobs/execute-flow'
+import { JobResultKind } from '../../../../src/lib/execute/types'
 
 function makeFlowVersion(): FlowVersion {
     return {
@@ -47,9 +22,30 @@ function makeFlowVersion(): FlowVersion {
         trigger: {
             name: 'trigger_1',
             valid: true,
-            displayName: 'Test Trigger',
-            type: FlowTriggerType.EMPTY,
-            settings: {},
+            displayName: 'Gmail Trigger',
+            lastUpdatedDate: '2024-01-01T00:00:00Z',
+            type: FlowTriggerType.PIECE,
+            settings: {
+                pieceName: '@activepieces/piece-gmail',
+                pieceVersion: '~0.1.0',
+                triggerName: 'new_email',
+                input: {},
+                propertySettings: {},
+            },
+            nextAction: {
+                name: 'step_1',
+                valid: true,
+                displayName: 'Slack Action',
+                lastUpdatedDate: '2024-01-01T00:00:00Z',
+                type: FlowActionType.PIECE,
+                settings: {
+                    pieceName: '@activepieces/piece-slack',
+                    pieceVersion: '~0.2.0',
+                    actionName: 'send_message',
+                    input: {},
+                    propertySettings: {},
+                },
+            },
         },
         updatedBy: null,
         valid: true,
@@ -72,19 +68,30 @@ function makeResumeJobData(overrides?: Partial<ExecuteFlowJobData>): ExecuteFlow
         flowId: 'flow-1',
         flowVersionId: 'fv-1',
         runId: 'run-1',
-        payload: {},
+        payload: { type: 'inline', value: {} },
         executionType: ExecutionType.RESUME,
-        progressUpdateType: ProgressUpdateType.NONE,
+        streamStepProgress: StreamStepProgress.NONE,
         logsUploadUrl: 'http://example.com/upload',
         logsFileId: 'logs-file-1',
         ...overrides,
     }
 }
 
-function makeMockContext(apiOverrides?: Record<string, vi.Mock>) {
-    const mockSandbox = {
-        start: vi.fn(),
-        execute: vi.fn().mockResolvedValue({ engine: { status: 'OK' } }),
+// The flow handler now drives ctx.resolver.resolve(...) (which resolves the flow + pieces and
+// returns { kind, provision, flowVersion }) followed by ctx.runtime.execute(...), so the test mocks
+// the resolver and runtime directly.
+function makeMockContext(opts?: { resolveResult?: unknown, apiOverrides?: Record<string, vi.Mock> }) {
+    const resolver = {
+        resolve: vi.fn().mockResolvedValue(
+            opts?.resolveResult ?? {
+                kind: 'ready',
+                provision: { platformId: 'plat-1', pieces: [], codes: [], publicApiUrl: 'http://localhost:3000/api/', engineToken: 'test-token' },
+                flowVersion: makeFlowVersion(),
+            },
+        ),
+    }
+    const runtime = {
+        execute: vi.fn().mockResolvedValue({ status: 'OK' }),
     }
     return {
         log: {
@@ -94,15 +101,12 @@ function makeMockContext(apiOverrides?: Record<string, vi.Mock>) {
             debug: vi.fn(),
         },
         apiClient: {
-            getPayloadFile: vi.fn(),
             uploadRunLog: vi.fn(),
-            ...apiOverrides,
+            ...opts?.apiOverrides,
         },
-        sandboxManager: {
-            acquire: vi.fn().mockReturnValue(mockSandbox),
-            release: vi.fn(),
-            invalidate: vi.fn(),
-        },
+        resolver,
+        runtime,
+        workerIndex: 0,
         engineToken: 'test-token',
         internalApiUrl: 'http://localhost:3000',
         publicApiUrl: 'http://localhost:4200',
@@ -111,17 +115,46 @@ function makeMockContext(apiOverrides?: Record<string, vi.Mock>) {
 
 describe('executeFlowJob', () => {
     beforeEach(() => {
-        mockGetVersion.mockResolvedValue(makeFlowVersion())
+        vi.clearAllMocks()
     })
 
-    describe('RESUME execution state validation', () => {
-        it('should throw VALIDATION error when RESUME has empty execution state', async () => {
+    describe('payload pass-through (no worker-side fetch)', () => {
+        it('forwards the JobPayload ref unchanged to the engine for BEGIN', async () => {
             const ctx = makeMockContext()
-            ctx.apiClient.getPayloadFile.mockResolvedValue(
-                Buffer.from(JSON.stringify({ executionState: { steps: {}, tags: [] } })),
-            )
+            const data = makeResumeJobData({
+                executionType: ExecutionType.BEGIN,
+                payload: { type: 'ref', fileId: 'huge-file-1' },
+            })
 
-            const data = makeResumeJobData()
+            await executeFlowJob.execute(ctx, data)
+
+            const operation = ctx.runtime.execute.mock.calls[0][0].operation
+            expect(operation.executionType).toBe(ExecutionType.BEGIN)
+            expect(operation.triggerPayload).toEqual({ type: 'ref', fileId: 'huge-file-1' })
+            expect(operation.executionState).toBeUndefined()
+        })
+
+        it('forwards the JobPayload ref unchanged to the engine for RESUME and never reads logsFileId', async () => {
+            const ctx = makeMockContext()
+            const data = makeResumeJobData({
+                payload: { type: 'ref', fileId: 'resume-payload-1' },
+                logsFileId: 'logs-file-1',
+            })
+
+            await executeFlowJob.execute(ctx, data)
+
+            const operation = ctx.runtime.execute.mock.calls[0][0].operation
+            expect(operation.executionType).toBe(ExecutionType.RESUME)
+            expect(operation.resumePayload).toEqual({ type: 'ref', fileId: 'resume-payload-1' })
+            expect(operation.logsFileId).toBe('logs-file-1')
+            expect(operation.executionState).toBeUndefined()
+        })
+    })
+
+    describe('RESUME validation', () => {
+        it('still throws when logsFileId is missing for RESUME', async () => {
+            const ctx = makeMockContext()
+            const data = makeResumeJobData({ logsFileId: undefined as unknown as string })
 
             try {
                 await executeFlowJob.execute(ctx, data)
@@ -129,44 +162,47 @@ describe('executeFlowJob', () => {
             }
             catch (e) {
                 expect(e).toBeInstanceOf(ActivepiecesError)
-                expect((e as ActivepiecesError).error.code).toBe(ErrorCode.VALIDATION)
+                expect((e as ActivepiecesError).error.code).toBe(ErrorCode.RESUME_LOGS_FILE_MISSING)
             }
-
-            expect(ctx.log.error).toHaveBeenCalledWith(
-                expect.objectContaining({ runId: 'run-1' }),
-                expect.stringContaining('empty execution state'),
-            )
 
             expect(ctx.apiClient.uploadRunLog).toHaveBeenCalledWith(
                 expect.objectContaining({ status: FlowRunStatus.INTERNAL_ERROR }),
             )
         })
+    })
 
-        it('should proceed normally when RESUME has non-empty execution state', async () => {
-            const ctx = makeMockContext()
-            ctx.apiClient.getPayloadFile.mockResolvedValue(
-                Buffer.from(JSON.stringify({
-                    executionState: {
-                        steps: {
-                            trigger_1: {
-                                type: FlowTriggerType.EMPTY,
-                                status: StepOutputStatus.SUCCEEDED,
-                                input: {},
-                                output: {},
-                            },
-                        },
-                        tags: [],
-                    },
-                })),
-            )
+    describe('missing piece handling', () => {
+        it('marks run as FAILED and never runs the engine when the flow version is not found', async () => {
+            const ctx = makeMockContext({ resolveResult: { kind: 'flow-not-found' } })
+            const data = makeResumeJobData({ executionType: ExecutionType.BEGIN })
 
-            const data = makeResumeJobData()
             const result = await executeFlowJob.execute(ctx, data)
 
-            expect(result).toBeDefined()
-            expect(ctx.apiClient.uploadRunLog).not.toHaveBeenCalledWith(
-                expect.objectContaining({ status: FlowRunStatus.INTERNAL_ERROR }),
+            expect(result.kind).toBe(JobResultKind.FIRE_AND_FORGET)
+            // Run is FAILED, but the job COMPLETES (OK) — a missing flow must not fail+retry+page the job.
+            expect(result.status).toBe(EngineResponseStatus.OK)
+
+            expect(ctx.apiClient.uploadRunLog).toHaveBeenCalledWith(
+                expect.objectContaining({ status: FlowRunStatus.FAILED }),
             )
+
+            // No sandbox work happens for a missing flow: provision returns early, run is never called.
+            expect(ctx.runtime.execute).not.toHaveBeenCalled()
+        })
+
+        it('marks run as FAILED and completes the job (OK) when the flow is disabled', async () => {
+            const failedStep = { name: 'step_1', displayName: 'HTTP', message: 'The piece @activepieces/piece-http@1.0.0 is not installed' }
+            const ctx = makeMockContext({ resolveResult: { kind: 'disabled', failedStep } })
+            const data = makeResumeJobData({ executionType: ExecutionType.BEGIN })
+
+            const result = await executeFlowJob.execute(ctx, data)
+
+            expect(result.kind).toBe(JobResultKind.FIRE_AND_FORGET)
+            expect(result.status).toBe(EngineResponseStatus.OK)
+            expect(ctx.apiClient.uploadRunLog).toHaveBeenCalledWith(
+                expect.objectContaining({ status: FlowRunStatus.FAILED, failedStep }),
+            )
+            expect(ctx.runtime.execute).not.toHaveBeenCalled()
         })
     })
 })

@@ -1,4 +1,5 @@
-import { AIProviderModel, AIProviderName, CreateAIProviderRequest, PrincipalType, UpdateAIProviderRequest } from '@activepieces/shared'
+import { AIProviderName } from '@activepieces/core-utils'
+import { AIProviderModel, CreateAIProviderRequest, PrincipalType, UpdateAIProviderRequest } from '@activepieces/shared'
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { StatusCodes } from 'http-status-codes'
 import { z } from 'zod'
@@ -66,7 +67,7 @@ const ListModels = {
 
 const CreateAIProvider = {
     config: {
-        security: securityAccess.publicPlatform([PrincipalType.USER]),
+        security: securityAccess.platformAdminOnly([PrincipalType.USER]),
     },
     schema: {
         body: CreateAIProviderRequest,
@@ -75,7 +76,7 @@ const CreateAIProvider = {
 
 const UpdateAIProvider = {
     config: {
-        security: securityAccess.publicPlatform([PrincipalType.USER]),
+        security: securityAccess.platformAdminOnly([PrincipalType.USER]),
     },
     schema: {
         params: z.object({
@@ -87,7 +88,7 @@ const UpdateAIProvider = {
 
 const DeleteAIProvider = {
     config: {
-        security: securityAccess.publicPlatform([PrincipalType.USER]),
+        security: securityAccess.platformAdminOnly([PrincipalType.USER]),
     },
     schema: {
         params: z.object({

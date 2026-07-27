@@ -1,6 +1,6 @@
-import { PieceAuth, createPiece } from '@activepieces/pieces-framework';
-import { PieceCategory } from '@activepieces/shared';
+import { PieceAuth, createPiece, PieceCategory } from '@activepieces/pieces-framework';
 import { httpSendRequestAction } from './lib/actions/send-http-request-action';
+import { parseUrl } from './lib/actions/parse-url';
 
 export const http = createPiece({
   displayName: 'HTTP',
@@ -9,7 +9,7 @@ export const http = createPiece({
   categories: [PieceCategory.CORE],
   auth: PieceAuth.None(),
   minimumSupportedRelease: '0.20.3',
-  actions: [httpSendRequestAction],
+  actions: [httpSendRequestAction, parseUrl],
   authors: [
     'bibhuty-did-this',
     'landonmoir',

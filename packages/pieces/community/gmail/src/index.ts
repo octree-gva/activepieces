@@ -1,10 +1,6 @@
 import { createCustomApiCallAction } from '@activepieces/pieces-common';
-import {
-  OAuth2PropertyValue,
-  PieceAuth,
-  createPiece,
-} from '@activepieces/pieces-framework';
-import { PieceCategory } from '@activepieces/shared';
+import { createPiece } from '@activepieces/pieces-framework';
+import { PieceCategory } from '@activepieces/pieces-framework';
 import { gmailSendEmailAction } from './lib/actions/send-email-action';
 import { gmailReplyToEmailAction } from './lib/actions/reply-to-email-action';
 import { gmailCreateDraftReplyAction } from './lib/actions/create-draft-reply-action';
@@ -15,10 +11,17 @@ import { gmailNewAttachmentTrigger } from './lib/triggers/new-attachment';
 import { gmailNewLabelTrigger } from './lib/triggers/new-label';
 import { gmailSearchMailAction } from './lib/actions/search-email-action';
 import { gmailGetEmailAction } from './lib/actions/get-mail-action';
-import { gmailAuth } from './lib/auth';
+import { gmailAuth, getAccessToken, GmailAuthValue } from './lib/auth';
+
+export {
+  gmailAuth,
+  getAccessToken,
+  GmailAuthValue,
+  createGoogleClient,
+} from './lib/auth';
 
 export const gmail = createPiece({
-  minimumSupportedRelease: '0.30.0',
+  minimumSupportedRelease: '0.87.0',
   logoUrl: 'https://cdn.activepieces.com/pieces/gmail.png',
   categories: [
     PieceCategory.COMMUNICATION,
@@ -35,7 +38,7 @@ export const gmail = createPiece({
       baseUrl: () => 'https://gmail.googleapis.com/gmail/v1',
       auth: gmailAuth,
       authMapping: async (auth) => ({
-        Authorization: `Bearer ${(auth as OAuth2PropertyValue).access_token}`,
+        Authorization: `Bearer ${await getAccessToken(auth as GmailAuthValue)}`,
       }),
     }),
   ],

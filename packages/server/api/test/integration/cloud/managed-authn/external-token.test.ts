@@ -1,18 +1,27 @@
-import { setupTestEnvironment, teardownTestEnvironment } from '../../../helpers/test-setup'
-import { apId, DefaultProjectRole, PiecesFilterType, PieceType, ProjectRole } from '@activepieces/shared'
+import { apId, ProjectRole } from '@activepieces/core-utils'
+import { DefaultProjectRole, PieceSelectionMode, PiecesFilterType } from '@activepieces/shared'
 import { FastifyInstance } from 'fastify'
 import { StatusCodes } from 'http-status-codes'
+import { Redis } from 'ioredis'
+import { databaseConnection } from '../../../../src/app/database/database-connection'
+import { getProjectConcurrencyPoolKey } from '../../../../src/app/database/redis/keys'
+import { distributedStore, redisConnections } from '../../../../src/app/database/redis-connections'
 import { generateMockExternalToken } from '../../../helpers/auth'
 import { db } from '../../../helpers/db'
 import {
-    createMockPieceMetadata,
-    createMockPieceTag,
     createMockProject,
     createMockSigningKey,
-    createMockTag,
     mockAndSaveBasicSetup,
     mockBasicUser,
 } from '../../../helpers/mocks'
+import { setupTestEnvironment, teardownTestEnvironment } from '../../../helpers/test-setup'
+
+async function deleteKeysByPattern(redis: Redis, pattern: string): Promise<void> {
+    const stream = redis.scanStream({ match: pattern, count: 100 })
+    for await (const keys of stream) {
+        if (keys.length > 0) await redis.del(...keys)
+    }
+}
 
 let app: FastifyInstance | null = null
 
@@ -22,6 +31,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
     await teardownTestEnvironment()
+})
+
+beforeEach(async () => {
+    const redis = await redisConnections.useExisting()
+    await deleteKeysByPattern(redis, 'concurrency-pool:limit:*')
+    await deleteKeysByPattern(redis, 'project:concurrency-pool:*')
 })
 describe('Managed Authentication API', () => {
     describe('External token endpoint', () => {
@@ -98,8 +113,8 @@ describe('Managed Authentication API', () => {
             expect(response?.statusCode).toBe(StatusCodes.OK)
 
             const generatedProject = await db.findOneBy('project', {
-                    id: responseBody?.projectId,
-                })
+                id: responseBody?.projectId,
+            })
 
             expect(generatedProject?.displayName).toBe(
                 mockExternalTokenPayload.externalProjectId,
@@ -111,39 +126,80 @@ describe('Managed Authentication API', () => {
             )
         })
 
-        it('Sync Pieces when exchanging external token', async () => {
+        it('Assigns the named piece set matching the first tag when exchanging external token', async () => {
             // arrange
-            const { mockPlatform } = await mockAndSaveBasicSetup()
-
-            const mockPieceMetadata1 = createMockPieceMetadata({
-                name: '@ap/a',
-                version: '0.0.1',
-                pieceType: PieceType.OFFICIAL,
+            const { mockPlatform } = await mockAndSaveBasicSetup({
+                plan: { managePiecesEnabled: true },
             })
-            await db.save('piece_metadata', mockPieceMetadata1)
-
-            const mockTag = createMockTag({
-                id: apId(),
-                platformId: mockPlatform.id,
-                name: 'free',
-            })
-
-            await db.save('tag', mockTag)
-
-
-            const mockPieceTag = createMockPieceTag({
-                platformId: mockPlatform.id,
-                tagId: mockTag.id,
-                pieceName: '@ap/a',
-            })
-
-            await db.save('piece_tag', mockPieceTag)
-
 
             const mockSigningKey = createMockSigningKey({
                 platformId: mockPlatform.id,
             })
             await db.save('signing_key', mockSigningKey)
+
+            // A tag maps to a named piece set (key = tag name), created by the backfill migration.
+            const tagSet = {
+                id: apId(),
+                created: new Date().toISOString(),
+                updated: new Date().toISOString(),
+                platformId: mockPlatform.id,
+                name: 'free',
+                key: 'free',
+                isDefault: false,
+                generatedForProjectId: null,
+                config: { pieces: { mode: PieceSelectionMode.EXCLUDE_ALL, exceptions: ['@ap/a'] }, selectedActions: {}, selectedTriggers: {} },
+            }
+            await db.save('piece_set', tagSet)
+
+            const { mockExternalToken } = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+                pieces: {
+                    filterType: PiecesFilterType.ALLOWED,
+                    // Only the first tag is honored; the second is ignored.
+                    tags: ['free', 'ignored-second-tag'],
+                },
+            })
+
+            // act
+            const response = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: {
+                    externalAccessToken: mockExternalToken,
+                },
+            })
+
+            // assert
+            const responseBody = response?.json()
+
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+
+            const project = await db.findOneBy<{ pieceSetId: string }>('project', { id: responseBody?.projectId })
+            expect(project?.pieceSetId).toBe(tagSet.id)
+        })
+
+        it('Assigns the named piece set even when managePiecesEnabled is false (flag gates management, not enforcement)', async () => {
+            // arrange — mocks default managePiecesEnabled to false
+            const { mockPlatform } = await mockAndSaveBasicSetup()
+
+            const mockSigningKey = createMockSigningKey({
+                platformId: mockPlatform.id,
+            })
+            await db.save('signing_key', mockSigningKey)
+
+            const tagSet = {
+                id: apId(),
+                created: new Date().toISOString(),
+                updated: new Date().toISOString(),
+                platformId: mockPlatform.id,
+                name: 'free',
+                key: 'free',
+                isDefault: false,
+                generatedForProjectId: null,
+                config: { pieces: { mode: PieceSelectionMode.EXCLUDE_ALL, exceptions: ['@ap/a'] }, selectedActions: {}, selectedTriggers: {} },
+            }
+            await db.save('piece_set', tagSet)
 
             const { mockExternalToken } = generateMockExternalToken({
                 platformId: mockPlatform.id,
@@ -168,10 +224,56 @@ describe('Managed Authentication API', () => {
 
             expect(response?.statusCode).toBe(StatusCodes.OK)
 
-            const generatedProject = await db.findOneBy('project_plan', { projectId: responseBody?.projectId })
+            const project = await db.findOneBy<{ pieceSetId: string }>('project', { id: responseBody?.projectId })
+            expect(project?.pieceSetId).toBe(tagSet.id)
+        })
 
-            expect(generatedProject?.piecesFilterType).toBe('ALLOWED')
-            expect(generatedProject?.pieces).toStrictEqual(['@ap/a'])
+        it('Assigns the named piece set referenced by a v4 token pieceSet field', async () => {
+            // arrange
+            const { mockPlatform } = await mockAndSaveBasicSetup({
+                plan: { managePiecesEnabled: true },
+            })
+
+            const mockSigningKey = createMockSigningKey({
+                platformId: mockPlatform.id,
+            })
+            await db.save('signing_key', mockSigningKey)
+
+            const namedSet = {
+                id: apId(),
+                created: new Date().toISOString(),
+                updated: new Date().toISOString(),
+                platformId: mockPlatform.id,
+                name: 'premium',
+                key: 'premium',
+                isDefault: false,
+                generatedForProjectId: null,
+                config: { pieces: { mode: PieceSelectionMode.EXCLUDE_ALL, exceptions: ['@ap/a'] }, selectedActions: {}, selectedTriggers: {} },
+            }
+            await db.save('piece_set', namedSet)
+
+            const { mockExternalToken } = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+                pieceSetKey: 'premium',
+            })
+
+            // act
+            const response = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: {
+                    externalAccessToken: mockExternalToken,
+                },
+            })
+
+            // assert
+            const responseBody = response?.json()
+
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+
+            const project = await db.findOneBy<{ pieceSetId: string }>('project', { id: responseBody?.projectId })
+            expect(project?.pieceSetId).toBe(namedSet.id)
         })
 
         it('Adds new user as a member in new project', async () => {
@@ -207,9 +309,9 @@ describe('Managed Authentication API', () => {
             expect(response?.statusCode).toBe(StatusCodes.OK)
 
             const generatedProjectMember = await db.findOneBy('project_member', {
-                    projectId: responseBody?.projectId,
-                    userId: responseBody?.id,
-                })
+                projectId: responseBody?.projectId,
+                userId: responseBody?.id,
+            })
 
             expect(generatedProjectMember?.projectId).toBe(responseBody?.projectId)
             expect(generatedProjectMember?.userId).toBe(responseBody?.id)
@@ -328,6 +430,164 @@ describe('Managed Authentication API', () => {
             expect(responseBody?.params?.message).toBe(
                 `signing key not found signingKeyId=${nonExistentSigningKeyId}`,
             )
+        })
+    })
+
+    describe('Concurrency pool', () => {
+        it('Creates pool and assigns to project when token has concurrencyPoolKey and limit', async () => {
+            const { mockPlatform } = await mockAndSaveBasicSetup()
+
+            const mockSigningKey = createMockSigningKey({
+                platformId: mockPlatform.id,
+            })
+            await db.save('signing_key', mockSigningKey)
+
+            const { mockExternalToken } = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+                concurrencyPoolKey: 'my-pool',
+                concurrencyPoolLimit: 10,
+            })
+
+            const response = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: {
+                    externalAccessToken: mockExternalToken,
+                },
+            })
+
+            const responseBody = response?.json()
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+
+            const pool = await databaseConnection()
+                .getRepository('concurrency_pool')
+                .findOneBy({ platformId: mockPlatform.id, key: 'my-pool' }) as { id: string, maxConcurrentJobs: number } | null
+
+            expect(pool).not.toBeNull()
+            expect(pool!.maxConcurrentJobs).toBe(10)
+
+            const project = await db.findOneByOrFail<{ poolId: string | null }>('project', { id: responseBody?.projectId })
+            expect(project.poolId).toBe(pool!.id)
+
+            const cachedPoolId = await distributedStore.get<string>(getProjectConcurrencyPoolKey(responseBody?.projectId))
+            expect(cachedPoolId).toBe(pool!.id)
+        })
+
+        it('Does not create pool when token has concurrencyPoolKey but no concurrencyPoolLimit', async () => {
+            const { mockPlatform } = await mockAndSaveBasicSetup()
+
+            const mockSigningKey = createMockSigningKey({
+                platformId: mockPlatform.id,
+            })
+            await db.save('signing_key', mockSigningKey)
+
+            const { mockExternalToken } = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+                concurrencyPoolKey: 'no-limit-pool',
+            })
+
+            const response = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: {
+                    externalAccessToken: mockExternalToken,
+                },
+            })
+
+            const responseBody = response?.json()
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+
+            const pool = await databaseConnection()
+                .getRepository('concurrency_pool')
+                .findOneBy({ platformId: mockPlatform.id, key: 'no-limit-pool' }) as { id: string, maxConcurrentJobs: number } | null
+
+            expect(pool).toBeNull()
+
+            const project = await db.findOneByOrFail<{ poolId: string | null }>('project', { id: responseBody?.projectId })
+            expect(project.poolId).toBeNull()
+        })
+
+        it('Reuses same pool for same concurrencyPoolKey across multiple tokens', async () => {
+            const { mockPlatform } = await mockAndSaveBasicSetup()
+
+            const mockSigningKey = createMockSigningKey({
+                platformId: mockPlatform.id,
+            })
+            await db.save('signing_key', mockSigningKey)
+
+            const { mockExternalToken: token1 } = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+                externalProjectId: apId(),
+                concurrencyPoolKey: 'shared-pool',
+                concurrencyPoolLimit: 5,
+            })
+
+            const { mockExternalToken: token2 } = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+                externalProjectId: apId(),
+                concurrencyPoolKey: 'shared-pool',
+                concurrencyPoolLimit: 5,
+            })
+
+            const response1 = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: { externalAccessToken: token1 },
+            })
+
+            const response2 = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: { externalAccessToken: token2 },
+            })
+
+            const body1 = response1?.json()
+            const body2 = response2?.json()
+            expect(response1?.statusCode).toBe(StatusCodes.OK)
+            expect(response2?.statusCode).toBe(StatusCodes.OK)
+
+            const project1 = await db.findOneByOrFail<{ poolId: string | null }>('project', { id: body1?.projectId })
+            const project2 = await db.findOneByOrFail<{ poolId: string | null }>('project', { id: body2?.projectId })
+
+            expect(project1.poolId).toBe(project2.poolId)
+
+            const poolCount = await databaseConnection()
+                .getRepository('concurrency_pool')
+                .countBy({ platformId: mockPlatform.id, key: 'shared-pool' })
+
+            expect(poolCount).toBe(1)
+        })
+
+        it('Does not create pool when token has no concurrencyPoolKey', async () => {
+            const { mockPlatform } = await mockAndSaveBasicSetup()
+
+            const mockSigningKey = createMockSigningKey({
+                platformId: mockPlatform.id,
+            })
+            await db.save('signing_key', mockSigningKey)
+
+            const { mockExternalToken } = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+            })
+
+            const response = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: {
+                    externalAccessToken: mockExternalToken,
+                },
+            })
+
+            const responseBody = response?.json()
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+
+            const project = await db.findOneByOrFail<{ poolId: string | null }>('project', { id: responseBody?.projectId })
+            expect(project.poolId).toBeNull()
         })
     })
 })

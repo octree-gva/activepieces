@@ -1,7 +1,7 @@
+import { Permission } from '@activepieces/core-utils';
 import {
   AppConnectionStatus,
   AppConnectionWithoutSensitiveData,
-  Permission,
 } from '@activepieces/shared';
 import { ColumnDef } from '@tanstack/react-table';
 import { t } from 'i18next';
@@ -227,6 +227,7 @@ const GlobalConnectionsTable = () => {
     extraKeys: [location.search],
     staleTime: 0,
     gcTime: 0,
+    showErrorDialog: true,
   });
 
   const userHasPermissionToWriteAppConnection = checkAccess(

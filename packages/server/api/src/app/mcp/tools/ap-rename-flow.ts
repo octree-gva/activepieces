@@ -1,25 +1,21 @@
-import {
-    FlowOperationRequest,
-    FlowOperationType,
-    isNil,
-    McpServer,
-    McpToolDefinition,
-} from '@activepieces/shared'
+import { isNil, Permission } from '@activepieces/core-utils'
+import { FlowOperationRequest, FlowOperationType, McpToolDefinition, ProjectScopedMcpServer } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
 import { flowService } from '../../flows/flow/flow.service'
 import { projectService } from '../../project/project-service'
-import { mcpToolError } from './mcp-utils'
+import { mcpUtils } from './mcp-utils'
 
 const renameFlowInput = z.object({
     flowId: z.string(),
     displayName: z.string(),
 })
 
-export const apRenameFlowTool = (mcp: McpServer, log: FastifyBaseLogger): McpToolDefinition => {
+export const apRenameFlowTool = (mcp: ProjectScopedMcpServer, log: FastifyBaseLogger): McpToolDefinition => {
     return {
         title: 'ap_rename_flow',
-        description: 'Rename a flow. Use ap_list_flows to get valid flow IDs.',
+        permission: Permission.WRITE_FLOW,
+        description: 'Rename a flow.',
         inputSchema: {
             flowId: z.string().describe('The id of the flow to rename'),
             displayName: z.string().describe('The new display name for the flow'),
@@ -54,7 +50,7 @@ export const apRenameFlowTool = (mcp: McpServer, log: FastifyBaseLogger): McpToo
                 }
             }
             catch (err) {
-                return mcpToolError('Flow rename failed', err)
+                return mcpUtils.mcpToolError('Flow rename failed', err)
             }
         },
     }

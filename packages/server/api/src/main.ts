@@ -1,18 +1,16 @@
-import './instrumentation'
-
-
+import { evlogSetup } from '@activepieces/server-utils'
 import dayjs from 'dayjs'
 import { FastifyInstance } from 'fastify'
 import { appPostBoot } from './app/app'
 import { initializeDatabase } from './app/database'
 import { distributedLock } from './app/database/redis-connections'
 import { system } from './app/helper/system/system'
-import { WorkerSystemProp } from './app/helper/system/system-props'
+import { AppSystemProp } from './app/helper/system/system-props'
 import { setupServer } from './app/server'
 
 const start = async (app: FastifyInstance): Promise<void> => {
     try {
-        const port = Number(system.get(WorkerSystemProp.PORT))
+        const port = Number(system.get(AppSystemProp.PORT))
         await app.listen({
             host: '::',
             port,
@@ -37,6 +35,7 @@ const stop = async (app: FastifyInstance): Promise<void> => {
 
     try {
         await app.close()
+        await evlogSetup.flush()
         process.exit(0)
     }
     catch (err) {

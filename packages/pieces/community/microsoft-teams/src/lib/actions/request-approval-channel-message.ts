@@ -1,12 +1,9 @@
 import { createAction, Property } from '@activepieces/pieces-framework';
 import { microsoftTeamsAuth } from '../auth';
-import { Client } from '@microsoft/microsoft-graph-client';
 import { microsoftTeamsCommon } from '../common';
-import {
-  assertNotNullOrUndefined,
-  ExecutionType,
-  PauseType,
-} from '@activepieces/shared';
+import { createGraphClient } from '../common/graph';
+import { assertNotNullOrUndefined } from '@activepieces/pieces-framework';
+import { ExecutionType } from '@activepieces/pieces-framework';
 import { ChatMessage } from '@microsoft/microsoft-graph-types';
 
 export const requestApprovalInChannel = createAction({
@@ -14,6 +11,11 @@ export const requestApprovalInChannel = createAction({
   name: 'request_approval_in_channel',
   displayName: 'Request Approval in Channel',
   description: 'Send approval message to a channel and then wait until the message is approved or disapproved',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Posts an adaptive card with a single button linking to a confirmation page (where the recipient chooses Approve or Disapprove) into a Microsoft Teams channel (by team ID and channel ID) and pauses the flow until they respond, then resumes reporting whether it was approved. Use as a human-in-the-loop gate where channel members decide; for a direct-message gate use Request Approval from a User instead. Not idempotent — each call posts another approval message and creates a new wait.',
+    idempotent: false,
+  },
   props: {
     teamId: microsoftTeamsCommon.teamId,
     channelId: microsoftTeamsCommon.channelId,
@@ -32,21 +34,15 @@ export const requestApprovalInChannel = createAction({
       assertNotNullOrUndefined(channelId, 'channelId');
       assertNotNullOrUndefined(message, 'message');
 
-      const client = Client.initWithMiddleware({
-        authProvider: {
-          getAccessToken: () => Promise.resolve(token),
-        },
-      });
+      const cloud = context.auth.props?.['cloud'] as string | undefined;
+      const client = createGraphClient(token, cloud);
 
       const attachmentId = Date.now().toString();
-      const approvalLink = context.generateResumeUrl({
-        queryParams: { action: 'approve' },
+      const waitpoint = await context.run.createWaitpoint({
+        type: 'WEBHOOK',
       });
-      const disapprovalLink = context.generateResumeUrl({
-        queryParams: { action: 'disapprove' },
-      });
+      const confirmationLink = `${waitpoint.resumeUrl}/confirm`;
 
-      
       const chatMessage: ChatMessage = {
         body: {
           contentType: 'html',
@@ -70,15 +66,8 @@ export const requestApprovalInChannel = createAction({
               actions: [
                 {
                   type: 'Action.OpenUrl',
-                  title: 'Approve',
-                  url: approvalLink,
-                  style: 'positive',
-                },
-                {
-                  type: 'Action.OpenUrl',
-                  title: 'Disapprove',
-                  url: disapprovalLink,
-                  style: 'destructive',
+                  title: 'Review & Respond',
+                  url: confirmationLink,
                 },
               ],
             }),
@@ -91,12 +80,7 @@ export const requestApprovalInChannel = createAction({
         .api(`/teams/${teamId}/channels/${channelId}/messages`)
         .post(chatMessage);
 
-      context.run.pause({
-        pauseMetadata: {
-          type: PauseType.WEBHOOK,
-          response: {},
-        },
-      });
+      context.run.waitForWaitpoint(waitpoint.id);
       return {
         approved: false, // default approval is false
       };

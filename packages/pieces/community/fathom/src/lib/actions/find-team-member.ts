@@ -1,12 +1,13 @@
-import { fathomAuth } from '../..';
+import { fathomAuth, getFathomClient } from '../common/auth';
 import { createAction, Property } from '@activepieces/pieces-framework';
-import { Fathom } from 'fathom-typescript';
 import { ListTeamMembersRequest } from 'fathom-typescript/dist/esm/sdk/models/operations';
 
 export const findTeamMember = createAction({
   name: 'findTeamMember',
   displayName: 'Find Team Member',
   description: 'Find team member based on email',
+  audience: 'both',
+  aiMetadata: { description: 'List team members in the connected Fathom workspace, optionally narrowed to a single team by name; with no team supplied it returns members across all teams. Use to look up who belongs to a team. Read-only and repeatable; use the cursor for pagination.', idempotent: true },
   auth: fathomAuth,
   props: {
     team: Property.ShortText({
@@ -21,9 +22,7 @@ export const findTeamMember = createAction({
     })
   },
   async run({ auth, propsValue }) {
-    const fathom = new Fathom({
-      security: { apiKeyAuth: auth.secret_text }
-    });
+    const fathom = getFathomClient(auth);
 
     const params: Partial<ListTeamMembersRequest> = {};
 

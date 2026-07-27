@@ -1,10 +1,5 @@
-import {
-  ApEdition,
-  ApFlagId,
-  isNil,
-  Permission,
-  PlatformRole,
-} from '@activepieces/shared';
+import { isNil, Permission } from '@activepieces/core-utils';
+import { ApEdition, ApFlagId, PlatformRole } from '@activepieces/shared';
 import { useQuery } from '@tanstack/react-query';
 
 import { authenticationApi } from '@/api/authentication-api';
@@ -38,10 +33,11 @@ export const useAuthorization = () => {
     if (isLoading || edition === ApEdition.COMMUNITY) {
       return true;
     }
+
     return projectRole?.permissions?.includes(permission) ?? true;
   };
 
-  return { checkAccess };
+  return { checkAccess, isFetchingProjectRole: isLoading };
 };
 
 export const useIsPlatformAdmin = () => {

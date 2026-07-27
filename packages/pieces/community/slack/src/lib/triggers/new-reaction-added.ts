@@ -13,6 +13,10 @@ export const newReactionAdded = createTrigger({
   name: 'new_reaction_added',
   displayName: 'New Reaction',
   description: 'Triggers when a new reaction is added to a message',
+  aiMetadata: {
+    description:
+      'Fires when an emoji reaction is added to a message in the Slack workspace. Can be optionally filtered to specific emojis, a specific user, or specific channels. The event payload identifies the user who added the reaction, the emoji name, and the message item it was added to.',
+  },
   props: {
     info: multiSelectChannelInfo,
     emojis: Property.Array({
@@ -64,6 +68,7 @@ export const newReactionAdded = createTrigger({
   run: async (context) => {
     const payloadBody = context.payload.body as PayloadBody;
     const channels = (context.propsValue.channels as string[]) ?? [];
+    const emojis = (context.propsValue.emojis as string[]) ?? [];
 
     // Filter by user if specified
     if (context.propsValue.user && payloadBody.event.user !== context.propsValue.user) {
@@ -71,10 +76,8 @@ export const newReactionAdded = createTrigger({
     }
 
     // Filter by emoji if specified
-    if (context.propsValue.emojis) {
-      if (!context.propsValue.emojis.includes(payloadBody.event.reaction)) {
-        return [];
-      }
+    if (emojis.length > 0 && !emojis.includes(payloadBody.event.reaction)) {
+      return [];
     }
 
     // Filter by channels - if no channels selected, trigger for all

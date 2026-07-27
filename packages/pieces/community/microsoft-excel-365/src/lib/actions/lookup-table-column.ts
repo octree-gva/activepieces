@@ -1,4 +1,4 @@
-import { createAction, Property } from '@activepieces/pieces-framework';
+import { createAction, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
 import { excelAuth } from '../auth';
 import { commonProps } from '../common/props';
 import { getDrivePath, createMSGraphClient } from '../common/helpers';
@@ -8,6 +8,8 @@ export const lookupTableColumnAction = createAction({
   auth: excelAuth,
   name: 'lookup_table_column',
   description: 'Lookup a value in a table column in a worksheet',
+  audience: 'both',
+  aiMetadata: { description: 'Find rows in a defined Excel table where a named column exactly equals a given value, returning the first match by default or all matches when Return All Matches is enabled. Use to look up table records by a key; throws if the named column does not exist. Read-only and idempotent.', idempotent: true },
   displayName: 'Lookup Table Column',
   props: {
     storageSource: commonProps.storageSource,
@@ -38,13 +40,14 @@ export const lookupTableColumnAction = createAction({
     const lookupColumn = propsValue['lookup_column'];
     const lookupValue = propsValue['lookup_value'];
     const returnAllMatches = propsValue['return_all_matches'];
+    const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
     if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
       throw new Error('please select SharePoint site and document library.');
     }
     const drivePath = getDrivePath(storageSource, siteId as string, documentId as string);
 
-    const client = createMSGraphClient(auth['access_token']);
+    const client = createMSGraphClient(auth['access_token'], cloud);
 
     const rowsResponse = await client
       .api(`${drivePath}/items/${workbookId}/workbook/worksheets/${worksheetId}/tables/${tableId}/rows`)

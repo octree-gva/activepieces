@@ -1,11 +1,11 @@
-import { ExecutionType, FlowRunStatus, FlowTriggerType, FlowVersionState, GenericStepOutput, StepOutputStatus } from '@activepieces/shared'
+import { FlowRunStatus, FlowTriggerType, FlowVersionState, GenericStepOutput, StepOutputStatus } from '@activepieces/shared'
 import { vi } from 'vitest'
 import { FlowExecutorContext } from '../../src/lib/handler/context/flow-execution-context'
 import { flowExecutor } from '../../src/lib/handler/flow-executor'
 import { buildCodeAction, buildMockBeginExecuteFlowOperation, buildSimpleLoopAction, generateMockEngineConstants } from './test-helper'
 
-vi.mock('../../src/lib/services/progress.service', () => ({
-    progressService: {
+vi.mock('../../src/lib/helper/flow-run-progress-reporter', () => ({
+    flowRunProgressReporter: {
         sendUpdate: vi.fn().mockResolvedValue(undefined),
         backup: vi.fn().mockResolvedValue(undefined),
         init: vi.fn(),
@@ -109,7 +109,7 @@ describe('flow executor log size exceeded', () => {
                 }),
             }
 
-            const executionState = FreshContext.empty().upsertStep(triggerName, GenericStepOutput.create({
+            const executionState = await FreshContext.empty().upsertStep(triggerName, GenericStepOutput.create({
                 type: FlowTriggerType.EMPTY,
                 status: StepOutputStatus.SUCCEEDED,
                 input: {},

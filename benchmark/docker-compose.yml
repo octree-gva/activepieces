@@ -8,7 +8,11 @@ services:
     depends_on:
       - app
     networks:
-      - bench
+      bench:
+        # Static IP so the SANDBOX_PROCESS engine (whose sandbox /etc/resolv.conf points at public
+        # DNS 8.8.8.8 and can't resolve the docker-internal "nginx" name) can still reach the server
+        # by IP to report flow results. AP_FRONTEND_URL points here.
+        ipv4_address: 172.30.0.10
 
   app:
     image: activepieces-benchmark:local
@@ -27,7 +31,7 @@ services:
       AP_POSTGRES_PORT: 5432
       AP_JWT_SECRET: benchmark-secret-key-for-testing
       AP_ENCRYPTION_KEY: 11020ebf480a9b1648ceec6400beaf26
-      AP_FRONTEND_URL: http://nginx:80
+      AP_FRONTEND_URL: http://172.30.0.10:80
       AP_EXECUTION_MODE: ${AP_EXECUTION_MODE:-SANDBOX_CODE_ONLY}
       AP_REDIS_HOST: redis
       AP_REDIS_PORT: 6379
@@ -35,7 +39,8 @@ services:
       AP_LOG_LEVEL: error
       AP_TELEMETRY_ENABLED: false
       AP_PROJECT_RATE_LIMITER_ENABLED: false
-      AP_MAX_CONCURRENT_JOBS_PER_PROJECT: 1000
+      AP_SANDBOX_MEMORY_LIMIT: ${AP_SANDBOX_MEMORY_LIMIT:-}
+      AP_DEFAULT_CONCURRENT_JOBS_LIMIT: 1000
       AP_FILE_STORAGE_LOCATION: ${AP_FILE_STORAGE_LOCATION:-DB}
       AP_S3_BUCKET: ${AP_S3_BUCKET:-}
       AP_S3_ACCESS_KEY_ID: ${AP_S3_ACCESS_KEY_ID:-}
@@ -58,7 +63,7 @@ services:
       - app
     environment:
       AP_CONTAINER_TYPE: WORKER
-      AP_FRONTEND_URL: http://nginx:80
+      AP_FRONTEND_URL: http://172.30.0.10:80
       AP_JWT_SECRET: benchmark-secret-key-for-testing
       AP_ENCRYPTION_KEY: 11020ebf480a9b1648ceec6400beaf26
       AP_EXECUTION_MODE: ${AP_EXECUTION_MODE:-SANDBOX_CODE_ONLY}
@@ -71,6 +76,7 @@ services:
       AP_POSTGRES_PORT: 5432
       AP_LOG_LEVEL: error
       AP_TELEMETRY_ENABLED: false
+      AP_WORKER_CONCURRENCY: ${AP_WORKER_CONCURRENCY:-}
       AP_FILE_STORAGE_LOCATION: ${AP_FILE_STORAGE_LOCATION:-DB}
       AP_S3_BUCKET: ${AP_S3_BUCKET:-}
       AP_S3_ACCESS_KEY_ID: ${AP_S3_ACCESS_KEY_ID:-}
@@ -109,3 +115,6 @@ volumes:
 
 networks:
   bench:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16

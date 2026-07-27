@@ -1,11 +1,6 @@
 import { randomBytes } from 'crypto'
 import { promisify } from 'util'
-import {
-    ActivepiecesError,
-    ErrorCode,
-    isNil,
-    spreadIfDefined,
-} from '@activepieces/shared'
+import { ActivepiecesError, ErrorCode, isNil, spreadIfDefined } from '@activepieces/core-utils'
 import { Mutex } from 'async-mutex'
 import jwtLibrary, {
     DecodeOptions,
@@ -23,6 +18,14 @@ export enum JwtSignAlgorithm {
     RS256 = 'RS256',
 }
 
+export enum JwtAudience {
+    FLOW_RUN_LOG = 'FLOW_RUN_LOG',
+    USER_INVITATION = 'USER_INVITATION',
+    MCP_OAUTH_ACCESS = 'MCP_OAUTH_ACCESS',
+    MCP_OAUTH_AUTH_REQUEST = 'MCP_OAUTH_AUTH_REQUEST',
+    FILE_READ = 'FILE_READ',
+}
+
 const ONE_WEEK = 7 * 24 * 3600
 const KEY_ID = '1'
 const ISSUER = 'activepieces'
@@ -37,12 +40,15 @@ export const jwtUtils = {
         expiresInSeconds = ONE_WEEK,
         keyId = KEY_ID,
         algorithm = ALGORITHM,
+        audience,
+        issuer,
     }: SignParams): Promise<string> {
         const signOptions: SignOptions = {
             algorithm,
             keyid: keyId,
             expiresIn: expiresInSeconds,
-            issuer: ISSUER,
+            issuer: issuer ?? ISSUER,
+            ...spreadIfDefined('audience', audience),
         }
         return new Promise((resolve, reject) => {
             jwtLibrary.sign(payload, key, signOptions, (err, token) => {
@@ -129,6 +135,8 @@ type SignParams = {
     expiresInSeconds?: number
     algorithm?: JwtSignAlgorithm
     keyId?: string
+    audience?: JwtAudience
+    issuer?: string
 }
 
 type VerifyParams = {
@@ -136,7 +144,7 @@ type VerifyParams = {
     key: string
     algorithm?: JwtSignAlgorithm
     issuer?: string | string[] | null
-    audience?: string
+    audience?: JwtAudience | string
 }
 
 type DecodeParams = {

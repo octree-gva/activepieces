@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto'
+import { apId } from '@activepieces/core-utils'
 import { cryptoUtils } from '@activepieces/server-utils'
-import { apId, McpOAuthClient } from '@activepieces/shared'
+import { McpOAuthClient } from '@activepieces/shared'
 import { repoFactory } from '../../../core/db/repo-factory'
 import { McpOAuthClientEntity } from './mcp-oauth-client.entity'
 
@@ -29,12 +30,15 @@ export const mcpOAuthClientService = {
         const rawSecret = isPublicClient ? null : generateClientSecret()
         const hashedSecret = rawSecret ? hashSecret(rawSecret) : null
 
+        const clientSecretExpiresAt = 0
+        const clientIdIssuedAt = Math.floor(Date.now() / 1000)
+
         const client: McpOAuthClient = {
             id: apId(),
             clientId,
             clientSecret: hashedSecret,
-            clientSecretExpiresAt: 0,
-            clientIdIssuedAt: Math.floor(Date.now() / 1000),
+            clientSecretExpiresAt,
+            clientIdIssuedAt,
             redirectUris: params.redirectUris,
             clientName: params.clientName ?? null,
             grantTypes: params.grantTypes ?? ['authorization_code', 'refresh_token'],
@@ -48,8 +52,8 @@ export const mcpOAuthClientService = {
         return {
             client_id: clientId,
             client_secret: rawSecret ?? undefined,
-            client_id_issued_at: client.clientIdIssuedAt,
-            client_secret_expires_at: client.clientSecretExpiresAt,
+            client_id_issued_at: clientIdIssuedAt,
+            client_secret_expires_at: clientSecretExpiresAt,
             redirect_uris: client.redirectUris,
             client_name: client.clientName ?? undefined,
             grant_types: client.grantTypes,

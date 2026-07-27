@@ -1,26 +1,21 @@
-import {
-    FlowOperationRequest,
-    FlowOperationType,
-    FlowStatus,
-    isNil,
-    McpServer,
-    McpToolDefinition,
-} from '@activepieces/shared'
+import { isNil, Permission } from '@activepieces/core-utils'
+import { FlowOperationRequest, FlowOperationType, FlowStatus, McpToolDefinition, ProjectScopedMcpServer } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
 import { flowService } from '../../flows/flow/flow.service'
 import { projectService } from '../../project/project-service'
-import { mcpToolError } from './mcp-utils'
+import { mcpUtils } from './mcp-utils'
 
 const changeFlowStatusInput = z.object({
     flowId: z.string(),
     status: z.enum(Object.values(FlowStatus) as [FlowStatus, ...FlowStatus[]]),
 })
 
-export const apChangeFlowStatusTool = (mcp: McpServer, log: FastifyBaseLogger): McpToolDefinition => {
+export const apChangeFlowStatusTool = (mcp: ProjectScopedMcpServer, log: FastifyBaseLogger): McpToolDefinition => {
     return {
         title: 'ap_change_flow_status',
-        description: 'Enable or disable a flow. The flow must be published first (use ap_lock_and_publish). Use ap_list_flows to get flow IDs.',
+        permission: Permission.UPDATE_FLOW_STATUS,
+        description: 'Enable or disable a published flow.',
         inputSchema: {
             flowId: z.string().describe('The id of the flow'),
             status: z.enum([FlowStatus.ENABLED, FlowStatus.DISABLED]).describe('The new status: ENABLED to activate the flow, DISABLED to pause it'),
@@ -46,6 +41,15 @@ export const apChangeFlowStatusTool = (mcp: McpServer, log: FastifyBaseLogger): 
                 }
             }
 
+            if (status === FlowStatus.DISABLED && flow.status === FlowStatus.DISABLED) {
+                return {
+                    content: [{
+                        type: 'text',
+                        text: `✅ Flow "${flow.version.displayName}" is already disabled.`,
+                    }],
+                }
+            }
+
             const operation: FlowOperationRequest = {
                 type: FlowOperationType.CHANGE_STATUS,
                 request: { status },
@@ -65,7 +69,7 @@ export const apChangeFlowStatusTool = (mcp: McpServer, log: FastifyBaseLogger): 
                 }
             }
             catch (err) {
-                return mcpToolError('Status change failed', err)
+                return mcpUtils.mcpToolError('Status change failed', err)
             }
         },
     }

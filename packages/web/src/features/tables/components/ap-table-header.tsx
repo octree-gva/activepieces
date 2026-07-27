@@ -1,4 +1,4 @@
-import { Permission } from '@activepieces/shared';
+import { Permission } from '@activepieces/core-utils';
 import { t } from 'i18next';
 import {
   ChevronDown,
@@ -9,13 +9,16 @@ import {
   Edit2,
   Import,
   FileJson,
+  Lock,
 } from 'lucide-react';
 import { useState } from 'react';
 
+import { ActiveUsersWidget } from '@/components/custom/active-users-widget';
 import { ConfirmationDeleteDialog } from '@/components/custom/delete-dialog';
 import EditableText from '@/components/custom/editable-text';
 import { PageHeader } from '@/components/custom/page-header';
 import { PermissionNeededTooltip } from '@/components/custom/permission-needed-tooltip';
+import { useEmbedding } from '@/components/providers/embed-provider';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -44,14 +47,21 @@ import { downloadFile } from '@/lib/dom-utils';
 import { tablesApi } from '../api/tables-api';
 import { tablesUtils } from '../utils/utils';
 
-import { useTableState } from './ap-table-state-provider';
+import { useRefreshTableState, useTableState } from './ap-table-state-provider';
 import { ImportTableDialog } from './import-table-dialog';
 
 interface ApTableHeaderProps {
   onBack: () => void;
+  lockedBy: { userId: string; userDisplayName: string } | null;
+  takeOver: () => void;
 }
 
-export function ApTableHeader({ onBack }: ApTableHeaderProps) {
+export function ApTableHeader({
+  onBack,
+  lockedBy,
+  takeOver,
+}: ApTableHeaderProps) {
+  const { embedState } = useEmbedding();
   const [
     selectedRecords,
     setSelectedRecords,
@@ -70,11 +80,16 @@ export function ApTableHeader({ onBack }: ApTableHeaderProps) {
     state.deleteRecords,
   ]);
   const [isImportTableDialogOpen, setIsImportTableDialogOpen] = useState(false);
+  // refresh in place after an import; a full-page reload would break the
+  // embed SDK handshake inside an iframe
+  const refreshTableState = useRefreshTableState();
   const [isEditingTableName, setIsEditingTableName] = useState(false);
   const { project } = projectCollectionUtils.useCurrentProject();
+  const lockedByOtherUser = useTableState((state) => state.lockedByOtherUser);
   const userHasTableWritePermission = useAuthorization().checkAccess(
     Permission.WRITE_TABLE,
   );
+  const canEdit = userHasTableWritePermission && !lockedByOtherUser;
   const userHasPermissionToPushToGit = useAuthorization().checkAccess(
     Permission.WRITE_PROJECT_RELEASE,
   );
@@ -109,15 +124,13 @@ export function ApTableHeader({ onBack }: ApTableHeaderProps) {
               <EditableText
                 className="hover:cursor-text"
                 value={table?.name || t('Table Editor')}
-                readonly={!userHasTableWritePermission}
+                readonly={!canEdit}
                 onValueChange={(newName) => {
                   renameTable(newName);
                 }}
                 isEditing={isEditingTableName}
                 setIsEditing={setIsEditingTableName}
-                tooltipContent={
-                  userHasTableWritePermission ? t('Edit Table Name') : ''
-                }
+                tooltipContent={canEdit ? t('Edit Table Name') : ''}
               />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -133,7 +146,7 @@ export function ApTableHeader({ onBack }: ApTableHeaderProps) {
                     onSelect={() => {
                       setTimeout(() => setIsEditingTableName(true), 300);
                     }}
-                    disabled={!userHasTableWritePermission}
+                    disabled={!canEdit}
                   >
                     <Edit2 className="mr-2 h-4 w-4" />
                     {t('Rename')}
@@ -141,6 +154,7 @@ export function ApTableHeader({ onBack }: ApTableHeaderProps) {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onSelect={() => setIsImportTableDialogOpen(true)}
+                    disabled={!canEdit}
                   >
                     <Import className="mr-2 h-4 w-4" />
                     {t('Import')}
@@ -174,9 +188,7 @@ export function ApTableHeader({ onBack }: ApTableHeaderProps) {
                     <Download className="mr-2 h-4 w-4" />
                     {t('Download Data')}
                   </DropdownMenuItem>
-                  <PermissionNeededTooltip
-                    hasPermission={userHasTableWritePermission}
-                  >
+                  <PermissionNeededTooltip hasPermission={canEdit}>
                     <ConfirmationDeleteDialog
                       title={t('Delete Table')}
                       message={t(
@@ -190,7 +202,7 @@ export function ApTableHeader({ onBack }: ApTableHeaderProps) {
                       }}
                     >
                       <DropdownMenuItem
-                        disabled={!userHasTableWritePermission}
+                        disabled={!canEdit}
                         onSelect={(e) => e.preventDefault()}
                         onClick={(e) => e.stopPropagation()}
                         className="text-destructive focus:text-destructive"
@@ -217,8 +229,23 @@ export function ApTableHeader({ onBack }: ApTableHeaderProps) {
           <span className="text-sm">{t('Saving...')}</span>
         </div>
       )}
+      {lockedBy && (
+        <div className="flex items-center gap-1.5 border border-warning/50 rounded-md px-2.5 py-1 text-sm text-warning-700 dark:text-warning-300">
+          <Lock className="size-3.5 shrink-0" />
+          <span>
+            {t('{name} is editing', { name: lockedBy.userDisplayName })}
+          </span>
+          <span className="text-warning/40">|</span>
+          <button className="hover:underline font-medium" onClick={takeOver}>
+            {t('Take Over')}
+          </button>
+        </div>
+      )}
+      {!embedState.hideActiveUsers && (
+        <ActiveUsersWidget resourceId={table.id} />
+      )}
       {selectedRecords.size > 0 && (
-        <PermissionNeededTooltip hasPermission={userHasTableWritePermission}>
+        <PermissionNeededTooltip hasPermission={canEdit}>
           <ConfirmationDeleteDialog
             title={t('Delete Records')}
             message={t('The selected records will be permanently deleted.')}
@@ -235,7 +262,7 @@ export function ApTableHeader({ onBack }: ApTableHeaderProps) {
             <Button
               variant="destructive"
               className="flex gap-2 items-center"
-              disabled={!userHasTableWritePermission}
+              disabled={!canEdit}
             >
               <Trash2 className="size-4" />
               {t('Delete Records')}{' '}
@@ -268,7 +295,7 @@ export function ApTableHeader({ onBack }: ApTableHeaderProps) {
           setIsOpen={setIsImportTableDialogOpen}
           tableId={table.id}
           allowedFileTypes={['json', 'csv']}
-          onImportSuccess={() => window.location.reload()}
+          onImportSuccess={refreshTableState}
         />
       </div>
     </>

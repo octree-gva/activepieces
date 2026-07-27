@@ -1,6 +1,5 @@
-import { SecretManagerProviderId, SecretManagerFieldsSeparator, SecretManagerConnectionScope } from '@activepieces/shared'
-import { apAxios } from '../../../../src/app/helper/ap-axios'
-import { PlatformRole, PrincipalType } from '@activepieces/shared'
+import { safeHttp } from '@activepieces/server-utils'
+import { PlatformRole, PrincipalType, SecretManagerConnectionScope, SecretManagerFieldsSeparator, SecretManagerProviderId } from '@activepieces/shared'
 import { FastifyBaseLogger, FastifyInstance } from 'fastify'
 import { StatusCodes } from 'http-status-codes'
 import { MockInstance } from 'vitest'
@@ -28,7 +27,7 @@ beforeAll(async () => {
 }, 50000)
 
 beforeEach(() => {
-    axiosRequestSpy = vi.spyOn(apAxios, 'request')
+    axiosRequestSpy = vi.spyOn(safeHttp.retryingAxios, 'request')
     vaultMock = hashicorpMock(axiosRequestSpy)
 })
 

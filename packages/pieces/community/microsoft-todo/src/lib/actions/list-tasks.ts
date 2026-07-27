@@ -1,4 +1,5 @@
 import { Property, createAction, OAuth2PropertyValue } from '@activepieces/pieces-framework';
+import { getGraphBaseUrl } from '../common/microsoft-cloud';
 import { microsoftToDoAuth } from '../auth';
 import { getTaskListsDropdown } from '../common';
 import { Client, PageCollection } from '@microsoft/microsoft-graph-client';
@@ -9,6 +10,8 @@ export const listTasksAction = createAction({
 	name: 'list_tasks',
 	displayName: 'List Tasks',
 	description: 'Returns a list of all tasks in a specific list.',
+	audience: 'both',
+	aiMetadata: { description: 'List the tasks in a given Microsoft To Do task list, paging through all results. Optionally narrow by a title substring and/or a status filter (not started, in progress, completed, waiting on others, deferred); with no filters it returns every task in the list. Use to enumerate or browse a list\'s contents. Read-only and idempotent. Requires a task list id.', idempotent: true },
 	props: {
 		task_list_id: Property.Dropdown({
 			auth: microsoftToDoAuth,
@@ -51,10 +54,12 @@ export const listTasksAction = createAction({
 		const { auth, propsValue } = context;
 		const { task_list_id, status, search } = propsValue;
 
+		const cloud = (auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 		const client = Client.initWithMiddleware({
 			authProvider: {
 				getAccessToken: () => Promise.resolve(auth.access_token),
 			},
+			baseUrl: getGraphBaseUrl(cloud),
 		});
 
 		const result: TodoTask[] = [];

@@ -1,11 +1,9 @@
-import {
-  ProjectMemberWithUser,
-  ApFlagId,
-  assertNotNullOrUndefined,
-} from '@activepieces/shared';
+import { assertNotNullOrUndefined } from '@activepieces/core-utils';
+import { ProjectMemberWithUser, ApFlagId } from '@activepieces/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { flagsHooks } from '@/hooks/flags-hooks';
+import { platformHooks } from '@/hooks/platform-hooks';
 import { authenticationSession } from '@/lib/authentication-session';
 
 import { projectMembersApi } from '../api/project-members-api';
@@ -13,6 +11,7 @@ import { projectMembersApi } from '../api/project-members-api';
 export const projectMembersHooks = {
   useProjectMembers: () => {
     const { data } = flagsHooks.useFlag<boolean>(ApFlagId.SHOW_PROJECT_MEMBERS);
+    const { platform } = platformHooks.useCurrentPlatform();
     const query = useQuery<ProjectMemberWithUser[]>({
       queryKey: ['project-members', authenticationSession.getProjectId()],
       queryFn: async () => {
@@ -26,7 +25,7 @@ export const projectMembersHooks = {
         });
         return res.data;
       },
-      enabled: !!data,
+      enabled: !!data && platform.plan.projectRolesEnabled,
     });
     return {
       projectMembers: query.data,
@@ -41,13 +40,15 @@ export const projectMembersMutations = {
     onSuccess,
     onError,
   }: {
-    onSuccess: () => void;
+    onSuccess: (variables: { memberId: string; role: string }) => void;
     onError: () => void;
   }) => {
     return useMutation({
       mutationFn: ({ memberId, role }: { memberId: string; role: string }) =>
         projectMembersApi.update(memberId, { role }),
-      onSuccess,
+      onSuccess: (_data, variables) => {
+        onSuccess(variables);
+      },
       onError,
     });
   },

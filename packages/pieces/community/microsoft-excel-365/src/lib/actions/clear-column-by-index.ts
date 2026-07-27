@@ -1,4 +1,4 @@
-import { createAction, Property } from '@activepieces/pieces-framework';
+import { createAction, OAuth2PropertyValue, Property } from '@activepieces/pieces-framework';
 import { excelAuth } from '../auth';
 import { commonProps } from '../common/props';
 import { getDrivePath, createMSGraphClient } from '../common/helpers';
@@ -9,6 +9,8 @@ export const clearColumnAction = createAction({
   name: 'clear_column',
   displayName: 'Clear Column by Index',
   description: 'Clear contents/formatting of a column by its index.',
+  audience: 'both',
+  aiMetadata: { description: 'Clear an entire column in a worksheet identified by its 1-based index (1 = A, 2 = B). Choose what to remove via Clear Type: contents, formats, or both. Clears in place without shifting other cells; idempotent — re-running on an already-cleared column has no further effect. To clear a row instead use Clear Row by ID, or a specific range with Clear Worksheet.', idempotent: true },
   props: {
     storageSource: commonProps.storageSource,
     siteId: commonProps.siteId,
@@ -48,6 +50,7 @@ export const clearColumnAction = createAction({
     const { storageSource, siteId, documentId, workbookId, worksheetId, column_index, applyTo } =
       context.propsValue;
     const { access_token } = context.auth;
+    const cloud = (context.auth as OAuth2PropertyValue).props?.['cloud'] as string | undefined;
 
     if (storageSource === 'sharepoint' && (!siteId || !documentId)) {
       throw new Error('please select SharePoint site and document library.');
@@ -68,7 +71,7 @@ export const clearColumnAction = createAction({
     // Construct the range address for the entire column, e.g., 'C:C'
     const columnAddress = `${columnLetter}:${columnLetter}`;
 
-    const client = createMSGraphClient(access_token);
+    const client = createMSGraphClient(access_token, cloud);
     await client
       .api(`${drivePath}/items/${workbookId}/workbook/worksheets/${worksheetId}/range(address='${columnAddress}')/clear`)
       .post({ applyTo: applyTo });

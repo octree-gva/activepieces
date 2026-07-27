@@ -8,6 +8,7 @@ type EmbeddingState = {
   hideFlowsPageNavbar: boolean;
   disableNavigationInBuilder: boolean;
   hideFolders: boolean;
+  hideTables: boolean;
   hideFlowNameInBuilder: boolean;
   hideExportAndImportFlow: boolean;
   sdkVersion?: string;
@@ -20,6 +21,8 @@ type EmbeddingState = {
   homeButtonIcon: 'back' | 'logo';
   hideDuplicateFlow: boolean;
   hidePageHeader: boolean;
+  hideActiveUsers: boolean;
+  hideGlobalSearch: boolean;
 };
 
 const defaultState: EmbeddingState = {
@@ -28,6 +31,7 @@ const defaultState: EmbeddingState = {
   hideFlowsPageNavbar: false,
   disableNavigationInBuilder: false,
   hideFolders: false,
+  hideTables: false,
   hideFlowNameInBuilder: false,
   hideExportAndImportFlow: false,
   useDarkBackground: window.opener !== null,
@@ -36,6 +40,8 @@ const defaultState: EmbeddingState = {
   homeButtonIcon: 'logo',
   hideDuplicateFlow: false,
   hidePageHeader: false,
+  hideActiveUsers: false,
+  hideGlobalSearch: false,
 };
 
 const EmbeddingContext = createContext<{

@@ -1,4 +1,4 @@
-import { isEmpty, isNil } from '@activepieces/shared'
+import { isEmpty, isNil } from '@activepieces/core-utils'
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { exceptionHandler } from '../../helper/exception-handler'
 import { SystemJobName } from '../../helper/system-jobs/common'
@@ -43,7 +43,7 @@ export const licenseKeysModule: FastifyPluginAsyncZod = async (app) => {
         },
         schedule: {
             type: 'repeated',
-            cron: '*/59 23 * * *',
+            cron: '59 23 * * *',
         },
     })
     await app.register(licenseKeysController, { prefix: '/v1/license-keys' })

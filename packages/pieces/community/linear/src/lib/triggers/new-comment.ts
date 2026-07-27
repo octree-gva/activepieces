@@ -8,6 +8,9 @@ export const linearNewComment = createTrigger({
   name: 'new_comment',
   displayName: 'New Comment',
   description: 'Triggers when a new comment is created on a Linear issue',
+  aiMetadata: {
+    description: 'Fires when a new comment is posted on a Linear issue, optionally filtered to specific teams or comment authors. Represents the created comment and its parent issue.',
+  },
   props: {
     team_ids: props.team_ids(false),
     author_ids: props.author_ids(false),
@@ -39,19 +42,13 @@ export const linearNewComment = createTrigger({
   type: TriggerStrategy.WEBHOOK,
   async onEnable(context) {
     const client = makeClient(context.auth);
-    const teamIds = context.propsValue['team_ids'] as string[] | undefined;
 
-    const baseConfig = {
+    const webhook = await client.createWebhook({
       label: 'ActivePieces New Comment',
       url: context.webhookUrl,
       resourceTypes: ['Comment'],
-    };
-
-    const webhook = await client.createWebhook(
-      teamIds && teamIds.length === 1
-        ? { ...baseConfig, teamId: teamIds[0] }
-        : { ...baseConfig, allPublicTeams: true },
-    );
+      allPublicTeams: true,
+    });
 
     if (webhook.success && webhook.webhook) {
       await context.store?.put<WebhookInformation>('_new_comment_trigger', {

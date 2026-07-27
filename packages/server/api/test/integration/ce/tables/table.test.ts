@@ -1,16 +1,17 @@
-import { setupTestEnvironment, teardownTestEnvironment } from '../../../helpers/test-setup'
-import { apId, FieldType } from '@activepieces/shared'
+import { apId } from '@activepieces/core-utils'
+import { FieldType } from '@activepieces/shared'
 import { FastifyInstance } from 'fastify'
 import { StatusCodes } from 'http-status-codes'
 import { db } from '../../../helpers/db'
+import { describeWithAuth } from '../../../helpers/describe-with-auth'
 import {
+    createMockCell,
     createMockField,
     createMockRecord,
-    createMockCell,
     createMockTable,
 } from '../../../helpers/mocks'
 import { createTestContext, TestContext } from '../../../helpers/test-context'
-import { describeWithAuth } from '../../../helpers/describe-with-auth'
+import { setupTestEnvironment, teardownTestEnvironment } from '../../../helpers/test-setup'
 
 let app: FastifyInstance | null = null
 
@@ -67,6 +68,31 @@ describe('Table API', () => {
             expect(fields.map((f: { name: string }) => f.name).sort()).toEqual(['Age', 'Name'])
         })
 
+        it('should preserve field order from the request', async () => {
+            const ctx = await setup()
+            const fieldNames = Array.from({ length: 10 }, (_, i) => `Field ${String.fromCharCode(65 + i)}`)
+
+            const response = await ctx.post('/v1/tables', {
+                projectId: ctx.project.id,
+                name: 'Ordered Table',
+                fields: fieldNames.map((name) => ({
+                    name,
+                    type: FieldType.TEXT,
+                    data: null,
+                    externalId: apId(),
+                })),
+            })
+
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+            const body = response?.json()
+
+            const fieldsResponse = await ctx.get('/v1/fields', {
+                tableId: body.id,
+            })
+            const fields = fieldsResponse?.json()
+            expect(fields.map((f: { name: string }) => f.name)).toEqual(fieldNames)
+        })
+
         it('should create a table with externalId', async () => {
             const ctx = await setup()
             const externalId = apId()
@@ -77,6 +103,50 @@ describe('Table API', () => {
                 externalId,
             })
 
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+            const body = response?.json()
+            expect(body.externalId).toBe(externalId)
+        })
+
+        const MALICIOUS_EXTERNAL_IDS: Array<[string, string]> = [
+            ['..', 'parent directory reference'],
+            ['.', 'current directory reference'],
+            ['', 'empty string'],
+            ['../test', 'relative traversal'],
+            ['../../etc/passwd', 'deep relative traversal'],
+            ['foo/bar', 'forward slash'],
+            ['foo\\bar', 'backslash'],
+            ['with\0null', 'null byte'],
+            ['a b', 'space'],
+            ['../../../../tmp/pwned', 'many-dot traversal'],
+            ['a'.repeat(200), 'over length limit'],
+        ]
+
+        it.each(MALICIOUS_EXTERNAL_IDS)('should reject externalId %j (%s)', async (externalId) => {
+            const ctx = await setup()
+            const response = await ctx.post('/v1/tables', {
+                projectId: ctx.project.id,
+                name: 'Malicious Table',
+                externalId,
+            })
+            expect(response?.statusCode).toBe(StatusCodes.BAD_REQUEST)
+        })
+
+        const SAFE_EXTERNAL_IDS = [
+            'safe-external-id',
+            'table_1',
+            'a',
+            'dot.inside.name',
+            'UPPER-lower.123',
+        ]
+
+        it.each(SAFE_EXTERNAL_IDS)('should accept externalId %j', async (externalId) => {
+            const ctx = await setup()
+            const response = await ctx.post('/v1/tables', {
+                projectId: ctx.project.id,
+                name: 'Safe Table',
+                externalId,
+            })
             expect(response?.statusCode).toBe(StatusCodes.OK)
             const body = response?.json()
             expect(body.externalId).toBe(externalId)

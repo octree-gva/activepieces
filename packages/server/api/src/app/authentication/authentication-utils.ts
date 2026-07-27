@@ -1,4 +1,5 @@
-import { ActivepiecesError, ApEdition, ApEnvironment, assertNotNullOrUndefined, AuthenticationResponse, EndpointScope, ErrorCode, isNil, PrincipalType, Project, ProjectType, TelemetryEventName, User, UserIdentity, UserIdentityProvider, UserStatus } from '@activepieces/shared'
+import { ActivepiecesError, assertNotNullOrUndefined, ErrorCode, isNil } from '@activepieces/core-utils'
+import { ApEdition, ApEnvironment, AuthenticationResponse, EndpointScope, pickTelemetryPii, PlatformRole, PrincipalType, Project, ProjectType, SsoDomainVerificationStatus, TelemetryEventName, User, UserIdentity, UserIdentityProvider, UserStatus } from '@activepieces/shared'
 import { FastifyBaseLogger, FastifyRequest } from 'fastify'
 import { system } from '../helper/system/system'
 import { AppSystemProp } from '../helper/system/system-props'
@@ -18,7 +19,7 @@ export const authenticationUtils = (log: FastifyBaseLogger) => ({
         const isInvited = await userInvitationsService(log).hasAnyAcceptedInvitations({
             platformId,
             email,
-            
+
         })
         if (!isInvited) {
             throw new ActivepiecesError({
@@ -86,6 +87,39 @@ export const authenticationUtils = (log: FastifyBaseLogger) => ({
         }
     },
 
+    async getOnboardingResponse({ identityId }: GetOnboardingResponseParams): Promise<AuthenticationResponse> {
+        const identity = await userIdentityService(log).getOneOrFail({ id: identityId })
+        if (!identity.verified) {
+            throw new ActivepiecesError({
+                code: ErrorCode.EMAIL_IS_NOT_VERIFIED,
+                params: {
+                    email: identity.email,
+                },
+            })
+        }
+
+        const token = await accessTokenManager(log).generateToken({
+            id: identity.id,
+            type: PrincipalType.ONBOARDING,
+            tokenVersion: identity.tokenVersion,
+        })
+        return {
+            id: identity.id,
+            platformId: null,
+            platformRole: PlatformRole.ADMIN,
+            status: UserStatus.ACTIVE,
+            externalId: null,
+            firstName: identity.firstName,
+            lastName: identity.lastName,
+            email: identity.email,
+            trackEvents: identity.trackEvents,
+            newsLetter: identity.newsLetter,
+            verified: identity.verified,
+            token,
+            projectId: null,
+        }
+    },
+
     async assertDomainIsAllowed({
         email,
         platformId,
@@ -104,6 +138,32 @@ export const authenticationUtils = (log: FastifyBaseLogger) => ({
             platform.allowedAuthDomains.includes(emailDomain)
 
         if (!isAllowedDomaiin) {
+            throw new ActivepiecesError({
+                code: ErrorCode.DOMAIN_NOT_ALLOWED,
+                params: {
+                    domain: emailDomain,
+                },
+            })
+        }
+    },
+
+    async assertEmailMatchesSsoDomain({
+        email,
+        platformId,
+    }: AssertEmailMatchesSsoDomainParams): Promise<void> {
+        const edition = system.getEdition()
+        if (edition !== ApEdition.CLOUD) {
+            return
+        }
+        const platform = await platformService(log).getOneWithPlanOrThrow(platformId)
+        if (!platform.plan.ssoEnabled) {
+            return
+        }
+        if (isNil(platform.ssoDomain) || platform.ssoDomainVerification?.status !== SsoDomainVerificationStatus.VERIFIED) {
+            return
+        }
+        const emailDomain = email.split('@')[1]?.toLowerCase() ?? ''
+        if (emailDomain !== platform.ssoDomain) {
             throw new ActivepiecesError({
                 code: ErrorCode.DOMAIN_NOT_ALLOWED,
                 params: {
@@ -139,34 +199,32 @@ export const authenticationUtils = (log: FastifyBaseLogger) => ({
     async sendTelemetry({
         user,
         identity,
-        project,
+        projectId,
     }: SendTelemetryParams): Promise<void> {
         try {
-            await telemetry(log).identify(user, identity, project.id)
-
-            await telemetry(log).trackProject(project.id, {
+            await telemetry(log).identify(identity, user)
+            await telemetry(log).trackProject(projectId, {
                 name: TelemetryEventName.SIGNED_UP,
                 payload: {
-                    userId: identity.id,
-                    email: identity.email,
-                    firstName: identity.firstName,
-                    lastName: identity.lastName,
-                    projectId: project.id,
+                    userId: user.id,
+                    projectId,
+                    ...pickTelemetryPii({
+                        edition: system.getEdition(),
+                        email: identity.email,
+                        firstName: identity.firstName,
+                        lastName: identity.lastName,
+                    }),
                 },
             })
         }
         catch (e) {
-            log.warn({ err: e }, '[authenticationUtils#sendTelemetry] Failed to send telemetry')
+            log.warn({ error: e }, '[authenticationUtils#sendTelemetry] Failed to send telemetry')
         }
     },
 
-    async saveNewsLetterSubscriber(user: User, platformId: string, identity: UserIdentity): Promise<void> {
-        const platform = await platformService(log).getOneWithPlanOrThrow(platformId)
+    async saveNewsLetterSubscriber(identity: UserIdentity): Promise<void> {
         const environment = system.get(AppSystemProp.ENVIRONMENT)
         if (environment !== ApEnvironment.PRODUCTION) {
-            return
-        }
-        if (platform.plan.embeddingEnabled) {
             return
         }
         try {
@@ -183,7 +241,7 @@ export const authenticationUtils = (log: FastifyBaseLogger) => ({
             await response.json()
         }
         catch (error) {
-            log.warn({ err: error }, '[authenticationUtils#saveNewsLetterSubscriber] Failed to save newsletter subscriber')
+            log.warn({ error }, '[authenticationUtils#saveNewsLetterSubscriber] Failed to save newsletter subscriber')
         }
     },
     async extractUserIdFromRequest(request: FastifyRequest): Promise<string> {
@@ -205,7 +263,7 @@ function findPersonalProject(projects: Project[], userId: string): Project | und
 type SendTelemetryParams = {
     identity: UserIdentity
     user: User
-    project: Project
+    projectId: string
 }
 
 type AssertDomainIsAllowedParams = {
@@ -218,9 +276,18 @@ type AssertEmailAuthIsEnabledParams = {
     provider: UserIdentityProvider
 }
 
+type AssertEmailMatchesSsoDomainParams = {
+    email: string
+    platformId: string
+}
+
 type AssertUserIsInvitedToPlatformOrProjectParams = {
     email: string
     platformId: string
+}
+
+type GetOnboardingResponseParams = {
+    identityId: string
 }
 
 type GetProjectAndTokenParams = {

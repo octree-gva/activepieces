@@ -1,9 +1,10 @@
 import path from 'path'
+import { isNil, STEP_NAME_REGEX } from '@activepieces/core-utils'
 import { LATEST_CONTEXT_VERSION } from '@activepieces/pieces-framework'
-import { CodeAction, EngineGenericError, FlowActionType, FlowRunStatus, GenericStepOutput, isNil, StepOutputStatus } from '@activepieces/shared'
+import { CodeAction, EngineGenericError, ExecutionError, ExecutionErrorType, FlowActionType, FlowRunStatus, GenericStepOutput, StepOutputStatus } from '@activepieces/shared'
 import { initCodeSandbox } from '../core/code/code-sandbox'
 import { continueIfFailureHandler, runWithExponentialBackoff } from '../helper/error-handling'
-import { progressService } from '../services/progress.service'
+import { flowRunProgressReporter } from '../helper/flow-run-progress-reporter'
 import { utils } from '../utils'
 import { ActionHandler, BaseExecutor } from './base-executor'
 
@@ -22,29 +23,36 @@ export const codeExecutor: BaseExecutor<CodeAction> = {
 }
 
 const executeAction: ActionHandler<CodeAction> = async ({ action, executionState, constants }) => {
-    const stepStartTime = performance.now() 
-    const { censoredInput, resolvedInput } = await constants.getPropsResolver(LATEST_CONTEXT_VERSION).resolve<Record<string, unknown>>({
-        unresolvedInput: action.settings.input,
-        executionState,
-    })
-
+    const stepStartTime = performance.now()
     const stepOutput = GenericStepOutput.create({
-        input: censoredInput,
+        input: {},
         type: FlowActionType.CODE,
         status: StepOutputStatus.RUNNING,
     })
-    
+
     const { data: executionStateResult, error: executionStateError } = await utils.tryCatchAndThrowOnEngineError((async () => {
-        await progressService.sendUpdate({
+        const { censoredInput, resolvedInput } = await constants.getPropsResolver(LATEST_CONTEXT_VERSION).resolve<Record<string, unknown>>({
+            unresolvedInput: action.settings.input,
+            executionState,
+        })
+        stepOutput.input = censoredInput
+
+        await flowRunProgressReporter.sendUpdate({
             engineConstants: constants,
-            flowExecutorContext: executionState.upsertStep(action.name, stepOutput),
+            flowExecutorContext: await executionState.upsertStep(action.name, stepOutput),
             stepNameToUpdate: action.name,
         })
-    
+
         if (isNil(constants.runEnvironment)) {
             throw new EngineGenericError('RunEnvironmentNotSetError', 'Run environment is not set')
         }
 
+        if (!STEP_NAME_REGEX.test(action.name)) {
+            // A malformed step name is bad user input, not an engine failure: fail the step
+            // (USER) instead of raising an ENGINE error that would page oncall. Ingress + the
+            // code-cache sink guard already block this upstream; this is the runtime backstop.
+            throw new ExecutionError('InvalidStepName', `Invalid code step name: "${action.name}"`, ExecutionErrorType.USER)
+        }
         const artifactPath = path.resolve(`${constants.baseCodeDirectory}/${constants.flowVersionId}/${action.name}/index.js`)
         const codeSandbox = await initCodeSandbox()
 
@@ -52,8 +60,9 @@ const executeAction: ActionHandler<CodeAction> = async ({ action, executionState
             codeFilePath: artifactPath,
             inputs: resolvedInput,
         })
-    
-        return executionState.upsertStep(action.name, stepOutput.setOutput(output).setStatus(StepOutputStatus.SUCCEEDED).setDuration(performance.now() - stepStartTime)).incrementStepsExecuted()
+
+        const succeeded = stepOutput.setOutput(output).setStatus(StepOutputStatus.SUCCEEDED).setDuration(performance.now() - stepStartTime)
+        return (await executionState.upsertStep(action.name, succeeded)).incrementStepsExecuted()
     }))
 
     if (executionStateError) {
@@ -62,8 +71,8 @@ const executeAction: ActionHandler<CodeAction> = async ({ action, executionState
             .setErrorMessage(utils.formatError(executionStateError))
             .setDuration(performance.now() - stepStartTime)
 
-        return executionState
-            .upsertStep(action.name, failedStepOutput)
+        return (await executionState
+            .upsertStep(action.name, failedStepOutput))
             .setVerdict({ status: FlowRunStatus.FAILED, failedStep: {
                 name: action.name,
                 displayName: action.displayName,

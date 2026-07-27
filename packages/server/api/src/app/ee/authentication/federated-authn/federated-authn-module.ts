@@ -1,8 +1,5 @@
-import {
-    ApplicationEventName,
-
-    ClaimTokenRequest,
-    ThirdPartyAuthnProviderEnum } from '@activepieces/shared'
+import { isNil } from '@activepieces/core-utils'
+import { ApplicationEventName, ClaimTokenRequest, ThirdPartyAuthnProviderEnum } from '@activepieces/shared'
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 import { securityAccess } from '../../../core/security/authorization/fastify-security'
@@ -33,17 +30,19 @@ const federatedAuthnController: FastifyPluginAsyncZod = async (app) => {
             platformId: platformId ?? undefined,
             code: req.body.code,
         })
-        applicationEvents(req.log).sendUserEvent({
-            platformId: response.platformId!,
-            userId: response.id,
-            projectId: response.projectId,
-            ip: networkUtils.extractClientRealIp(req, system.get(AppSystemProp.CLIENT_REAL_IP_HEADER)),
-        }, {
-            action: ApplicationEventName.USER_SIGNED_UP,
-            data: {
-                source: 'sso',
-            },
-        })
+        if (!isNil(response.platformId)) {
+            applicationEvents(req.log).sendUserEvent({
+                platformId: response.platformId,
+                userId: response.id,
+                projectId: response.projectId ?? undefined,
+                ip: networkUtils.extractClientRealIp(req, system.get(AppSystemProp.CLIENT_REAL_IP_HEADER)),
+            }, {
+                action: ApplicationEventName.USER_SIGNED_UP,
+                data: {
+                    source: 'sso',
+                },
+            })
+        }
         return response
     })
 }

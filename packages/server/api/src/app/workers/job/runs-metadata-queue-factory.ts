@@ -1,7 +1,7 @@
+import { apId, ApId } from '@activepieces/core-utils'
 import { apDayjsDuration } from '@activepieces/server-utils'
-import { apId, ApId, FlowRunStatus, PauseMetadata, RunEnvironment } from '@activepieces/shared'
+import { FailedStep, FlowRunStatus, RunEnvironment } from '@activepieces/shared'
 import { Queue } from 'bullmq'
-import { BullMQOtel } from 'bullmq-otel'
 import Redis from 'ioredis'
 import { DistributedStore } from '../../database/redis/distributed-store-factory'
 import { QueueName } from './index'
@@ -18,7 +18,6 @@ export const runsMetadataQueueFactory = ({
         async init(config: RunsMetadataQueueConfig): Promise<void> {
             queueInstance = new Queue<RunsMetadataJobData>(QueueName.RUNS_METADATA, {
                 connection: await createRedisConnection(),
-                telemetry: config.isOtelEnabled ? new BullMQOtel(QueueName.RUNS_METADATA) : undefined,
                 defaultJobOptions: {
                     attempts: 5,
                     backoff: {
@@ -69,9 +68,10 @@ export const runsMetadataQueueFactory = ({
 
 const RUNS_METADATA_UPSERT_KEYS: (keyof RunsMetadataUpsertData)[] = [
     'id', 'projectId', 'created', 'flowId', 'flowVersionId', 'environment',
-    'triggeredBy', 'startTime', 'finishTime', 'status', 'tags', 'pauseMetadata',
+    'triggeredBy', 'startTime', 'finishTime', 'status', 'tags',
     'failedStep', 'stepNameToTest', 'parentRunId', 'failParentOnFailure',
     'logsFileId', 'updated', 'stepsCount', 'requestId',
+    'provisionMs', 'bootMs', 'runMs',
 ]
 
 function stripToRunsMetadataUpsertData(params: RunsMetadataUpsertData): RunsMetadataUpsertData {
@@ -95,7 +95,6 @@ export type RunsMetadataJobData = {
 }
 
 export type RunsMetadataQueueConfig = {
-    isOtelEnabled: boolean
     redisFailedJobRetentionDays: number
     redisFailedJobRetentionMaxCount: number
 }
@@ -108,12 +107,11 @@ export type RunsMetadataUpsertData = {
     flowVersionId?: string
     environment?: RunEnvironment
     triggeredBy?: string
-    startTime?: string
-    finishTime?: string
+    startTime?: string | null
+    finishTime?: string | null
     status?: FlowRunStatus
     tags?: string[]
-    pauseMetadata?: PauseMetadata
-    failedStep?: { name: string, displayName: string }
+    failedStep?: FailedStep
     stepNameToTest?: string
     parentRunId?: string
     failParentOnFailure?: boolean
@@ -121,4 +119,8 @@ export type RunsMetadataUpsertData = {
     updated?: string
     stepsCount?: number
     requestId?: string
+    // Transient worker-measured phase durations, merged then folded into the `timeline` column. Not persisted directly.
+    provisionMs?: number
+    bootMs?: number
+    runMs?: number
 }

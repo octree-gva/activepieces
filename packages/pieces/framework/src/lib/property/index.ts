@@ -1,11 +1,12 @@
 import { InputProperty } from './input';
 import { PieceAuthProperty } from './authentication';
-import { z } from 'zod';
+import * as z from "zod/mini";
 import { PropertyType } from './input/property-type';
 import { DropdownState } from './input/dropdown/common';
 
 // EXPORTED
 export { ApFile } from './input/file-property';
+export type { ApStreamingFile } from './input/file-property';
 export { DropdownProperty, MultiSelectDropdownProperty } from './input/dropdown/dropdown-prop';
 export { DynamicProperties, DynamicProp } from './input/dynamic-prop';
 export { PropertyType } from './input/property-type';
@@ -30,6 +31,7 @@ export { BasicAuthPropertyValue } from './authentication/basic-auth-prop';
 export { StaticMultiSelectDropdownProperty } from './input/dropdown/static-dropdown';
 export { StaticDropdownProperty } from './input/dropdown/static-dropdown';
 export * from './authentication/custom-auth-prop';
+export * from './authentication/oidc-prop';
 export { OAuth2Property } from './authentication/oauth2-prop';
 export { FileProperty } from './input/file-property';
 export { BasicAuthProperty } from './authentication/basic-auth-prop';

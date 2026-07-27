@@ -1,15 +1,18 @@
 import {
+  ApFlagId,
   ColorName,
   PlatformRole,
   PROJECT_COLOR_PALETTE,
   ProjectIcon,
   ProjectType,
+  TeamProjectsLimit,
 } from '@activepieces/shared';
 import { t } from 'i18next';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { UseFormReturn } from 'react-hook-form';
 
+import { ClearableInput } from '@/components/custom/clearable-input';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -26,6 +29,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { projectCollectionUtils } from '@/features/projects';
+import { flagsHooks } from '@/hooks/flags-hooks';
 import { platformHooks } from '@/hooks/platform-hooks';
 import { userHooks } from '@/hooks/user-hooks';
 import { cn } from '@/lib/utils';
@@ -34,6 +38,8 @@ export type FormValues = {
   projectName: string;
   icon: ProjectIcon;
   externalId?: string;
+  maxConcurrentJobs?: number | null;
+  activeFlowsLimit?: number | null;
 };
 
 type GeneralSettingsProps = {
@@ -45,6 +51,12 @@ export const GeneralSettings = ({ form }: GeneralSettingsProps) => {
   const platformRole = userHooks.getCurrentUserPlatformRole();
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const { project } = projectCollectionUtils.useCurrentProject();
+  const { data: isRateLimiterEnabled } = flagsHooks.useFlag<boolean>(
+    ApFlagId.PROJECT_RATE_LIMITER_ENABLED,
+  );
+  const { data: defaultConcurrentJobsLimit } = flagsHooks.useFlag<number>(
+    ApFlagId.DEFAULT_CONCURRENT_JOBS_LIMIT,
+  );
   const showGeneralSettings = project.type === ProjectType.TEAM;
   const showExternalIdSettings =
     platform.plan.embeddingEnabled && platformRole === PlatformRole.ADMIN;
@@ -160,6 +172,90 @@ export const GeneralSettings = ({ form }: GeneralSettingsProps) => {
             )}
           />
         )}
+        {!platform.plan.workerGroupsEnabled &&
+          platformRole === PlatformRole.ADMIN && (
+            <FormField
+              name="maxConcurrentJobs"
+              render={({ field }) => (
+                <FormItem>
+                  <Label
+                    htmlFor="maxConcurrentJobs"
+                    className="text-sm font-medium"
+                  >
+                    {t('Max Concurrent Jobs')}
+                  </Label>
+                  <ClearableInput
+                    {...field}
+                    id="maxConcurrentJobs"
+                    type="number"
+                    min={1}
+                    placeholder={
+                      defaultConcurrentJobsLimit
+                        ? t('Default ({value})', {
+                            value: defaultConcurrentJobsLimit,
+                          })
+                        : t('Default')
+                    }
+                    value={field.value ?? ''}
+                    onChange={(e) =>
+                      field.onChange(
+                        e.target.value ? Number(e.target.value) : null,
+                      )
+                    }
+                    onClear={() => field.onChange(null)}
+                    disabled={form.formState.disabled || !isRateLimiterEnabled}
+                  />
+                  <FormDescription className="text-xs text-muted-foreground">
+                    {isRateLimiterEnabled === false
+                      ? t(
+                          'The rate limiting feature is disabled. Enable the PROJECT_RATE_LIMITER_ENABLED environment variable to use this feature.',
+                        )
+                      : t(
+                          'Maximum number of flows that can run at the same time for this project',
+                        )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+        {platform.plan.teamProjectsLimit !== TeamProjectsLimit.NONE &&
+          platformRole === PlatformRole.ADMIN && (
+            <FormField
+              name="activeFlowsLimit"
+              render={({ field }) => (
+                <FormItem>
+                  <Label
+                    htmlFor="activeFlowsLimit"
+                    className="text-sm font-medium"
+                  >
+                    {t('Active Flows Limit')}
+                  </Label>
+                  <ClearableInput
+                    {...field}
+                    id="activeFlowsLimit"
+                    type="number"
+                    min={1}
+                    placeholder={t('Unlimited')}
+                    value={field.value ?? ''}
+                    onChange={(e) =>
+                      field.onChange(
+                        e.target.value ? Number(e.target.value) : null,
+                      )
+                    }
+                    onClear={() => field.onChange(null)}
+                    disabled={form.formState.disabled}
+                  />
+                  <FormDescription className="text-xs text-muted-foreground">
+                    {t(
+                      'Maximum number of enabled flows in this project. Leave empty for no limit.',
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
       </div>
     </Form>
   );

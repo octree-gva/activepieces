@@ -1,4 +1,13 @@
-import { piecePropertiesUtils } from '@activepieces/pieces-framework';
+import {
+  deepMergeAndCast,
+  isNil,
+  isManualPieceTrigger,
+} from '@activepieces/core-utils';
+import {
+  PieceAuthProperty,
+  PiecePropertyMap,
+  piecePropertiesUtils,
+} from '@activepieces/pieces-framework';
 import {
   FlowAction,
   FlowActionType,
@@ -7,10 +16,8 @@ import {
   PieceAction,
   PieceTrigger,
   FlowTrigger,
-  deepMergeAndCast,
   BranchExecutionType,
   RouterExecutionType,
-  isNil,
   flowStructureUtil,
   StepSettings,
   RouterActionSettingsWithValidation,
@@ -19,7 +26,7 @@ import {
   DEFAULT_SAMPLE_DATA_SETTINGS,
   FlowVersion,
   FlowOperationType,
-  isManualPieceTrigger,
+  AUTHENTICATION_PROPERTY_NAME,
 } from '@activepieces/shared';
 import { useRef } from 'react';
 
@@ -52,6 +59,24 @@ const isPieceActionOrTrigger = (
   );
 };
 
+const isPieceStepInputValid = ({
+  props,
+  auth,
+  input,
+  requireAuth,
+}: {
+  props: PiecePropertyMap;
+  auth: PieceAuthProperty | PieceAuthProperty[] | undefined;
+  input: Record<string, unknown>;
+  requireAuth: boolean;
+}): boolean => {
+  const schema = piecePropertiesUtils.buildSchema(props, auth);
+  const hasAuth = !isNil(auth);
+  const authValid =
+    !requireAuth || !hasAuth || !isNil(input[AUTHENTICATION_PROPERTY_NAME]);
+  return schema.safeParse(input).success && authValid;
+};
+
 const isStepInitiallyValid = (
   pieceSelectorItem: PieceSelectorItem,
   overrideDefaultSettings?: StepSettings,
@@ -66,14 +91,12 @@ const isStepInitiallyValid = (
           ? overrideDefaultSettings.input
           : undefined;
       const input = overridingInput ?? getInitalStepInput(pieceSelectorItem);
-      const schema = piecePropertiesUtils.buildSchema(
-        pieceSelectorItem.actionOrTrigger.props,
-        pieceSelectorItem.pieceMetadata.auth,
-      );
-      const isValid = schema.safeParse(input).success;
-      const needsAuth = pieceSelectorItem.actionOrTrigger.requireAuth;
-      const hasAuth = !isNil(pieceSelectorItem.pieceMetadata.auth);
-      return isValid && (!needsAuth || !hasAuth);
+      return isPieceStepInputValid({
+        props: pieceSelectorItem.actionOrTrigger.props,
+        auth: pieceSelectorItem.pieceMetadata.auth,
+        input,
+        requireAuth: pieceSelectorItem.actionOrTrigger.requireAuth,
+      });
     }
     case FlowActionType.LOOP_ON_ITEMS: {
       if (
@@ -311,7 +334,7 @@ const MAX_PIECE_SELECTOR_LIST_HEIGHT = 300 as const;
 const MIN_PIECE_SELECTOR_LIST_HEIGHT = 100 as const;
 const SEARCH_INPUT_DIV_HEIGHT = 113 as const;
 const PIECE_ITEM_HEIGHT = 48 as const;
-const ACTION_OR_TRIGGER_ITEM_HEIGHT = 41 as const;
+const ACTION_OR_TRIGGER_ITEM_HEIGHT = 54 as const;
 const CATEGORY_ITEM_HEIGHT = 28 as const;
 export const PIECE_SELECTOR_ELEMENTS_HEIGHTS = {
   MAX_PIECE_SELECTOR_LIST_HEIGHT,
@@ -349,6 +372,7 @@ const getStepNameFromOperationType = (
 export const pieceSelectorUtils = {
   getDefaultStepValues,
   useAdjustPieceListHeightToAvailableSpace,
+  isPieceStepInputValid,
   isMcpToolTrigger,
   isChatTrigger,
   removeHiddenActions,

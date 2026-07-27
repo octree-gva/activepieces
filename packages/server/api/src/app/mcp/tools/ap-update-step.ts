@@ -1,20 +1,11 @@
-import { PropertyType } from '@activepieces/pieces-framework'
-import {
-    FlowActionType,
-    FlowOperationRequest,
-    FlowOperationType,
-    flowStructureUtil,
-    isNil,
-    McpServer,
-    McpToolDefinition,
-    UpdateActionRequest,
-} from '@activepieces/shared'
+import { isNil, Permission } from '@activepieces/core-utils'
+import { FlowActionType, FlowOperationRequest, FlowOperationType, flowStructureUtil, McpToolDefinition, PieceActionSettings, ProjectScopedMcpServer, UpdateActionRequest } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
 import { flowService } from '../../flows/flow/flow.service'
 import { pieceMetadataService } from '../../pieces/metadata/piece-metadata-service'
 import { projectService } from '../../project/project-service'
-import { mcpToolError } from './mcp-utils'
+import { mcpUtils } from './mcp-utils'
 
 const updateStepInput = z.object({
     flowId: z.string(),
@@ -25,25 +16,34 @@ const updateStepInput = z.object({
     actionName: z.string().optional(),
     loopItems: z.string().optional(),
     skip: z.boolean().optional(),
+    sourceCode: z.string().optional(),
+    packageJson: z.string().optional(),
+    continueOnFailure: z.boolean().optional(),
+    retryOnFailure: z.boolean().optional(),
 })
 
-export const apUpdateStepTool = (mcp: McpServer, log: FastifyBaseLogger): McpToolDefinition => {
+export const apUpdateStepTool = (mcp: ProjectScopedMcpServer, log: FastifyBaseLogger): McpToolDefinition => {
     return {
         title: 'ap_update_step',
-        description: 'Update an existing step\'s settings in a flow. Use ap_flow_structure to get step names. Use ap_list_pieces to get valid pieceName, pieceVersion, actionName. Provide only the fields you want to change.',
+        permission: Permission.WRITE_FLOW,
+        description: 'Update an existing step\'s settings. Provide only the fields you want to change.',
         inputSchema: {
             flowId: z.string().describe('The id of the flow'),
             stepName: z.string().describe('The name of the step to update (e.g. "step_1"). Use ap_flow_structure to get valid values.'),
             displayName: z.string().optional().describe('New display name for the step'),
-            input: z.record(z.string(), z.unknown()).optional().describe('Input settings for the step (key-value pairs matching the action schema). Use `{{stepName.output.field}}` to reference data from previous steps (e.g. `{{trigger.output.body.email}}`, `{{step_1.output.id}}`).'),
+            input: z.record(z.string(), z.unknown()).optional().describe(`Input settings for the step (key-value pairs matching the action schema). ${mcpUtils.STEP_REFERENCE_HINT}`),
             auth: z.string().optional().describe('Connection `externalId` from `ap_list_connections`. The tool wraps it automatically as `{{connections[\'externalId\']}}`.'),
-            actionName: z.string().optional().describe('For PIECE steps: the action to perform. Use ap_list_pieces to get valid values.'),
+            actionName: z.string().optional().describe('For PIECE steps: the action to perform. Use ap_research_pieces to get valid values.'),
             loopItems: z.string().optional().describe('For LOOP steps: expression for the items to iterate over'),
             skip: z.boolean().optional().describe('Whether to skip this step during execution'),
+            sourceCode: z.string().optional().describe('For CODE steps only: the JavaScript/TypeScript source code. Must export a `code` function: `export const code = async (inputs) => { ... }`.'),
+            packageJson: z.string().optional().describe('For CODE steps only: package.json content as a JSON string for npm dependencies. Defaults to "{}".'),
+            continueOnFailure: z.boolean().optional().describe('For CODE/PIECE steps: set true on the step that can fail (the one whose failure you want to react to), NOT on the recovery step. The flow keeps running on failure and the step gains On success / On failure branches — add handler steps into them with ap_add_step using stepLocationRelativeToParent INSIDE_ON_SUCCESS_BRANCH / INSIDE_ON_FAILURE_BRANCH and parentStepName = this step.'),
+            retryOnFailure: z.boolean().optional().describe('For CODE/PIECE steps: whether to retry this step on failure.'),
         },
         annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false },
         execute: async (args) => {
-            const { flowId, stepName, displayName, input, auth, actionName, loopItems, skip } = updateStepInput.parse(args)
+            const { flowId, stepName, displayName, input, auth, actionName, loopItems, skip, sourceCode, packageJson, continueOnFailure, retryOnFailure } = updateStepInput.parse(args)
 
             const [flow, project] = await Promise.all([
                 flowService(log).getOnePopulated({ id: flowId, projectId: mcp.projectId }),
@@ -67,19 +67,20 @@ export const apUpdateStepTool = (mcp: McpServer, log: FastifyBaseLogger): McpToo
                 }
             }
 
-            if (auth !== undefined && auth.includes('\'')) {
-                return {
-                    content: [{ type: 'text', text: '❌ auth value must not contain single quotes. Use the exact externalId from ap_list_connections.' }],
-                }
+            const authError = mcpUtils.validateAuth(auth)
+            if (authError) {
+                return authError
             }
+
+            const rewritten = mcpUtils.rewriteAllReferences({ input, loopItems, trigger: flow.version.trigger })
 
             const currentSettings = step.settings as Record<string, unknown>
             const updatedSettings: Record<string, unknown> = { ...currentSettings }
 
-            if (input !== undefined || auth !== undefined) {
+            if (rewritten.input !== undefined || auth !== undefined) {
                 updatedSettings.input = {
                     ...(currentSettings.input as Record<string, unknown> ?? {}),
-                    ...(input ?? {}),
+                    ...(rewritten.input ?? {}),
                     ...(auth !== undefined && { auth: `{{connections['${auth}']}}` }),
                 }
             }
@@ -91,21 +92,54 @@ export const apUpdateStepTool = (mcp: McpServer, log: FastifyBaseLogger): McpToo
                     return { content: [{ type: 'text', text: `❌ actionName can only be set on PIECE steps, but "${stepName}" is type ${step.type}.` }] }
                 }
             }
-            if (loopItems !== undefined) {
+            if (rewritten.loopItems !== undefined) {
                 if (step.type === FlowActionType.LOOP_ON_ITEMS) {
-                    updatedSettings.items = loopItems
+                    updatedSettings.items = rewritten.loopItems
                 }
                 else {
                     return { content: [{ type: 'text', text: `❌ loopItems can only be set on LOOP_ON_ITEMS steps, but "${stepName}" is type ${step.type}.` }] }
                 }
             }
+            if (sourceCode !== undefined || packageJson !== undefined) {
+                if (step.type !== FlowActionType.CODE) {
+                    const param = sourceCode !== undefined ? 'sourceCode' : 'packageJson'
+                    return { content: [{ type: 'text', text: `❌ ${param} can only be set on CODE steps, but "${stepName}" is type ${step.type}.` }] }
+                }
+                const existing = currentSettings.sourceCode
+                const isObj = typeof existing === 'object' && existing !== null
+                const existingCode = isObj && 'code' in existing ? String(existing.code) : ''
+                const existingPkg = isObj && 'packageJson' in existing ? String(existing.packageJson) : '{}'
+                updatedSettings.sourceCode = {
+                    code: sourceCode ?? existingCode,
+                    packageJson: packageJson ?? existingPkg,
+                }
+            }
+
+            if (continueOnFailure !== undefined || retryOnFailure !== undefined) {
+                if (step.type !== FlowActionType.CODE && step.type !== FlowActionType.PIECE) {
+                    return { content: [{ type: 'text', text: `❌ continueOnFailure/retryOnFailure can only be set on CODE or PIECE steps, but "${stepName}" is type ${step.type}.` }] }
+                }
+                const currentErrorHandling = (currentSettings.errorHandlingOptions as { continueOnFailure?: { value?: boolean }, retryOnFailure?: { value?: boolean } }) ?? {}
+                updatedSettings.errorHandlingOptions = mcpUtils.buildErrorHandlingOptions({
+                    continueOnFailure: continueOnFailure ?? currentErrorHandling.continueOnFailure?.value,
+                    retryOnFailure: retryOnFailure ?? currentErrorHandling.retryOnFailure?.value,
+                })
+            }
 
             if (step.type === FlowActionType.PIECE && input !== undefined) {
-                await fillDefaultsForMissingOptionalProps({
+                await mcpUtils.fillDefaultsForMissingOptionalProps({
                     settings: updatedSettings,
                     platformId: project.platformId,
                     log,
                 })
+
+                const { pieceName, pieceVersion, actionName: resolvedActionName } = updatedSettings
+                if (typeof pieceName === 'string' && typeof pieceVersion === 'string' && typeof resolvedActionName === 'string') {
+                    const unknownPropsError = await mcpUtils.rejectUnknownInputProps({ pieceName, pieceVersion, componentName: resolvedActionName, componentType: 'action', input: updatedSettings.input, platformId: project.platformId, log })
+                    if (unknownPropsError) {
+                        return unknownPropsError
+                    }
+                }
             }
 
             const payload = {
@@ -139,64 +173,54 @@ export const apUpdateStepTool = (mcp: McpServer, log: FastifyBaseLogger): McpToo
                     operation,
                 })
                 const updatedStep = flowStructureUtil.getStep(stepName, updatedFlow.version.trigger)
+                const draftWarning = mcpUtils.publishedFlowWarning(flow.publishedVersionId)
                 if (updatedStep && !updatedStep.valid) {
-                    const hint = step.type === FlowActionType.PIECE
-                        ? ' Use ap_list_pieces to verify pieceName, pieceVersion, actionName and required inputs, then retry.'
-                        : ' Check the step settings and retry.'
+                    const diagnosis = updatedStep.type === FlowActionType.PIECE
+                        ? await diagnoseMissingInputs({ settings: updatedStep.settings, platformId: project.platformId, log })
+                        : null
+                    const hint = (diagnosis || null)
+                        ?? (step.type === FlowActionType.PIECE
+                            ? 'Use ap_research_pieces to verify pieceName, pieceVersion, actionName and required inputs, then retry.'
+                            : 'Check the step settings and retry.')
                     return {
                         content: [{
                             type: 'text',
-                            text: `⚠️ Step "${stepName}" updated but still invalid.${hint}`,
+                            text: `⚠️ Step "${stepName}" updated but still invalid. ${hint}${draftWarning}`,
                         }],
                     }
                 }
                 return {
-                    content: [{ type: 'text', text: `✅ Successfully updated step "${stepName}".` }],
+                    content: [{ type: 'text', text: `✅ Successfully updated step "${stepName}".${draftWarning}` }],
                 }
             }
             catch (err) {
-                return mcpToolError('Step update failed', err)
+                return mcpUtils.mcpToolError('Step update failed', err)
             }
         },
     }
 }
 
-async function fillDefaultsForMissingOptionalProps({ settings, platformId, log }: {
-    settings: Record<string, unknown>
+async function diagnoseMissingInputs({ settings, platformId, log }: {
+    settings: PieceActionSettings
     platformId: string
     log: FastifyBaseLogger
-}): Promise<void> {
-    const pieceName = settings.pieceName
-    const pieceVersion = settings.pieceVersion
-    const actionName = settings.actionName
-    if (typeof pieceName !== 'string' || typeof pieceVersion !== 'string' || typeof actionName !== 'string') {
-        return
+}): Promise<string | null> {
+    const { pieceName, pieceVersion, actionName } = settings
+    if (isNil(actionName)) {
+        return 'Missing actionName.'
     }
     try {
-        const piece = await pieceMetadataService(log).getOrThrow({
-            platformId,
-            name: pieceName,
-            version: pieceVersion,
-        })
+        const piece = await pieceMetadataService(log).getOrThrow({ platformId, name: pieceName, version: pieceVersion })
         const action = piece.actions[actionName]
         if (isNil(action)) {
-            return
+            return `Action "${actionName}" not found in piece "${pieceName}". Use ap_research_pieces with includeActions=true to get valid action names.`
         }
-        const defaults: Record<string, unknown> = {}
-        for (const [propName, prop] of Object.entries(action.props)) {
-            if (prop.type === PropertyType.ARRAY && !prop.required) {
-                defaults[propName] = []
-            }
-            else if (prop.type === PropertyType.DYNAMIC && !prop.required) {
-                defaults[propName] = {}
-            }
-            else if (prop.type === PropertyType.CHECKBOX && !prop.required) {
-                defaults[propName] = prop.defaultValue ?? false
-            }
-        }
-        settings.input = { ...defaults, ...(typeof settings.input === 'object' && settings.input !== null ? settings.input : {}) }
+        const input = settings.input ?? {}
+        const { parts } = mcpUtils.diagnosePieceProps({ props: action.props, input, pieceAuth: piece.auth, requireAuth: action.requireAuth, componentType: 'action' })
+        return parts.join(' ')
     }
     catch (err) {
-        log.warn({ err, pieceName, actionName }, 'fillDefaultsForMissingOptionalProps: failed to fetch piece metadata, skipping defaults')
+        log.warn({ error: err, piece: { name: pieceName }, actionName }, 'diagnoseMissingInputs: failed to fetch piece metadata')
+        return null
     }
 }

@@ -1,21 +1,5 @@
-import {
-    ActivepiecesError,
-    assertNotNullOrUndefined,
-    ErrorCode,
-    InvitationStatus,
-    InvitationType,
-    isNil,
-    ListUserInvitationsRequest,
-    Permission,
-    Principal,
-    PrincipalType,
-    ProjectRole,
-    SeekPage,
-    SendUserInvitationRequest,
-    SERVICE_KEY_SECURITY_OPENAPI,
-    UserInvitation,
-    UserInvitationWithLink,
-} from '@activepieces/shared'
+import { ActivepiecesError, assertNotNullOrUndefined, ErrorCode, isNil, Permission, ProjectRole, SeekPage } from '@activepieces/core-utils'
+import { InvitationStatus, InvitationType, ListUserInvitationsRequest, Principal, PrincipalType, SendUserInvitationRequest, SERVICE_KEY_SECURITY_OPENAPI, UserInvitation, UserInvitationWithLink } from '@activepieces/shared'
 import dayjs from 'dayjs'
 import { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
@@ -48,9 +32,9 @@ const invitationController: FastifyPluginAsyncZod = async (app) => {
                 await platformMustBeOwnedByCurrentUser.call(app, request, reply)
                 break
         }
-        const status = await shouldAutoAcceptInvitation(request.principal, request.body, request.log) ? InvitationStatus.ACCEPTED : InvitationStatus.PENDING
-        const projectRole = await getProjectRoleAndAssertIfFound(request.principal.platform.id, request.body)
         const platformId = request.principal.platform.id
+        const status = await shouldAutoAcceptInvitation(request.principal, request.body, platformId, request.log) ? InvitationStatus.ACCEPTED : InvitationStatus.PENDING
+        const projectRole = await getProjectRoleAndAssertIfFound(platformId, request.body)
 
         const invitation = await userInvitationsService(request.log).create({
             email,
@@ -144,21 +128,24 @@ async function getProjectIdAndAssertPermission<R extends Principal>(
     return requestQuery.projectId ?? null
 }
 
-async function shouldAutoAcceptInvitation(principal: Principal, request: SendUserInvitationRequest, log: FastifyBaseLogger): Promise<boolean> {
+async function shouldAutoAcceptInvitation(principal: Principal, request: SendUserInvitationRequest, platformId: string, log: FastifyBaseLogger): Promise<boolean> {
     if (principal.type === PrincipalType.SERVICE) {
         return true
     }
-    
+
     if (request.type === InvitationType.PLATFORM) {
         return false
     }
-    
+
     const identity = await userIdentityService(log).getIdentityByEmail(request.email)
     if (isNil(identity)) {
         return false
     }
-    
-    const user = await userService(log).getOneByIdentityIdOnly({ identityId: identity.id })
+
+    const user = await userService(log).getOneByIdentityAndPlatform({
+        identityId: identity.id,
+        platformId,
+    })
     return !isNil(user)
 }
 

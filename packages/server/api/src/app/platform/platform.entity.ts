@@ -1,4 +1,4 @@
-import { FilteredPieceBehavior, Platform, User } from '@activepieces/shared'
+import { Platform, User } from '@activepieces/shared'
 import { EntitySchema } from 'typeorm'
 import {
     ApIdSchema,
@@ -25,6 +25,10 @@ export const PlatformEntity = new EntitySchema<PlatformSchema>({
             type: String,
             nullable: false,
         },
+        themeColors: {
+            type: 'jsonb',
+            nullable: true,
+        },
         logoIconUrl: {
             type: String,
             nullable: false,
@@ -42,19 +46,28 @@ export const PlatformEntity = new EntitySchema<PlatformSchema>({
             nullable: false,
             default: true,
         },
-        filteredPieceNames: {
-            type: String,
-            array: true,
+        googleAuthEnabled: {
+            type: Boolean,
             nullable: false,
-        },
-        filteredPieceBehavior: {
-            type: String,
-            enum: FilteredPieceBehavior,
-            nullable: false,
+            default: true,
         },
         allowedAuthDomains: {
             type: String,
             array: true,
+        },
+        allowedEmbedOrigins: {
+            type: String,
+            array: true,
+            nullable: false,
+            default: [],
+        },
+        ssoDomain: {
+            type: String,
+            nullable: true,
+        },
+        ssoDomainVerification: {
+            type: 'jsonb',
+            nullable: true,
         },
         enforceAllowedAuthDomains: {
             type: Boolean,
@@ -66,14 +79,26 @@ export const PlatformEntity = new EntitySchema<PlatformSchema>({
         },
         federatedAuthProviders: {
             type: 'jsonb',
+            select: false,
         },
         pinnedPieces: {
             type: String,
             array: true,
             nullable: false,
         },
+        pieceSelectorConfig: {
+            type: 'jsonb',
+            nullable: true,
+        },
     },
-    indices: [],
+    indices: [
+        {
+            name: 'idx_platform_sso_domain',
+            columns: ['ssoDomain'],
+            unique: true,
+            where: '"ssoDomain" IS NOT NULL',
+        },
+    ],
     relations: {
         owner: {
             type: 'one-to-one',

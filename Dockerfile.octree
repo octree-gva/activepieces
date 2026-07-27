@@ -86,7 +86,6 @@ RUN npx turbo run build \
 RUN rm -rf packages/pieces/custom && \
     find packages/pieces/community -mindepth 1 -maxdepth 1 -type d \
       ! -name decidim \
-      ! -name store \
       ! -name opnform \
       ! -name whatsapp \
       ! -name stripe \
@@ -98,7 +97,6 @@ RUN rm -rf packages/pieces/custom && \
       ! -name facebook-leads \
       ! -name intercom \
       ! -name telegram-bot \
-      ! -name tables \
       -exec rm -rf {} + && \
     rm -rf node_modules && \
     rm -f bun.lock package-lock.json && \

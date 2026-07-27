@@ -1,7 +1,7 @@
 import { participantCrud } from '../../../../src/lib/domains/users/participant-crud';
 import { UsersApi, OAuthApi } from '@octree/decidim-sdk';
 import { createMockActionContext } from '../../../helpers/create-mock-action-context';
-import { AppConnectionType } from '@activepieces/shared';
+import { AppConnectionType } from '@activepieces/pieces-framework';
 
 jest.mock('@octree/decidim-sdk', () => {
   const actual = jest.requireActual('@octree/decidim-sdk');

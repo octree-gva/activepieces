@@ -1,5 +1,4 @@
-import { createPiece } from '@activepieces/pieces-framework';
-import { PieceCategory } from '@activepieces/shared';
+import { createPiece, PieceCategory } from '@activepieces/pieces-framework';
 import { getConversationAction } from './lib/actions/get-conversation';
 import { setConversationAction } from './lib/actions/set-conversation';
 import { debugSchemaAction } from './lib/actions/debug-schema';

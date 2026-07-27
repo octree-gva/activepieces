@@ -1,8 +1,8 @@
 {
   "name": "@activepieces/piece-decidim",
   "version": "0.0.1",
-  "main": "./src/index.js",
-  "types": "./src/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.lib.json && cp package.json dist/",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
@@ -12,9 +12,10 @@
   "dependencies": {
     "@activepieces/pieces-common": "workspace:*",
     "@activepieces/pieces-framework": "workspace:*",
-    "@activepieces/shared": "workspace:*",
+    "@octree/decidim-sdk": "https://git.octree.ch/api/v4/projects/464/packages/npm/@octree/decidim-sdk/-/@octree/decidim-sdk-0.3.0.tgz",
+    "axios": "1.18.0",
     "tslib": "2.6.2",
-    "@octree/decidim-sdk": "https://git.octree.ch/api/v4/projects/464/packages/npm/@octree/decidim-sdk/-/@octree/decidim-sdk-0.3.0.tgz"
+    "zod": "4.3.6"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "3.0.8",

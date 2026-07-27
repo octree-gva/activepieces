@@ -1,5 +1,4 @@
-import { createPiece } from "@activepieces/pieces-framework";
-import { PieceCategory } from "@activepieces/shared";
+import { createPiece, PieceCategory } from "@activepieces/pieces-framework";
 import { decidimAuth } from "./decidimAuth";
 import { allActions } from "./lib/registry/actions";
 import { meetingsReminder } from "./lib/triggers/meetings-reminder";

@@ -1,8 +1,8 @@
 {
   "name": "@activepieces/piece-state-store",
   "version": "0.0.1",
-  "main": "./src/index.js",
-  "types": "./src/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/octree-gva/activepieces.git"
@@ -16,10 +16,10 @@
   "dependencies": {
     "@activepieces/pieces-common": "workspace:*",
     "@activepieces/pieces-framework": "workspace:*",
-    "@activepieces/shared": "workspace:*",
     "flatted": "^3.2.9",
     "ioredis": "5.4.1",
-    "tslib": "2.6.2"
+    "tslib": "2.6.2",
+    "zod": "4.3.6"
   },
   "devDependencies": {
     "@types/jest": "30.0.0",

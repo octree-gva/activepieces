@@ -2,7 +2,7 @@ import { getConversationAction } from '../../../src/lib/actions/get-conversation
 import { createMockActionContext } from '../../helpers/create-mock-action-context';
 import { redisConnect } from '../../../src/lib/utils/redis';
 import { UNKNOWN_STATE } from '../../../src/types';
-import { AppConnectionType } from '@activepieces/shared';
+import { AppConnectionType } from '@activepieces/pieces-framework';
 import { stateStoreAuth } from '../../../src/stateStoreAuth';
 
 jest.mock('../../../src/lib/utils/redis');

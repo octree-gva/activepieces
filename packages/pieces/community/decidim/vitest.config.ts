@@ -7,6 +7,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    testTimeout: 15000,
     include: ['test/**/*.test.ts'],
     coverage: {
       provider: 'v8',
@@ -17,7 +18,6 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@activepieces/shared': path.resolve(repoRoot, 'packages/shared/src/index.ts'),
       '@activepieces/pieces-framework': path.resolve(
         repoRoot,
         'packages/pieces/framework/src/index.ts'

@@ -1,5 +1,4 @@
-import { PieceAuth, createPiece } from '@activepieces/pieces-framework';
-import { PieceCategory } from '@activepieces/shared';
+import { PieceAuth, createPiece, PieceCategory } from '@activepieces/pieces-framework';
 import { configureAction } from './lib/actions/configure';
 import { translateAction } from './lib/actions/translate';
 import { settingsAction } from './lib/actions/settings';

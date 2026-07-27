@@ -2,7 +2,7 @@ import { vi, type Mock } from 'vitest';
 import { participantCrud } from '../../../../src/lib/domains/users/participant-crud';
 import { UsersApi, OAuthApi } from '@octree/decidim-sdk';
 import { createMockActionContext } from '../../../helpers/create-mock-action-context';
-import { AppConnectionType } from '@activepieces/shared';
+import { AppConnectionType } from '@activepieces/pieces-framework';
 
 vi.mock('@octree/decidim-sdk', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@octree/decidim-sdk')>();

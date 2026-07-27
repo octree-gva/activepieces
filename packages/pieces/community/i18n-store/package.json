@@ -1,8 +1,8 @@
 {
   "name": "@activepieces/piece-i18n-store",
   "version": "0.0.2",
-  "main": "./src/index.js",
-  "types": "./src/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/octree-gva/activepieces"
@@ -15,11 +15,13 @@
   "dependencies": {
     "@activepieces/pieces-common": "workspace:*",
     "@activepieces/pieces-framework": "workspace:*",
-    "@activepieces/shared": "workspace:*",
+    "i18next": "23.13.0",
+    "js-yaml": "4.1.1",
     "tslib": "2.6.2"
   },
   "devDependencies": {
     "@types/jest": "30.0.0",
+    "@types/js-yaml": "4.0.9",
     "jest": "30.0.5",
     "ts-jest": "29.4.5"
   }

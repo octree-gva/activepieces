@@ -1,4 +1,4 @@
-import { AppConnectionType } from '@activepieces/shared';
+import { AppConnectionType } from '@activepieces/pieces-framework';
 import type { DecidimAccessToken } from '../../src/types';
 
 /** Shared CUSTOM_AUTH used across Decidim integration tests. */

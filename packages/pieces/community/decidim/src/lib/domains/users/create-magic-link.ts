@@ -60,7 +60,7 @@ export const createMagicLink = createAction({
   props: {
     accessToken: userAccessTokenProp(true),
     redirectUrl: Property.ShortText({
-      displayName: 'redirect_url',
+      displayName: 'Redirect URL',
       required: false,
       description:
         'Optional. HTTPS URL sent to the API as data.redirect_url. Allowed characters: letters, digits, and ._-/?#= in path and query (no %, &, spaces, or other specials).',

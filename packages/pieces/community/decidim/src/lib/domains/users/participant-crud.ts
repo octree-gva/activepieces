@@ -17,7 +17,9 @@ import { introspectToken } from '../../utils/introspecToken';
 import { buildOAuthGrantParam, createImpersonateToken } from './impersonate';
 import { assertProp } from '../../utils/assertProp';
 import {
-  extendedDataQueryProp,
+  participantExtendedDataFiltersProp,
+  participantNicknamesFilterProp,
+  participantUserIdsFilterProp,
   userIdProp,
   usernameProp,
   userFullNameProp,
@@ -36,6 +38,7 @@ import {
 } from '../../runtime/sdk-casts';
 import type { JsonObject } from '../../types/decidim-api';
 import type { DecidimAccessToken } from '../../../types';
+import { toExtendedDataSearchQuery } from './upsert-helpers';
 
 async function getUsersApi(
   config: ReturnType<typeof configuration>,
@@ -77,34 +80,18 @@ export async function searchParticipants(
   clientSecret: string,
   propsValue: Record<string, unknown>
 ) {
-  const searchOptions = (propsValue['searchOptions'] as Record<string, unknown>) || {};
-  assertProp(searchOptions['extendedDataQuery'], 'Extended Data Query is required for search');
-  await propsValidation.validateZod(searchOptions, {
-    extendedDataQuery: z.string().min(1, 'Extended Data Query must not be empty'),
-  });
-
-  let extendedDataQuery = searchOptions['extendedDataQuery'] as string;
-
-  // Normalize JSON query string to handle whitespace differences
-  // Since filterExtendedDataCont does substring matching on serialized JSON,
-  // we need to ensure consistent formatting to match stored data format
-  try {
-    const parsed = JSON.parse(extendedDataQuery);
-    // Parse and re-stringify to normalize, then ensure spaces after colons
-    // This matches the format that works: "chatbotID": "31"
-    extendedDataQuery = JSON.stringify(parsed).replace(/":/g, '": ');
-  } catch {
-    // If it's not valid JSON, normalize whitespace around colons
-    // This handles partial queries: "chatbotID":"31" -> "chatbotID": "31"
-    extendedDataQuery = extendedDataQuery.replace(/":\s*"/g, '": "');
-  }
+  const nested = propsValue['searchOptions'];
+  const searchOptions =
+    nested !== null && typeof nested === 'object'
+      ? { ...propsValue, ...(nested as Record<string, unknown>) }
+      : propsValue;
+  const listReq = buildParticipantSearchRequest(searchOptions);
 
   const { usersApi, authorization } = await getUsersApi(config, clientId, clientSecret);
   const searchResult = await usersApi.listUsers(
     asUsersApiUsersRequest({
+      ...listReq,
       authorization,
-      filterExtendedDataCont: extendedDataQuery,
-      perPage: 100,
     })
   );
 
@@ -134,7 +121,6 @@ export async function createParticipant(
   const extendedData = createOptions['extendedData'] as JsonObject | undefined;
   const fetchUserInfo = (createOptions['fetchUserInfo'] as boolean) || false;
 
-  // Search if user exists
   const { usersApi, authorization } = await getUsersApi(config, clientId, clientSecret);
   const searchResult = await usersApi.listUsers(
     asUsersApiUsersRequest({
@@ -148,7 +134,6 @@ export async function createParticipant(
   let impersonateToken: DecidimAccessToken;
 
   if (searchResult.data?.data && searchResult.data.data.length > 0) {
-    // User exists, use impersonate
     decidimUserId = searchResult.data.data[0].id.toString();
     const oauthGrantParam = buildOAuthGrantParam(
       username,
@@ -159,7 +144,6 @@ export async function createParticipant(
     );
     impersonateToken = await createImpersonateToken(oauthApi, oauthGrantParam);
   } else {
-    // User doesn't exist, create with impersonate
     const oauthGrantParam = buildOAuthGrantParam(
       username,
       clientId,
@@ -173,7 +157,6 @@ export async function createParticipant(
     );
     impersonateToken = await createImpersonateToken(oauthApi, oauthGrantParam);
 
-    // Get user ID from introspect
     const systemToken = await systemAccessToken(oauthApi, clientId, clientSecret);
     const introspectResult = await introspectToken(
       oauthApi,
@@ -188,7 +171,6 @@ export async function createParticipant(
     decidimUserId = introspectResult.resource.id.toString();
   }
 
-  // Set extended_data if provided
   if (extendedData) {
     const { usersApi: userApi, authorization } = await getUsersApi(config, clientId, clientSecret, decidimUserId);
     await userApi.setUserExtendedData(
@@ -236,7 +218,6 @@ export async function readParticipant(
 
   const { usersApi, authorization } = await getUsersApi(config, clientId, clientSecret, userId);
 
-  // Get user data
   let userData = null;
   try {
     const dataResult = await usersApi.getUserExtendedData(
@@ -254,7 +235,6 @@ export async function readParticipant(
     }
   }
 
-  // Get user info
   const userResult = await usersApi.listUsers(
     asUsersApiUsersRequest({
       authorization,
@@ -280,14 +260,12 @@ export async function updateParticipant(
   const updateOptions = (propsValue['updateOptions'] as Record<string, unknown>) || {};
   assertProp(updateOptions['userId'], 'User ID is required for update');
 
-  // Check if extendedData is provided and not empty
   const rawExtendedData = updateOptions['extendedData'];
   if (!rawExtendedData ||
       (typeof rawExtendedData === 'object' && Object.keys(rawExtendedData).length === 0)) {
     throw new Error('Extended Data is required for update and must not be empty');
   }
 
-  // Parse extendedData if it's a string
   if (typeof rawExtendedData === 'string') {
     try {
       updateOptions['extendedData'] = JSON.parse(rawExtendedData);
@@ -351,14 +329,15 @@ export const participantCrud = createAction({
       displayName: 'Search Options',
       description: 'Options for searching participants',
       required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth) return {};
+      refreshers: ['action'],
+      props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
         if (action !== 'search') {
           return {};
         }
         return {
-          extendedDataQuery: extendedDataQueryProp(true),
+          userIds: participantUserIdsFilterProp(false),
+          nicknames: participantNicknamesFilterProp(false),
+          extendedDataFilters: participantExtendedDataFiltersProp(false),
         };
       },
     }),
@@ -367,9 +346,8 @@ export const participantCrud = createAction({
       displayName: 'Create Options',
       description: 'Options for creating a participant',
       required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth) return {};
+      refreshers: ['action'],
+      props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
         if (action !== 'create') {
           return {};
         }
@@ -387,9 +365,8 @@ export const participantCrud = createAction({
       displayName: 'Read Options',
       description: 'Options for reading participant data',
       required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth) return {};
+      refreshers: ['action'],
+      props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
         if (action !== 'read') {
           return {};
         }
@@ -403,9 +380,8 @@ export const participantCrud = createAction({
       displayName: 'Update Options',
       description: 'Options for updating participant data',
       required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth) return {};
+      refreshers: ['action'],
+      props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
         if (action !== 'update') {
           return {};
         }
@@ -466,3 +442,70 @@ export const participantCrud = createAction({
     }
   },
 });
+
+function buildParticipantSearchRequest(searchOptions: Record<string, unknown>): {
+  perPage: number;
+  filterIdIn?: number[];
+  filterNicknameIn?: string[];
+  filterNicknameEq?: string;
+  filterExtendedDataCont?: string;
+} {
+  const req: {
+    perPage: number;
+    filterIdIn?: number[];
+    filterNicknameIn?: string[];
+    filterNicknameEq?: string;
+    filterExtendedDataCont?: string;
+  } = { perPage: 100 };
+
+  const ids = parsePositiveIdList(searchOptions['userIds']);
+  if (ids) req.filterIdIn = ids;
+
+  const nicknames = parseStringList(searchOptions['nicknames']);
+  if (nicknames) {
+    if (nicknames.length === 1) req.filterNicknameEq = nicknames[0];
+    else req.filterNicknameIn = nicknames;
+  }
+
+  const cont = buildExtendedDataCont(searchOptions['extendedDataFilters']);
+  if (cont) req.filterExtendedDataCont = cont;
+
+  return req;
+}
+
+function rowValue(row: unknown): unknown {
+  if (row !== null && typeof row === 'object' && 'value' in row) {
+    return Reflect.get(row, 'value');
+  }
+  return row;
+}
+
+function parseArrayValues(raw: unknown): unknown[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(rowValue)
+    .filter((v) => v !== undefined && v !== null && String(v).trim() !== '');
+}
+
+function parsePositiveIdList(raw: unknown): number[] | undefined {
+  const values = parseArrayValues(raw);
+  if (values.length === 0) return undefined;
+  return values.map((v) => z.number().int().gt(0).parse(Number(v)));
+}
+
+function parseStringList(raw: unknown): string[] | undefined {
+  const values = parseArrayValues(raw);
+  if (values.length === 0) return undefined;
+  return values.map((v) => z.string().min(1).parse(String(v).trim()));
+}
+
+function buildExtendedDataCont(raw: unknown): string | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const first = raw[0];
+  if (first === null || typeof first !== 'object') return undefined;
+
+  const key = String(Reflect.get(first, 'key') ?? '').trim();
+  const value = Reflect.get(first, 'value');
+  if (!key) return undefined;
+  return toExtendedDataSearchQuery(key, value);
+}

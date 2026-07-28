@@ -29,48 +29,68 @@ describe('searchParticipants', () => {
     (OAuthApi as Mock).mockImplementation(() => ({}));
   });
 
-  it('should return participants matching extended data query', async () => {
-    const mockUsers = [{ id: 1, nickname: 'user1' }, { id: 2, nickname: 'user2' }];
+  it('maps user ids and nicknames', async () => {
+    const mockUsers = [{ id: 1, nickname: 'user1' }];
     mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: mockUsers } });
 
     const result = await searchParticipants(config, 'clientId', 'clientSecret', {
-      searchOptions: { extendedDataQuery: '{"chatbotID": "31"}' },
+      searchOptions: {
+        userIds: [{ value: 1 }, { value: 2 }],
+        nicknames: [{ value: 'alice' }, { value: 'bob' }],
+      },
     });
 
     expect(result.ok).toBe(true);
     expect(result.users).toEqual(mockUsers);
-    expect(result.count).toBe(2);
-  });
-
-  it('should normalize JSON query formatting', async () => {
-    await searchParticipants(config, 'clientId', 'clientSecret', {
-      searchOptions: { extendedDataQuery: '{"chatbotID":"31"}' },
-    });
-
     expect(mockUsersApi.listUsers).toHaveBeenCalledWith(
       expect.objectContaining({
         authorization: 'Bearer system-token',
-        filterExtendedDataCont: '{"chatbotID": "31"}',
+        filterIdIn: [1, 2],
+        filterNicknameIn: ['alice', 'bob'],
         perPage: 100,
       })
     );
   });
 
-  it('should return empty results when no matches found', async () => {
+  it('maps single nickname to eq', async () => {
+    await searchParticipants(config, 'clientId', 'clientSecret', {
+      searchOptions: {
+        nicknames: [{ value: 'alice' }],
+      },
+    });
+
+    expect(mockUsersApi.listUsers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filterNicknameEq: 'alice',
+      })
+    );
+  });
+
+  it('maps extended data key/value to Cont query', async () => {
+    await searchParticipants(config, 'clientId', 'clientSecret', {
+      searchOptions: {
+        extendedDataFilters: [
+          { key: 'details.phone_number', value: '+41918477641' },
+        ],
+      },
+    });
+
+    expect(mockUsersApi.listUsers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filterExtendedDataCont: '{"details": {"phone_number": "+41918477641"}}',
+      })
+    );
+  });
+
+  it('returns empty results when no matches', async () => {
     const result = await searchParticipants(config, 'clientId', 'clientSecret', {
-      searchOptions: { extendedDataQuery: '{"key": "value"}' },
+      searchOptions: {
+        userIds: [{ value: 99 }],
+      },
     });
 
     expect(result.ok).toBe(true);
     expect(result.users).toEqual([]);
     expect(result.count).toBe(0);
-  });
-
-  it('should require extendedDataQuery', async () => {
-    await expect(
-      searchParticipants(config, 'clientId', 'clientSecret', {
-        searchOptions: {},
-      })
-    ).rejects.toThrow('Extended Data Query is required for search');
   });
 });

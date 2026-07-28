@@ -26,7 +26,7 @@ const mockUsersApi = {
 
 const createContext = (propsValue: {
   action: 'search';
-  searchOptions: { extendedDataQuery: string };
+  searchOptions: Record<string, unknown>;
 }): Parameters<typeof participantCrud.run>[0] => createMockActionContext({
   auth: decidimCustomAuth,
   propsValue,
@@ -49,7 +49,11 @@ describe('Search Participants Integration', () => {
 
     const result = await participantCrud.run(createContext({
       action: 'search',
-      searchOptions: { extendedDataQuery: '{"chatbotID": "31"}' },
+      searchOptions: {
+        extendedDataFilters: [
+          { key: 'chatbotID', value: '31' },
+        ],
+      },
     })) as SearchResult;
 
     expect(result.ok).toBe(true);
@@ -62,7 +66,9 @@ describe('Search Participants Integration', () => {
 
     const result = await participantCrud.run(createContext({
       action: 'search',
-      searchOptions: { extendedDataQuery: '{"key": "value"}' },
+      searchOptions: {
+        userIds: [{ value: 99 }],
+      },
     })) as SearchResult;
 
     expect(result.ok).toBe(true);
@@ -70,12 +76,16 @@ describe('Search Participants Integration', () => {
     expect(result.count).toBe(0);
   });
 
-  it('should normalize JSON query formatting', async () => {
+  it('should map extended data filter to Cont query', async () => {
     mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [] } });
 
     await participantCrud.run(createContext({
       action: 'search',
-      searchOptions: { extendedDataQuery: '{"chatbotID":"31"}' },
+      searchOptions: {
+        extendedDataFilters: [
+          { key: 'chatbotID', value: '31' },
+        ],
+      },
     }));
 
     expect(mockUsersApi.listUsers).toHaveBeenCalledWith(
@@ -97,7 +107,9 @@ describe('Search Participants Integration', () => {
 
     const result = await participantCrud.run(createContext({
       action: 'search',
-      searchOptions: { extendedDataQuery: '{"key": "value"}' },
+      searchOptions: {
+        nicknames: [{ value: 'alice' }],
+      },
     })) as SearchResult;
 
     expect(result.ok).toBe(false);

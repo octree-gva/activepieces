@@ -1,106 +1,48 @@
-import { createAction } from '@activepieces/pieces-framework';
-import type { SpacesApiSearchSpacesRequest } from '@octree/decidim-sdk';
+import { createAction, Property } from '@activepieces/pieces-framework';
 import { decidimAuth } from '../../../decidimAuth';
 import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import {
-  decidimSpaceManifestProp,
-  localesProp,
-  perPageProp,
-  spaceSearchAdvancedFiltersProp,
-  spaceSearchMaxResultsProp,
-  spaceSearchTitleQueryProp,
-  userAccessTokenProp,
+  spaceIdsFilterProp,
+  spaceManifestsFilterProp,
+  spaceSearchLanguagesProp,
+  spaceSearchPageProp,
+  spaceSearchPerPageProp,
 } from '../../props';
 import { resolveAuthContext } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
 import { asSpacesApiSearchSpacesRequest } from '../../runtime/sdk-casts';
 import { createSpacesApi } from '../../runtime/clients';
-import {
-  buildSearchSpacesRequestParams,
-  normalizeAdvancedFiltersInput,
-  searchParticipatorySpacePropsSchema,
-  type SearchParticipatorySpaceInput,
-} from './spaces-search-params';
+import { buildSearchSpacesRequestParams } from './spaces-search-params';
 
-type SpacesClient = {
-  searchSpaces: (req: SpacesApiSearchSpacesRequest) => Promise<unknown>;
-};
-
-function parseSearchParticipatoryProps(
-  props: Record<string, unknown>
-): SearchParticipatorySpaceInput {
-  return searchParticipatorySpacePropsSchema.parse({
-    query: props['query'],
-    spaceType: props['spaceType'],
-    advancedFilters: normalizeAdvancedFiltersInput(props['advancedFilters']),
-    perPage: props['perPage'],
-    maxResults: props['maxResults'],
-  });
-}
-
-function readBatchFromSearchResult(result: unknown): unknown[] {
-  const raw = (result as { data?: { data?: unknown } } | undefined)?.data?.data;
-  return Array.isArray(raw) ? raw : [];
-}
-
-async function fetchSpacesPages(args: {
-  client: SpacesClient;
-  accessToken: string;
-  input: SearchParticipatorySpaceInput;
-  locales: unknown;
-}): Promise<{ spaces: unknown[]; pagesFetched: number }> {
-  const spaces: unknown[] = [];
-  let page = 1;
-  let pagesFetched = 0;
-
-  while (spaces.length < args.input.maxResults) {
-    const { requestParams, effectivePerPage } = buildSearchSpacesRequestParams({
-      accessToken: args.accessToken,
-      query: args.input.query,
-      spaceType: args.input.spaceType,
-      advancedFilters: args.input.advancedFilters,
-      page,
-      perPage: args.input.perPage,
-      locales: args.locales,
-    });
-
-    const result = await args.client.searchSpaces(
-      asSpacesApiSearchSpacesRequest(requestParams)
-    );
-    const batch = readBatchFromSearchResult(result);
-    pagesFetched += 1;
-
-    if (batch.length === 0) break;
-
-    const room = args.input.maxResults - spaces.length;
-    spaces.push(...batch.slice(0, room));
-
-    if (batch.length < effectivePerPage) break;
-    page += 1;
-  }
-
-  return { spaces, pagesFetched };
+function readSpacesFromSearchResult(result: unknown): unknown[] {
+  if (result === null || typeof result !== 'object') return [];
+  const data = Reflect.get(result, 'data');
+  if (data === null || typeof data !== 'object') return [];
+  const list = Reflect.get(data, 'data');
+  return Array.isArray(list) ? list : [];
 }
 
 export const searchParticipatorySpace = createAction({
   auth: decidimAuth,
   name: 'searchParticipatorySpace',
   displayName: 'Search Participatory Space',
-  description: 'Search assemblies, processes, conferences, or initiatives (with optional auto-pagination)',
+  description: 'Search assemblies, processes, conferences, or initiatives',
   props: {
-    accessToken: userAccessTokenProp(false),
-    query: spaceSearchTitleQueryProp(false),
-    spaceType: decidimSpaceManifestProp(false),
-    advancedFilters: spaceSearchAdvancedFiltersProp(false),
-    perPage: perPageProp(false),
-    maxResults: spaceSearchMaxResultsProp(false),
-    locales: localesProp(false),
+    accessToken: Property.ShortText({
+      displayName: 'User token',
+      required: false,
+      description: 'If you impersonate a user.',
+    }),
+    spaceIds: spaceIdsFilterProp(false),
+    spaceManifests: spaceManifestsFilterProp(false),
+    locales: spaceSearchLanguagesProp(false),
+    perPage: spaceSearchPerPageProp(false),
+    page: spaceSearchPageProp(false),
   },
   async run(context) {
     try {
       const { baseUrl, clientId, clientSecret } = extractAuth(context);
-      const input = parseSearchParticipatoryProps(context.propsValue);
 
       const resolved = await resolveAuthContext({
         baseUrl,
@@ -111,19 +53,25 @@ export const searchParticipatorySpace = createAction({
       const client = createSpacesApi(
         resolved.baseConfiguration,
         resolved.rawAccessToken
-      ) as SpacesClient;
+      );
 
-      const { spaces, pagesFetched } = await fetchSpacesPages({
-        client,
+      const { requestParams } = buildSearchSpacesRequestParams({
         accessToken: resolved.rawAccessToken,
-        input,
+        spaceIds: context.propsValue['spaceIds'],
+        spaceManifests: context.propsValue['spaceManifests'],
+        page: context.propsValue['page'],
+        perPage: context.propsValue['perPage'],
         locales: context.propsValue['locales'],
       });
+
+      const result = await client.searchSpaces(
+        asSpacesApiSearchSpacesRequest(requestParams)
+      );
+      const spaces = readSpacesFromSearchResult(result);
 
       return response({
         spaces,
         count: spaces.length,
-        pagesFetched,
       });
     } catch (e) {
       return response({}, getErrorMessage(e));

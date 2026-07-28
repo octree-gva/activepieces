@@ -76,7 +76,9 @@ describe('participantCrud action', () => {
     const result = (await participantCrud.run(
       participantContext({
         action: 'search',
-        searchOptions: { extendedDataQuery: '{"key": "value"}' },
+        searchOptions: {
+          nicknames: [{ value: 'alice' }],
+        },
       })
     )) as ParticipantCrudRunResult;
 
@@ -142,7 +144,6 @@ describe('participantCrud action', () => {
     const result = (await participantCrud.run(
       participantContext({
         action: 'unknown',
-        searchOptions: { extendedDataQuery: '{"key": "value"}' },
       })
     )) as ParticipantCrudRunResult;
 

@@ -5,7 +5,8 @@ import { decidimAuth } from '../../../decidimAuth';
 import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import {
-  componentSearchAdvancedFiltersProp,
+  componentIdsFilterProp,
+  componentManifestsFilterProp,
   localesProp,
   pageProp,
   perPageProp,
@@ -18,15 +19,13 @@ import { createComponentsApi } from '../../runtime/clients';
 import {
   buildSearchComponentsRequestParams,
   computeHasMore,
-  componentAdvancedFiltersSchema,
 } from './search-component.helpers';
 
 function validateInput(propsValue: Record<string, unknown>): void | Promise<void> {
-  const { advancedFilters, page, perPage } = propsValue;
+  const { page, perPage } = propsValue;
   return propsValidation.validateZod(
-    { advancedFilters, page, perPage },
+    { page, perPage },
     {
-      advancedFilters: componentAdvancedFiltersSchema,
       page: z.number().int().min(1).optional(),
       perPage: z.number().int().min(1).max(100).optional(),
     }
@@ -40,10 +39,11 @@ export const searchComponent = createAction({
   description: 'Search or list components (proposals, meetings, blogs, etc.)',
   props: {
     accessToken: userAccessTokenProp(false),
-    advancedFilters: componentSearchAdvancedFiltersProp(true),
+    componentIds: componentIdsFilterProp(false),
+    componentManifests: componentManifestsFilterProp(false),
+    locales: localesProp(false),
     page: pageProp(false),
     perPage: perPageProp(false),
-    locales: localesProp(false),
   },
   async run(context) {
     try {
@@ -62,7 +62,8 @@ export const searchComponent = createAction({
       );
       const { requestParams, effectivePerPage } = buildSearchComponentsRequestParams({
         accessToken: resolved.rawAccessToken,
-        advancedFilters: context.propsValue['advancedFilters'],
+        componentIds: context.propsValue['componentIds'],
+        componentManifests: context.propsValue['componentManifests'],
         page: context.propsValue['page'],
         perPage: context.propsValue['perPage'],
         locales: context.propsValue['locales'],

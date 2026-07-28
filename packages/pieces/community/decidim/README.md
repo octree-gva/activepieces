@@ -42,15 +42,12 @@ Avoid empty `catch` blocks. Top-level action `catch` should surface a string via
 | `auth_mode` | `system` or `user` |
 | `proposal_id`, `draft_proposal_id`, `component_id`, `space_id` | For chaining steps |
 | `has_more` | List steps when `count === per_page` |
-| `pagesFetched` | Search Participatory Space — API pages read during auto-pagination |
 
 ### Search Participatory Space
 
-- **Title contains** + **Space type** and/or **Advanced filters** — at least one is required.
-- **Max spaces (total)** caps how many items are collected across pages.
-- **Items per page** maps to the API `per_page` (max 100).
-- Advanced filter **Values (JSON array)** is optional; if **Value** is set, Values is ignored.
-- Implementation: `spaces-search-params.ts` (validation + query params), `search-participatory-space.ts` (auth + pagination loop).
+- Optional filters: **Space id**, **Space Manifest**, **Languages**, **Page**, **Items per page** (default 10, max 100).
+- Empty filters list spaces (scoped by token).
+- Implementation: `spaces-search-params.ts`, `search-participatory-space.ts`.
 
 ## Chaining outputs
 

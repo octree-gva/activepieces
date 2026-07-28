@@ -1,30 +1,5 @@
 import { Property } from "@activepieces/pieces-framework";
 
-/**
- * Filter operators for Decidim search endpoints. Values are the API tokens; labels are for builders.
- */
-const SEARCH_FILTER_OPERATORS = [
-  { label: 'Equals', value: 'eq' },
-  { label: 'Not equals', value: 'not_eq' },
-  { label: 'In list', value: 'in' },
-  { label: 'Not in list', value: 'not_in' },
-  { label: 'Less than', value: 'lt' },
-  { label: 'Greater than', value: 'gt' },
-  { label: 'Starts with', value: 'start' },
-  { label: 'Matches pattern', value: 'matches' },
-  { label: 'Is present', value: 'present' },
-  { label: 'Is blank', value: 'blank' },
-] as const;
-
-function searchFilterOperatorDropdown(description: string) {
-  return Property.StaticDropdown({
-    displayName: 'Operator',
-    required: true,
-    description,
-    options: { options: [...SEARCH_FILTER_OPERATORS] },
-  });
-}
-
 export function usernameProp(required = false) {
   return Property.ShortText({
     displayName: 'Nickname',
@@ -76,15 +51,6 @@ export function sendConfirmationEmailOnRegisterProp(required = false) {
   });
 }
 
-export function extendedDataQueryProp(required = false) {
-  return Property.ShortText({
-    displayName: 'Extended data filter (JSON)',
-    description:
-      'JSON object used to search inside extended_data. Example: {"chatbotUserId":"123"}. Search action only.',
-    required,
-  });
-}
-
 export function userIdProp(required = false) {
   return Property.ShortText({
     displayName: 'User ID',
@@ -114,7 +80,7 @@ export function localesProp(required = false) {
   return Property.Array({
     displayName: 'Languages',
     required,
-    description: 'Locale codes for translated text (e.g. en, fr-ca). One row per code.',
+    description: 'Select only the given locales.',
     properties: {
       value: Property.ShortText({
         displayName: 'Code',
@@ -129,7 +95,7 @@ export function pageProp(required = false) {
     displayName: 'Page number',
     required,
     defaultValue: 1,
-    description: '1-based page index.',
+    description: '1-based page index',
   });
 }
 
@@ -138,25 +104,115 @@ export function perPageProp(required = false) {
     displayName: 'Items per page',
     required,
     defaultValue: 50,
-    description: 'How many items each API page returns (max 100).',
+    description: 'max 100',
   });
 }
 
-export function spaceSearchMaxResultsProp(required = false) {
+export function spaceSearchPageProp(required = false) {
   return Property.Number({
-    displayName: 'Max spaces (total)',
+    displayName: 'Page',
     required,
-    defaultValue: 500,
-    description: 'Stop after this many spaces across all pages (max 5000).',
+    defaultValue: 1,
+    description: '1-paged pagination',
   });
 }
 
-export function spaceSearchTitleQueryProp(required = false) {
-  return Property.ShortText({
-    displayName: 'Title contains',
+export function spaceSearchPerPageProp(required = false) {
+  return Property.Number({
+    displayName: 'Items per page',
+    required,
+    defaultValue: 10,
+    description: 'max 100',
+  });
+}
+
+export function spaceSearchLanguagesProp(required = false) {
+  return Property.Array({
+    displayName: 'Languages',
+    required,
+    description: 'Only given languages will be fetched',
+    properties: {
+      value: Property.ShortText({
+        displayName: 'Code',
+        required: true,
+      }),
+    },
+  });
+}
+
+export function spaceIdsFilterProp(required = false) {
+  return Property.Array({
+    displayName: 'Space id',
+    required,
+    description: 'Only spaces with this id will be fetched',
+    properties: {
+      value: Property.Number({
+        displayName: 'ID',
+        required: true,
+      }),
+    },
+  });
+}
+
+export function spaceManifestsFilterProp(required = false) {
+  return Property.Array({
+    displayName: 'Space Manifest',
+    required,
+    description: 'Only spaces with this manifest will be fetched',
+    properties: {
+      value: Property.ShortText({
+        displayName: 'Manifest',
+        required: true,
+      }),
+    },
+  });
+}
+
+export function participantUserIdsFilterProp(required = false) {
+  return Property.Array({
+    displayName: 'User id',
+    required,
+    description: 'Only the users with these ids will be fetched',
+    properties: {
+      value: Property.Number({
+        displayName: 'ID',
+        required: true,
+      }),
+    },
+  });
+}
+
+export function participantNicknamesFilterProp(required = false) {
+  return Property.Array({
+    displayName: 'User nickname',
+    required,
+    description: 'Only the users with these nicknames will be fetched',
+    properties: {
+      value: Property.ShortText({
+        displayName: 'Nickname',
+        required: true,
+      }),
+    },
+  });
+}
+
+export function participantExtendedDataFiltersProp(required = false) {
+  return Property.Array({
+    displayName: 'User extended data',
     required,
     description:
-      'Plain text: spaces whose translated title contains this (case depends on server). Combine with space type or advanced filters.',
+      'Only users matching this Cont filter (key/value JSON substring in extended_data)',
+    properties: {
+      key: Property.ShortText({
+        displayName: 'Key',
+        required: true,
+        description: 'Dot path in extended_data (e.g. details.phone_number)',
+      }),
+      value: Property.ShortText({
+        displayName: 'Value',
+        required: true,
+      }),
+    },
   });
 }
 
@@ -167,7 +223,7 @@ export function userAccessTokenProp(required = false) {
     required,
     description: required
       ? 'Paste the token from Impersonate or OAuth (with or without "Bearer ").'
-      : 'Leave empty for app (client) credentials. Or paste a user token from Impersonate / OAuth.',
+      : 'If impersonating a user, use this field to add the impersonation token',
   });
 }
 
@@ -330,72 +386,32 @@ export function blogOrderDirectionProp(required = false) {
   });
 }
 
-export function componentSearchAdvancedFiltersProp(required = false) {
+export function componentIdsFilterProp(required = false) {
   return Property.Array({
-    displayName: 'Advanced filters',
+    displayName: 'Component ids',
     required,
-    description: 'Optional rows sent to GET /components/search.',
+    description: 'Only components with these ids will be fetched',
     properties: {
-      field: Property.StaticDropdown({
-        displayName: 'Field',
+      value: Property.Number({
+        displayName: 'ID',
         required: true,
-        options: {
-          options: [
-            { label: 'Component type (manifest)', value: 'manifest_name' },
-            { label: 'Component ID', value: 'id' },
-            { label: 'Participatory space ID', value: 'participatory_space_id' },
-            { label: 'Participatory space type', value: 'participatory_space_type' },
-            { label: 'Component name (title)', value: 'name' },
-          ],
-        },
-      }),
-      operator: searchFilterOperatorDropdown(
-        'IDs: equals, in list, less than, greater than, is present, is blank. Text: also not equals, starts with, matches pattern.',
-      ),
-      value: Property.Json({
-        displayName: 'Value',
-        required: false,
-        description:
-          'Single value, or for “In list” / “Not in list” a JSON array. Ignored for is present / is blank.',
       }),
     },
   });
 }
 
-export function spaceSearchAdvancedFiltersProp(required = false) {
+export function componentManifestsFilterProp(required = false) {
   return Property.Array({
-    displayName: 'Advanced filters',
+    displayName: 'Component manifests',
     required,
-    description: 'Optional rows sent to GET /spaces/search.',
+    description: 'Only component with these manifest name will be fetched',
     properties: {
-      field: Property.StaticDropdown({
-        displayName: 'Field',
+      value: Property.ShortText({
+        displayName: 'Manifest',
         required: true,
-        options: {
-          options: [
-            { label: 'Space type (manifest)', value: 'manifest_name' },
-            { label: 'Space ID', value: 'id' },
-            { label: 'Slug (URL segment)', value: 'slug' },
-            { label: 'Title (translated)', value: 'title' },
-          ],
-        },
-      }),
-      operator: searchFilterOperatorDropdown(
-        'Space ID: equals, in list, less than, greater than, is present, is blank. Text fields: all operators.',
-      ),
-      value: Property.Json({
-        displayName: 'Value',
-        required: false,
-        description:
-          'Single value or JSON array for “In list” / “Not in list”. Ignored for is present / is blank.',
-      }),
-      values: Property.Json({
-        displayName: 'Values (JSON array)',
-        required: false,
-        description:
-          'Alternative to Value: JSON array only. Example: ["a","b"]. Ignored if Value is set.',
       }),
     },
   });
 }
+
 

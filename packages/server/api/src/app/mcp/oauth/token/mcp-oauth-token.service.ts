@@ -1,9 +1,10 @@
 import { randomBytes } from 'crypto'
-import { apId } from '@activepieces/core-utils'
+import { apId, isNil, sanitizeObjectForPostgresql, spreadIfDefined } from '@activepieces/core-utils'
 import { cryptoUtils } from '@activepieces/server-utils'
 import { McpOAuthToken } from '@activepieces/shared'
 import { repoFactory } from '../../../core/db/repo-factory'
 import { JwtAudience, jwtUtils } from '../../../helper/jwt-utils'
+import { mcpOAuthClientIdentity } from '../client/mcp-oauth-client-identity'
 import { mcpOAuthPkce } from '../mcp-oauth.pkce'
 import { McpOAuthTokenEntity } from './mcp-oauth-token.entity'
 
@@ -52,16 +53,18 @@ export const mcpOAuthTokenService = {
             id: apId(),
             refreshToken: hashedRefreshToken,
             clientId: params.clientId,
+            clientKey: mcpOAuthClientIdentity.detectClientKey({ redirectUris: params.redirectUris }),
             userId: params.userId,
             projectId: params.projectId,
             platformId: params.platformId,
             scopes: params.scopes,
             expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_30_DAYS_MS).toISOString(),
             revoked: false,
+            lastUsedAt: null,
             created: new Date().toISOString(),
             updated: new Date().toISOString(),
         }
-        await repo().save(tokenRecord)
+        await repo().save(sanitizeObjectForPostgresql(tokenRecord))
 
         const accessToken = await issueAccessToken({
             userId: params.userId,
@@ -89,6 +92,11 @@ export const mcpOAuthTokenService = {
             throw new OAuthTokenError('invalid_grant', 'Client mismatch')
         }
 
+        await repo().update({ id: record.id }, {
+            lastUsedAt: new Date().toISOString(),
+            ...spreadIfDefined('clientKey', isNil(record.clientKey) ? mcpOAuthClientIdentity.detectClientKey({ redirectUris: params.redirectUris }) : undefined),
+        })
+
         const accessToken = await issueAccessToken({
             userId: record.userId,
             projectId: record.projectId,
@@ -101,6 +109,7 @@ export const mcpOAuthTokenService = {
             access_token: accessToken,
             token_type: 'Bearer',
             expires_in: ACCESS_TOKEN_TTL_15_MINUTES_SECONDS,
+            refresh_token: params.refreshToken,
         }
     },
 
@@ -117,12 +126,8 @@ export const mcpOAuthTokenService = {
         return payload
     },
 
-    async revokeRefreshToken(refreshToken: string, clientId: string | undefined): Promise<void> {
-        const hashed = hashRefreshToken(refreshToken)
-        const criteria = clientId
-            ? { refreshToken: hashed, clientId }
-            : { refreshToken: hashed }
-        await repo().update(criteria, { revoked: true })
+    async revokeRefreshToken({ refreshToken, clientId }: RevokeRefreshTokenParams): Promise<void> {
+        await repo().update({ refreshToken: hashRefreshToken(refreshToken), clientId }, { revoked: true })
     },
 
     async issueInternalAccessToken({ userId, platformId, projectId }: { userId: string, platformId: string, projectId: string | null }): Promise<string> {
@@ -148,6 +153,7 @@ type IssueAccessTokenParams = {
 }
 
 type ExchangeCodeParams = {
+    redirectUris: string[]
     codeVerifier: string
     codeChallenge: string
     codeChallengeMethod: string
@@ -158,7 +164,13 @@ type ExchangeCodeParams = {
     scopes: string[]
 }
 
+type RevokeRefreshTokenParams = {
+    refreshToken: string
+    clientId: string
+}
+
 type RefreshParams = {
+    redirectUris: string[]
     refreshToken: string
     clientId: string
 }

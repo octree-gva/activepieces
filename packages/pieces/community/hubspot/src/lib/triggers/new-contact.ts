@@ -10,6 +10,7 @@ import { OBJECT_TYPE, MAX_SEARCH_PAGE_SIZE, MAX_SEARCH_TOTAL_RESULTS } from '../
 import { hubspotAuth } from '../auth';
 import { Client } from '@hubspot/api-client';
 import { FilterOperatorEnum } from '../common/types';
+import { crmObjectOutputSchema } from '../output-schemas';
 
 type Props = {
 	additionalPropertiesToRetrieve?: string | string[];
@@ -74,6 +75,7 @@ const polling: Polling<AppConnectionValueForAuthProperty<typeof hubspotAuth>, Pr
 export const newContactTrigger = createTrigger({
 	auth: hubspotAuth,
 	name: 'new-contact',
+	classification: 'READ',
 	displayName: 'New Contact',
 	description: 'Trigger when new contact is available.',
 	aiMetadata: {
@@ -95,20 +97,13 @@ export const newContactTrigger = createTrigger({
 			required: false,
 		}),
 	},
+	outputSchema: crmObjectOutputSchema,
 	type: TriggerStrategy.POLLING,
 	async onEnable(context) {
-		await pollingHelper.onEnable(polling, {
-			auth: context.auth,
-			store: context.store,
-			propsValue: context.propsValue,
-		});
+		await pollingHelper.onEnable(polling, context);
 	},
 	async onDisable(context) {
-		await pollingHelper.onDisable(polling, {
-			auth: context.auth,
-			store: context.store,
-			propsValue: context.propsValue,
-		});
+		await pollingHelper.onDisable(polling, context);
 	},
 	async test(context) {
 		return await pollingHelper.test(polling, context);

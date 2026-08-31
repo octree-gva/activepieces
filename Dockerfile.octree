@@ -77,7 +77,6 @@ RUN npx turbo run build \
   --filter=@activepieces/piece-opnform \
   --filter=@activepieces/piece-whatsapp \
   --filter=@activepieces/piece-stripe \
-  --filter=@activepieces/piece-i18n-store \
   --filter=@activepieces/piece-state-store \
   --filter=@activepieces/piece-matrix \
   --filter=@activepieces/piece-telegram-bot \
@@ -89,7 +88,6 @@ RUN rm -rf packages/pieces/custom && \
       ! -name opnform \
       ! -name whatsapp \
       ! -name stripe \
-      ! -name i18n-store \
       ! -name state-store \
       ! -name slack \
       ! -name square \
@@ -111,7 +109,7 @@ ENV AP_API_KEY="api-key" \
     AP_CHATBOT_ENABLED=true \
     AP_CONFIG_PATH="./dev/config" \
     AP_DB_TYPE=POSTGRES \
-    AP_DEV_PIECES="decidim,store,webhook,opnform,whatsapp,stripe,i18n-store,state-store,matrix,telegram-bot,tables" \
+    AP_DEV_PIECES="decidim,store,webhook,opnform,whatsapp,stripe,state-store,matrix,telegram-bot,tables" \
     AP_ENRICH_ERROR_CONTEXT=true \
     AP_ENVIRONMENT="prod" \
     AP_FRONTEND_URL="http://localhost:8080" \

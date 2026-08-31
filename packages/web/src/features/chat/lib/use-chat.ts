@@ -3,15 +3,16 @@ import {
   ActionPreviewEvent,
   ActionReceiptEvent,
   BuildPlanEvent,
-  ChatAllowedMimeType,
+  AgentAllowedMimeType,
   FileProducedEvent,
   ImageGeneratedEvent,
-  ChatConversationStatus,
-  ChatHistoryMessage,
+  AgentConversationStatus,
+  AgentHistoryMessage,
   CHAT_ALLOWED_MIME_TYPES,
   DEFAULT_CHAT_TIER_ID,
-  PersistedChatMessage,
+  PersistedAgentMessage,
   ToolProgressEvent,
+  AgentMessageSource,
 } from '@activepieces/shared';
 import { useQuery } from '@tanstack/react-query';
 import { t } from 'i18next';
@@ -50,7 +51,7 @@ function restoreReceiptsIntoStore({
   data,
   setState,
 }: {
-  data: PersistedChatMessage[] | ChatHistoryMessage[];
+  data: PersistedAgentMessage[] | AgentHistoryMessage[];
   setState: SetChatStore;
 }): void {
   const receipts = chatUtils.extractReceiptsFromHistory(data);
@@ -182,13 +183,13 @@ function appendGatePart({
 
 const ALLOWED_MIME_SET: ReadonlySet<string> = new Set(CHAT_ALLOWED_MIME_TYPES);
 
-function isAllowedMimeType(value: string): value is ChatAllowedMimeType {
+function isAllowedMimeType(value: string): value is AgentAllowedMimeType {
   return ALLOWED_MIME_SET.has(value);
 }
 
 function fileToBase64(
   file: File,
-): Promise<{ name: string; mimeType: ChatAllowedMimeType; data: string }> {
+): Promise<{ name: string; mimeType: AgentAllowedMimeType; data: string }> {
   return new Promise((resolve, reject) => {
     const mimeType = file.type || 'application/octet-stream';
     if (!isAllowedMimeType(mimeType)) {
@@ -248,13 +249,19 @@ type SendStatus =
   | { type: 'error'; message: string };
 
 export function useAgentChat({
+  agentId,
+  builder,
   onTitleUpdate,
   onConversationCreated,
   onCreditsExhausted,
+  onTurnEnd,
 }: {
+  agentId?: string;
+  builder?: boolean;
   onTitleUpdate?: (title: string) => void;
   onConversationCreated?: (conversationId: string) => void;
   onCreditsExhausted?: () => void;
+  onTurnEnd?: () => void;
 } = {}) {
   const store = useChatStoreApi();
 
@@ -282,7 +289,7 @@ export function useAgentChat({
   optimisticUserMessageRef.current = optimisticUserMessage;
 
   const pendingFilesRef = useRef<
-    { name: string; mimeType: ChatAllowedMimeType; data: string }[] | undefined
+    { name: string; mimeType: AgentAllowedMimeType; data: string }[] | undefined
   >(undefined);
   const lastSentFileNamesRef = useRef<string[]>([]);
   const conversationIdRef = useRef<string | null>(null);
@@ -453,7 +460,7 @@ export function useAgentChat({
         { conversation: { id: convId }, errorCode, error: errorMessage },
         'stream error',
       );
-      if (errorCode === ErrorCode.AI_CREDIT_LIMIT_EXCEEDED) {
+      if (errorCode === ErrorCode.QUOTA_EXCEEDED) {
         onCreditsExhaustedRef.current?.();
         settleStreamRef.current(convId, { suppressNoReply: true });
         return;
@@ -465,7 +472,7 @@ export function useAgentChat({
         const conv = await chatApi.getConversation(convId);
         if (isNil(conv) || conversationIdRef.current !== convId) return;
 
-        if (conv.status !== ChatConversationStatus.STREAMING) {
+        if (conv.status !== AgentConversationStatus.STREAMING) {
           settleStreamRef.current(convId);
         }
       });
@@ -519,6 +526,16 @@ export function useAgentChat({
   }, [streamingQuickReplies, store]);
 
   const isStreamActive = streamPhase !== 'idle';
+  const onTurnEndRef = useRef(onTurnEnd);
+  onTurnEndRef.current = onTurnEnd;
+  const wasStreamActiveRef = useRef(false);
+  useEffect(() => {
+    if (wasStreamActiveRef.current && !isStreamActive) {
+      onTurnEndRef.current?.();
+    }
+    wasStreamActiveRef.current = isStreamActive;
+  }, [isStreamActive]);
+
   const isStreaming =
     isStreamActive ||
     sendStatusRef.current.type === 'submitting' ||
@@ -600,16 +617,22 @@ export function useAgentChat({
       const conv = await chatApi.createConversation({
         title: title ?? null,
         modelName: modelName ?? null,
+        ...(agentId === undefined ? {} : { agentId }),
+        ...(builder === undefined ? {} : { builder }),
       });
       conversationIdRef.current = conv.id;
       setConversationIdState(conv.id);
       return conv;
     },
-    [],
+    [agentId, builder],
   );
 
   const sendMessage = useCallback(
-    async (content: string, files?: File[]) => {
+    async (
+      content: string,
+      files?: File[],
+      options?: { messageSource?: AgentMessageSource },
+    ) => {
       updateSendStatus({ type: 'submitting' });
 
       const fileNames = files?.map((f) => f.name) ?? [];
@@ -710,6 +733,9 @@ export function useAgentChat({
           content,
           runId,
           files: pendingFilesRef.current,
+          ...(options?.messageSource
+            ? { messageSource: options.messageSource }
+            : {}),
         }),
       );
       if (sendError) {
@@ -723,7 +749,7 @@ export function useAgentChat({
         );
         stopStream();
         setOptimisticUserMessage(null);
-        if (api.isApError(sendError, ErrorCode.AI_CREDIT_LIMIT_EXCEEDED)) {
+        if (api.isApError(sendError, ErrorCode.QUOTA_EXCEEDED)) {
           onCreditsExhaustedRef.current?.();
           updateSendStatus({ type: 'idle' });
         } else {
@@ -747,6 +773,13 @@ export function useAgentChat({
 
   const setConversationId = useCallback(
     async (id: string) => {
+      if (
+        chatUtils.reopensSameConversation({
+          current: conversationIdRef.current,
+          next: id,
+        })
+      )
+        return;
       stopStream();
       setIsPollingForAgentReply(false);
       updateSendStatus({ type: 'idle' });
@@ -784,7 +817,7 @@ export function useAgentChat({
       });
       modelNameRef.current = convResult.data.modelName ?? null;
       setModelNameState(convResult.data.modelName ?? null);
-      if (convResult.data.status === ChatConversationStatus.STREAMING) {
+      if (convResult.data.status === AgentConversationStatus.STREAMING) {
         const lastAssistantIdx = mapped.findLastIndex(
           (m) => m.role === 'assistant',
         );
@@ -844,7 +877,7 @@ export function useAgentChat({
         const restored = chatUtils.extractQuickRepliesFromHistory(mapped);
         applyQuickRepliesToStore({ setState: store.setState, data: restored });
       }
-      if (convResult.status !== ChatConversationStatus.STREAMING) {
+      if (convResult.status !== AgentConversationStatus.STREAMING) {
         setIsPollingForAgentReply(false);
       } else {
         const hasBlockingCard = chatStoreSelectors.hasBlockingCard({

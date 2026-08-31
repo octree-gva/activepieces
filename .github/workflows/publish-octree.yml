@@ -35,10 +35,6 @@ jobs:
         run: |
           npx turbo test --filter='@activepieces/piece-decidim'
 
-      - name: Run tests for i18n-store
-        run: |
-          npx turbo test --filter='@activepieces/piece-i18n-store'
-
       - name: Run tests for state-store
         run: |
           npx turbo test --filter='@activepieces/piece-state-store'

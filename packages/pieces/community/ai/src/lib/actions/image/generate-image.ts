@@ -17,16 +17,18 @@ import {
 import { generateImage } from 'ai';
 import mime from 'mime-types';
 import { isNil } from '@activepieces/pieces-framework';
-import { getEffectiveProviderAndModel } from '@activepieces/pieces-framework';
+import { getEffectiveProviderAndModel, spreadIfDefined } from '@activepieces/pieces-framework';
 import { createAIModel } from '../../common/ai-sdk';
 import { AIProviderName } from '@activepieces/pieces-framework';
-import { aiProps } from '../../common/props';
+import { aiProps, aiProviderSelection } from '../../common/props';
 
 export const generateImageAction = createAction({
-  audience: 'human',
+  audience: 'both',
   name: 'generateImage',
+  classification: 'READ',
   displayName: 'Generate Image',
   description: 'Create unique, high-quality images from simple text descriptions using AI.',
+  aiMetadata: { description: 'Generates an image from a text prompt with an image-capable model and writes it out as a flow file; when Input Images are attached and the model supports editing, it edits, varies, or merges those images instead of generating from scratch. Pick it for any image creation or edit step; use askAi or run_agent when you need text output. Requires a prompt plus an image-capable provider/model, and input images fail on a model that cannot accept them; not idempotent, as each call generates and stores a new image file.', idempotent: false },
   props: {
     provider: aiProps({ modelType: 'image' }).provider,
     model: aiProps({ modelType: 'image' }).model,
@@ -52,7 +54,7 @@ export const generateImageAction = createAction({
       auth: PieceAuth.None(),
       refreshers: ['provider', 'model'],
       props: async (propsValue): Promise<InputPropertyMap> => {
-        const rawProvider = propsValue['provider'] as unknown as string;
+        const rawProvider = aiProviderSelection.resolve(propsValue['provider'])?.provider;
         const rawModel = propsValue['model'] as unknown as string;
         const { provider: effectiveProvider, model: effectiveModel } = getEffectiveProviderAndModel({
           provider: rawProvider,
@@ -73,7 +75,7 @@ export const generateImageAction = createAction({
                       { label: 'Standard', value: 'standard' },
                       { label: 'HD', value: 'hd' },
                     ]
-                    : modelId === 'gpt-image-1'
+                    : isGptImageModel({ modelId })
                       ? [
                         { label: 'High', value: 'high' },
                         { label: 'Medium', value: 'medium' },
@@ -95,7 +97,7 @@ export const generateImageAction = createAction({
                       { label: '1792x1024', value: '1792x1024' },
                       { label: '1024x1792', value: '1024x1792' },
                     ]
-                    : modelId === 'gpt-image-1'
+                    : isGptImageModel({ modelId })
                       ? [
                         { label: '1024x1024', value: '1024x1024' },
                         { label: '1536x1024', value: '1536x1024' },
@@ -112,7 +114,7 @@ export const generateImageAction = createAction({
             }),
           };
 
-          if (modelId === 'gpt-image-1') {
+          if (isGptImageModel({ modelId })) {
             options = {
               ...options,
               background: Property.StaticDropdown({
@@ -139,7 +141,7 @@ export const generateImageAction = createAction({
     }),
   },
   async run(context) {
-    const provider = context.propsValue.provider;
+    const { provider, configId } = aiProviderSelection.resolveOrThrow(context.propsValue.provider);
     const modelId = context.propsValue.model;
 
     const inputImages = collectInputImages({
@@ -148,7 +150,8 @@ export const generateImageAction = createAction({
     });
 
     const image = await getGeneratedImage({
-      provider: provider as AIProviderName,
+      provider,
+      ...spreadIfDefined('configId', configId),
       modelId,
       engineToken: context.server.token,
       apiUrl: context.server.apiUrl,
@@ -205,6 +208,7 @@ const extractImageFiles = (value: unknown): ApFile[] => {
 
 const getGeneratedImage = async ({
   provider,
+  configId,
   modelId,
   engineToken,
   apiUrl,
@@ -216,6 +220,7 @@ const getGeneratedImage = async ({
   advancedOptions,
 }: {
   provider: AIProviderName;
+  configId?: string;
   modelId: string;
   engineToken: string;
   apiUrl: string;
@@ -228,6 +233,7 @@ const getGeneratedImage = async ({
 }): Promise<GeneratedFile> => {
   const model = await createAIModel({
     provider,
+    ...spreadIfDefined('configId', configId),
     modelId,
     engineToken,
     apiUrl,
@@ -379,3 +385,7 @@ const assertImageGenerationSuccess = (
     throw new Error('No image generated');
   }
 };
+
+function isGptImageModel({ modelId }: { modelId: string }): boolean {
+  return modelId.startsWith('gpt-image');
+}

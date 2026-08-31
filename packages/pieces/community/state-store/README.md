@@ -1,305 +1,134 @@
 # State Store Piece
 
-A Redis-backed conversation state machine for Activepieces that manages conversation state with finite state machine (FSM) validation and event streaming.
+Redis-backed conversation state for Activepieces chatbots. One conversation per user in a connection namespace, with FSM-validated advances and optional jump for intercepts. No history / go-back.
 
-## Overview
+## Who this is for
 
-This piece provides a state management system for conversational applications. It stores conversation state in Redis, validates state transitions using a configurable FSM, and emits events when conversations change state.
+Flow builders composing WhatsApp (or similar) → Decidim (or other) flows. Connection = Redis URL + namespace (bot) + FSM. User ID on each step = WhatsApp sender (or any stable user key).
 
-**Key Concepts:**
-- **Namespace**: Isolates different chatbot domains (e.g., "bot:proposal", "bot:support")
-- **Conversation**: A single conversation instance identified by a unique ID
-- **State**: The current position in the conversation flow (e.g., "START", "PROPOSE", "PROPOSE_TITLE")
-- **FSM**: Defines valid state transitions (e.g., START → PROPOSE → PROPOSE_TITLE)
-- **Events**: Automatically emitted when conversations change state, enabling reactive workflows
+## Product needs
+
+| Need | How |
+| --- | --- |
+| On a message: get state, then advance | **Get or Create Conversation** → Router on `state` → **Update Conversation** with next state |
+| On an intercept: jump | **Update Conversation** with **Jump, skip FSM** |
+| Store data on the state | **Update Conversation** merges `data` by default (or Replace Data) |
+| State linked to current user | User ID prop; Redis key `{namespace}:conversation:{userId}` |
+| No history | No previous-state stack, no go-back |
 
 ## Connection
 
-When creating a State Store connection, configure:
-- **Redis URL**: Connection URL (e.g., `redis://:password@localhost:6379`)
-- **Namespace**: Isolates chatbot domains (e.g., `bot:proposal`)
-- **FSM**: Finite state machine definition (see example below)
+Configure once:
 
-**Example FSM:**
+- **Redis URL** — use the same Redis as Activepieces when possible
+  - Docker Compose (`docker-compose.octree.yml`): `redis://redis:6379` from another container, or `redis://localhost:6379` from the host if the Redis port is published
+  - Do **not** start a second Redis on 6379 for the happy path
+- **Namespace** — bot / domain isolation (e.g. `bot:proposal`)
+- **FSM** — `initial` + `transitions` map
+
+Example FSM:
+
 ```json
 {
   "initial": "START",
   "transitions": {
-    "START": ["PROPOSE"],
-    "PROPOSE": ["PROPOSE_TITLE", "START"]
+    "START": ["PROPOSE", "MENU"],
+    "PROPOSE": ["PROPOSE_SUBMIT", "MENU"],
+    "PROPOSE_SUBMIT": ["MENU"],
+    "MENU": ["PROPOSE", "START"]
   }
 }
 ```
 
-All actions and triggers using the connection share this FSM.
+## Happy path: normal message
+
+```text
+WhatsApp message
+  → Get or Create Conversation (User ID = sender)
+  → Router on conversation.state
+  → handle (Decidim / i18n / …)
+  → Update Conversation (next state + merge data)
+  → WhatsApp send
+```
+
+1. **Get or Create Conversation** — returns `conversation`, `created`, and `allowed_next_states`.
+2. **Router** — branch on `conversation.state`.
+3. **Update Conversation** — pick next state from the FSM dropdown; merge session data. Same-state updates are always allowed (patch data without leaving the state).
+
+## Intercept: special message
+
+```text
+WhatsApp special message
+  → Update Conversation (Jump, skip FSM → target state + optional data)
+  → WhatsApp send
+```
+
+Turn on **Jump, skip FSM** so the target state does not need to be an allowed FSM transition.
 
 ## Actions
 
-### Get Conversation State
-Retrieves the current state and data for a conversation. If the conversation doesn't exist, it creates a new one with the initial state from the configured FSM (or "UNKNOWN" if no FSM is configured).
+### Get or Create Conversation
 
-**When to use:** Check the current state of a conversation or initialize a new conversation.
+Retrieves state and data for a user. Creates at FSM `initial` (or `unknown`) if missing.
 
-**Inputs:**
-- `namespace`: Namespace identifier
-- `conversation_id`: Unique conversation identifier (e.g., user ID, session ID)
+**Output:** `ok`, `created`, `conversation` (`state`, `data`), `allowed_next_states`
 
-**Output:**
-- `ok`: Success indicator (boolean)
-- `created`: Whether a new conversation was created (boolean)
-- `conversation`: Conversation object with `state` (string) and `data` (object)
+### Update Conversation
 
-**Behavior:**
-- If conversation exists: returns existing state and data
-- If conversation doesn't exist: creates it with initial state and emits a creation event
+Transitions and/or merges data.
 
-### Update Conversation State
-Transitions a conversation to a new state. Validates the state transition (using FSM), then emits an event.
+| Prop | Role |
+| --- | --- |
+| User ID | Same key as Get |
+| State | Optional. Empty = stay; otherwise next state from FSM dropdown |
+| Data | Merged into existing session data |
+| Replace Data | Wipe-and-set instead of merge |
+| Jump, skip FSM | Intercepts — skip transition validation |
 
-**When to use:** Move a conversation to the next step in your flow after user interaction or processing.
-
-**Inputs:**
-- `namespace`: Namespace identifier
-- `conversation_id`: Unique conversation identifier
-- `state`: New state to transition to (must be valid according to FSM)
-- `data`: Data object for the conversation state (loosely validated; any JSON-serializable object)
-
-**Output:**
-- `ok`: Success indicator (boolean)
-- `conversation`: Updated conversation object with new `state` and `data`
-- `error`: Error object with `code` and `message` if validation fails
-
-**Validation:**
-- **FSM Transition**: Ensures the transition from current state to new state is allowed
-- **Event Emission**: Automatically emits event to Redis Streams for triggerable flows
-
-**Error Codes:**
-- `INVALID_TRANSITION`: The state transition is not allowed by the FSM
+**Errors:** `INVALID_TRANSITION` when Jump is off and the move is not allowed (or current state is unknown to the FSM).
 
 ### Inspect State Configuration
-View the configured state machine schema and recent conversation events. Useful for debugging and monitoring.
 
-**When to use:** Troubleshoot state machine issues or monitor conversation activity.
+Debug: connection FSM + recent stream events (optional User ID filter).
 
-**Inputs:**
-- `namespace`: Namespace identifier
-- `event_count`: Number of recent events to return (default: 10)
+## Triggers (side-flows)
 
-**Output:**
-- `ok`: Success indicator (boolean)
-- `namespace`: The namespace queried
-- `schema`: The configured schema bundle (FSM)
-- `events`: Array of recent conversation change events
-- `event_count`: Number of events returned
+**On Conversation Changed** (polling) — analytics / operators. Optional state filter. Not the bot loop (polling is too slow for chat).
 
-## Trigger
+**On Conversation Changed (Webhook)** — advanced; needs `bin/redis-webhook-bridge.ts`. Prefer channel inbound triggers for the bot.
 
-### On Conversation Changed
-A polling trigger that fires whenever a conversation changes state in the specified namespace. Use this to build reactive workflows that respond to conversation state changes.
-
-**When to use:** Create workflows that automatically respond when conversations move to specific states.
-
-**Configuration:**
-- `namespace`: Namespace to monitor for conversation changes
-
-**Event Payload:**
-```json
-{
-  "namespace": "bot:proposal",
-  "conversation_id": "whatsapp:+351...",
-  "previous": { 
-    "state": "PROPOSE", 
-    "data": {} 
-  },
-  "current": { 
-    "state": "PROPOSE_TITLE", 
-    "data": { 
-      "title": "Example proposal" 
-    } 
-  },
-  "at": "2026-01-24T12:00:00Z"
-}
-```
-
-**How it works:**
-- Polls Redis Streams for new conversation events
-- Emits events in chronological order
-- Deduplicates events to prevent duplicate triggers
-- Works with any conversation state change (created or updated)
-
-## Typical Workflow
-
-1. **Create connection** (one-time setup)
-   - Configure Redis URL, namespace, and FSM in the connection settings
-
-2. **Get Conversation State** (when starting/interacting)
-   - Use "Get Conversation State" to retrieve or initialize a conversation
-   - Returns current state and data, or creates new conversation with initial state
-
-3. **Update Conversation State** (when progressing)
-   - Use "Update Conversation State" to move conversations through your flow
-   - Validates transitions against the connection's FSM, then emits events
-
-4. **React to Changes** (optional, for reactive workflows)
-   - Use "On Conversation Changed" trigger to build workflows that respond to state changes
-   - Useful for notifications, analytics, or multi-step processes
-
-## Example: Proposal Bot Flow
-
-```json
-// Connection: namespace = "bot:proposal", FSM =
-{
-  "initial": "START",
-  "transitions": {
-    "START": ["PROPOSE"],
-    "PROPOSE": ["PROPOSE_TITLE", "START"],
-    "PROPOSE_TITLE": ["PROPOSE_DESCRIPTION", "START"],
-    "PROPOSE_DESCRIPTION": ["COMPLETE", "START"]
-  }
-}
-
-// Step 1: Get or create conversation
-{
-  "namespace": "bot:proposal",
-  "conversation_id": "whatsapp:+351912345678"
-}
-// Returns: { "state": "START", "data": {} }
-
-// Step 2: Update conversation state
-{
-  "namespace": "bot:proposal",
-  "conversation_id": "whatsapp:+351912345678",
-  "state": "PROPOSE",
-  "data": {}
-}
-// Validates transition START → PROPOSE, emits event
-
-// Step 3: Update with data
-{
-  "namespace": "bot:proposal",
-  "conversation_id": "whatsapp:+351912345678",
-  "state": "PROPOSE_TITLE",
-  "data": { "title": "My Proposal" }
-}
-// Validates transition PROPOSE → PROPOSE_TITLE, emits event
-```
-
-## Local Development and Testing
-
-### Prerequisites
-
-- Node.js v18+ and npm v9+
-- Docker and Docker Compose (for local Redis)
-- Activepieces development environment set up
-
-### Setting Up Redis Locally
-
-The piece includes a `docker-compose.yml` file for local Redis development:
+## Local development
 
 ```bash
-cd packages/pieces/community/state-store
-docker-compose up -d
+# Enable the piece
+# packages/server/api/.env → AP_DEV_PIECES=state-store
+
+# Use the Activepieces Redis from docker-compose.octree.yml (already required by the app).
+# Connection URL from the host if Redis is published, or redis://redis:6379 from compose network.
+
+npm start   # from repo root
 ```
 
-This starts Redis on `localhost:6379` with:
-- Password: `my_insecure_password`
-- Persistence enabled (AOF)
-- Health checks configured
-
-**Connection URL for local development:**
-```
-redis://:my_insecure_password@localhost:6379
-```
-
-To stop Redis:
-```bash
-docker-compose down
-```
-
-### Running Tests
-
-Run unit tests using Nx:
+Tests:
 
 ```bash
-# From the repository root
-nx test pieces-state-store
-
-# Or from the piece directory
-cd packages/pieces/community/state-store
-nx test pieces-state-store
+npx turbo run test --filter=@activepieces/piece-state-store
+# or
+cd packages/pieces/community/state-store && npm test
 ```
 
-Tests use mocked Redis connections and cover:
-- Action implementations (get-conversation, set-conversation)
-- Utility functions (validation, schema, JSON, Redis)
-- Error handling and edge cases
+Build / lint:
 
-### Running Activepieces with This Piece
+```bash
+npx turbo run build --filter=@activepieces/piece-state-store
+npx turbo run lint --filter=@activepieces/piece-state-store
+```
 
-1. **Enable the piece in development mode:**
+## Redis keys
 
-   Set the `AP_DEV_PIECES` environment variable to include `state-store`:
+- `{namespace}:conversation:{userId}` — current state + data
+- `{namespace}:events` — Redis stream (trimmed ~10k); for triggers only, not user history
 
-   ```bash
-   export AP_DEV_PIECES=state-store
-   ```
+## Concurrency
 
-   Or add it to `packages/server/api/.env`:
-   ```
-   AP_DEV_PIECES=state-store
-   ```
-
-2. **Start Activepieces:**
-
-   ```bash
-   # From repository root
-   npm start
-   ```
-
-   This starts:
-   - Frontend at `http://localhost:4200` (or 4300)
-   - Backend API at `http://localhost:3000`
-   - Engine worker
-
-3. **Configure the connection:**
-
-   - Navigate to `http://localhost:4200` and sign in (default: `dev@ap.com` / `12345678`)
-   - Create a new connection for the State Store piece
-   - Use Redis URL: `redis://:my_insecure_password@localhost:6379`
-   - Set your namespace (e.g., `bot:proposal`)
-   - Define FSM (initial state and transitions)
-   - Enable SSL only if using a secured Redis instance
-
-### Testing in Activepieces UI
-
-1. Create a workflow using the State Store piece
-2. Use "Get Conversation State" to retrieve or create conversations
-3. Use "Update Conversation State" to transition conversations
-4. Set up "On Conversation Changed" trigger to react to state changes
-
-### Debugging
-
-- Use "Inspect State Configuration" action to view configured schemas and recent events
-- Check Redis directly: `docker exec -it state-store-redis redis-cli -a my_insecure_password`
-- View Redis keys: `KEYS bot:*` (replace `bot` with your namespace prefix)
-- Monitor events: `XREAD COUNT 10 STREAMS bot:proposal:events 0`
-
-## Technical Details
-
-### Redis Keys
-
-All keys are derived from namespace:
-- `{namespace}:conversation:{conversation_id}` - Conversation state storage
-- `{namespace}:events` - Redis Streams event log (max 10,000 events)
-
-### Concurrency
-
-- Uses Redis `SET NX` for atomic conversation creation
-- Safe for concurrent access from multiple workflows
-- Race conditions are handled gracefully
-
-### Event Streaming
-
-- Events are stored in Redis Streams with automatic trimming (max 10,000 events)
-- Events include previous state, current state, and timestamp
-- Trigger uses polling strategy with deduplication
+Create uses `SET NX`. Concurrent Gets for a new user resolve to one conversation.

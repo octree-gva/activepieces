@@ -34,7 +34,9 @@ An [FSM](https://en.wikipedia.org/wiki/Finite-state_machine) is a model where a 
 \`\`\`
 
 - \`initial\`: starting state for new conversations
-- \`transitions\`: map each state to an array of allowed next states. \`Set Conversation\` validates transitions before applying.
+- \`transitions\`: map each state to an array of allowed next states. **Update Conversation** validates transitions unless **Jump, skip FSM** is on (intercepts).
+- Same-state updates always succeed so you can merge session data without leaving the state.
+- Namespace is the bot; User ID on each action is the WhatsApp sender (or other stable user key). No go-back / history.
       `.trim(),
     }),
     fsm: fsmProp,
@@ -53,7 +55,12 @@ An [FSM](https://en.wikipedia.org/wiki/Finite-state_machine) is a model where a 
     if (!namespace) {
       return { valid: false, error: 'Namespace is required' };
     }
-    const fsmJson = JSON.parse(fsm as string) as unknown;
+    let fsmJson: unknown;
+    try {
+      fsmJson = typeof fsm === 'string' ? JSON.parse(fsm) : fsm;
+    } catch {
+      return { valid: false, error: 'Invalid FSM JSON' };
+    }
     if (!fsmJson || typeof fsmJson !== 'object') {
       return { valid: false, error: 'Invalid FSM JSON' };
     }

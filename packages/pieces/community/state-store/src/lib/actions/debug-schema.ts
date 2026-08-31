@@ -1,13 +1,22 @@
 import { createAction, Property } from '@activepieces/pieces-framework';
 import { stateStoreAuth } from '../../stateStoreAuth';
 import { redisConnect } from '../utils/redis';
-import { getEventsKey, getFsmFromAuth } from '../utils/validation';
+import { getEventsKey, getFsmFromAuth, parseConversationEvent } from '../utils/validation';
+import { debugSchemaActionOutputSchema } from '../output-schemas';
 
 export const debugSchemaAction = createAction({
   name: 'debug_schema',
   displayName: 'Inspect State Configuration',
   description: 'View the configured state machine schema and recent conversation events for troubleshooting',
   auth: stateStoreAuth,
+  audience: 'both',
+  classification: 'READ',
+  aiMetadata: {
+    description:
+      'Returns the connection FSM schema and recent conversation change events from the Redis stream. Optional User ID filters events for one user. Use when debugging transitions or monitoring activity.',
+    idempotent: true,
+  },
+  outputSchema: debugSchemaActionOutputSchema,
   props: {
     event_count: Property.Number({
       displayName: 'Event Count',
@@ -16,8 +25,8 @@ export const debugSchemaAction = createAction({
       defaultValue: 10,
     }),
     conversation_id: Property.ShortText({
-      displayName: 'Conversation ID',
-      description: 'If set, only return events for this conversation',
+      displayName: 'User ID',
+      description: 'If set, only return events for this user',
       required: false,
     }),
   },
@@ -29,17 +38,26 @@ export const debugSchemaAction = createAction({
 
     try {
       const eventsKey = getEventsKey(namespace);
-
       const eventCount = event_count || 10;
       const conversation_id = context.propsValue.conversation_id;
       const fetchCount = conversation_id ? 500 : eventCount;
       const events = await client.xrevrange(eventsKey, '+', '-', 'COUNT', fetchCount);
 
-      let parsedEvents = events.map(([id, fields]) => ({ id, ...JSON.parse(fields[1] as string) ?? {} }));
-      if (conversation_id) {
-        parsedEvents = parsedEvents
-          .filter((e) => (e as { conversation_id?: string }).conversation_id === conversation_id)
-          .slice(0, eventCount);
+      const parsedEvents = [];
+      for (const [id, fields] of events) {
+        const payloadIndex = fields.indexOf('payload');
+        const payloadRaw = payloadIndex >= 0 ? fields[payloadIndex + 1] : undefined;
+        const event = parseConversationEvent(payloadRaw);
+        if (!event) {
+          continue;
+        }
+        if (conversation_id && event.conversation_id !== conversation_id) {
+          continue;
+        }
+        parsedEvents.push({ id, ...event });
+        if (parsedEvents.length >= eventCount) {
+          break;
+        }
       }
 
       return {

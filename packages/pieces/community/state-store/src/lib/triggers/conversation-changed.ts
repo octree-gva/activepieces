@@ -1,32 +1,43 @@
 import {
   createTrigger,
   TriggerStrategy,
-  Property,
   AppConnectionValueForAuthProperty,
 } from '@activepieces/pieces-framework';
 import { DedupeStrategy, Polling, pollingHelper } from '@activepieces/pieces-common';
 import { stateStoreAuth } from '../../stateStoreAuth';
 import { redisConnect } from '../utils/redis';
-import { getEventsKey } from '../utils/validation';
+import { getEventsKey, parseConversationEvent } from '../utils/validation';
 import { ConversationEvent } from '../../types';
+import { stateDropdownProp } from '../common/state-dropdown';
+import { conversationChangedTriggerOutputSchema } from '../output-schemas';
 
-const polling: Polling<AppConnectionValueForAuthProperty<typeof stateStoreAuth>, Record<string, never>> = {
+type TriggerProps = {
+  state_filter?: string;
+};
+
+const polling: Polling<
+  AppConnectionValueForAuthProperty<typeof stateStoreAuth>,
+  TriggerProps
+> = {
   strategy: DedupeStrategy.LAST_ITEM,
-  items: async ({ auth, lastItemId }) => {
-    // Use the correct type for auth from types.ts that includes all props from stateStoreAuth
-    // Assuming the type is named StateStoreAuthProps in types.ts
-    const { namespace } = auth.props; // Type will enforce inclusion of all required props
+  items: async ({ auth, lastItemId, propsValue }) => {
+    const { namespace } = auth.props;
     const client = await redisConnect(auth);
     const eventsKey = getEventsKey(namespace);
+    const stateFilter = propsValue.state_filter;
 
     try {
-      // Use simple XREAD approach for polling triggers
-      // Consumer groups are better for webhook-style processing, but polling
-      // triggers work better with simple XREAD from last known position
-      let streamId = lastItemId as string || '0';
-
-      // If lastItemId is '0', start from beginning, otherwise read from that ID
-      const messages = await client.xread('COUNT', 100, 'STREAMS', eventsKey, streamId);
+      const streamId =
+        typeof lastItemId === 'string' && lastItemId.length > 0 ? lastItemId : '0';
+      const messages = await client.xread(
+        'COUNT',
+        100,
+        'BLOCK',
+        1,
+        'STREAMS',
+        eventsKey,
+        streamId
+      );
 
       if (!messages || messages.length === 0) {
         return [];
@@ -34,20 +45,21 @@ const polling: Polling<AppConnectionValueForAuthProperty<typeof stateStoreAuth>,
 
       const items: Array<{ id: string; data: ConversationEvent }> = [];
 
-      for (const [stream, entries] of messages) {
+      for (const [, entries] of messages) {
         for (const [id, fields] of entries) {
-          const payloadField = fields.find(([key]) => key === 'payload');
-          if (payloadField) {
-            try {
-              const event = JSON.parse(payloadField[1] as string) as ConversationEvent;
-              items.push({
-                id,
-                data: event,
-              });
-            } catch (error) {
-              // Skip invalid events
-            }
+          const payloadIndex = fields.indexOf('payload');
+          const payloadRaw = payloadIndex >= 0 ? fields[payloadIndex + 1] : undefined;
+          const event = parseConversationEvent(payloadRaw);
+          if (!event) {
+            continue;
           }
+          if (stateFilter && event.current.state !== stateFilter) {
+            continue;
+          }
+          items.push({
+            id,
+            data: event,
+          });
         }
       }
 
@@ -62,8 +74,21 @@ export const conversationChangedTrigger = createTrigger({
   name: 'conversation_changed',
   auth: stateStoreAuth,
   displayName: 'On Conversation Changed',
-  description: 'Triggered when a conversation state changes in the specified namespace',
-  props: {},
+  description:
+    'Fires when a conversation state changes in this namespace. Side-flow for analytics or operators — not the main WhatsApp bot loop.',
+  classification: 'READ',
+  aiMetadata: {
+    description:
+      'Polling trigger for conversation change events in the connection namespace. Optional state filter keeps only events whose new state matches. Prefer WhatsApp inbound for the bot loop; use this for side effects.',
+  },
+  outputSchema: conversationChangedTriggerOutputSchema,
+  props: {
+    state_filter: stateDropdownProp({
+      required: false,
+      displayName: 'State Filter',
+      description: 'If set, only emit events whose new (current) state matches this value.',
+    }),
+  },
   sampleData: {
     namespace: 'bot:proposal',
     conversation_id: 'whatsapp:+351...',
@@ -84,12 +109,10 @@ export const conversationChangedTrigger = createTrigger({
     return await pollingHelper.test(polling, context);
   },
   async onEnable(context) {
-    const { store, auth, propsValue } = context;
-    await pollingHelper.onEnable(polling, { store, propsValue, auth });
+    await pollingHelper.onEnable(polling, context);
   },
   async onDisable(context) {
-    const { store, auth, propsValue } = context;
-    await pollingHelper.onDisable(polling, { store, propsValue, auth });
+    await pollingHelper.onDisable(polling, context);
   },
   async run(context) {
     return await pollingHelper.poll(polling, context);

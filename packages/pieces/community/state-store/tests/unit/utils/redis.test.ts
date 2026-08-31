@@ -1,8 +1,24 @@
 import { redisConnect } from '../../../src/lib/utils/redis';
-import { stateStoreAuth } from '../../../src/stateStoreAuth';
 import Redis from 'ioredis';
+import { AppConnectionType, AppConnectionValueForAuthProperty } from '@activepieces/pieces-framework';
+import { stateStoreAuth } from '../../../src/stateStoreAuth';
 
 jest.mock('ioredis');
+
+type StateStoreAuthValue = AppConnectionValueForAuthProperty<typeof stateStoreAuth>;
+
+function authWith(props: Partial<StateStoreAuthValue['props']>): StateStoreAuthValue {
+  return {
+    type: AppConnectionType.CUSTOM_AUTH,
+    props: {
+      url: 'redis://localhost:6379',
+      useSsl: false,
+      namespace: 'test',
+      fsm: JSON.stringify({ initial: 'START', transitions: { START: [] } }),
+      ...props,
+    },
+  };
+}
 
 describe('redisConnect', () => {
   let mockRedisInstance: jest.Mocked<Redis>;
@@ -18,13 +34,7 @@ describe('redisConnect', () => {
   });
 
   it('should connect using URL', async () => {
-    const auth = {
-      props: {
-        url: 'redis://localhost:6379',
-      },
-    } as any;
-
-    const client = await redisConnect(auth);
+    const client = await redisConnect(authWith({ url: 'redis://localhost:6379' }));
 
     expect(Redis).toHaveBeenCalledWith('redis://localhost:6379', {
       maxRetriesPerRequest: null,
@@ -36,14 +46,7 @@ describe('redisConnect', () => {
   });
 
   it('should include tls when useSsl is true', async () => {
-    const auth = {
-      props: {
-        url: 'redis://localhost:6379',
-        useSsl: true,
-      },
-    } as any;
-
-    await redisConnect(auth);
+    await redisConnect(authWith({ url: 'redis://localhost:6379', useSsl: true }));
 
     expect(Redis).toHaveBeenCalledWith('redis://localhost:6379', {
       maxRetriesPerRequest: null,
@@ -53,14 +56,7 @@ describe('redisConnect', () => {
   });
 
   it('should not include tls when useSsl is false', async () => {
-    const auth = {
-      props: {
-        url: 'redis://localhost:6379',
-        useSsl: false,
-      },
-    } as any;
-
-    await redisConnect(auth);
+    await redisConnect(authWith({ url: 'redis://localhost:6379', useSsl: false }));
 
     expect(Redis).toHaveBeenCalledWith('redis://localhost:6379', {
       maxRetriesPerRequest: null,
@@ -69,13 +65,7 @@ describe('redisConnect', () => {
   });
 
   it('should not include tls when useSsl is undefined', async () => {
-    const auth = {
-      props: {
-        url: 'redis://localhost:6379',
-      },
-    } as any;
-
-    await redisConnect(auth);
+    await redisConnect(authWith({ url: 'redis://localhost:6379', useSsl: undefined }));
 
     expect(Redis).toHaveBeenCalledWith('redis://localhost:6379', {
       maxRetriesPerRequest: null,
@@ -84,46 +74,32 @@ describe('redisConnect', () => {
   });
 
   it('should throw error if URL is missing', async () => {
-    const auth = {
-      props: {},
-    } as any;
-
-    await expect(redisConnect(auth)).rejects.toThrow('Redis URL is required');
+    await expect(
+      redisConnect(authWith({ url: '' }))
+    ).rejects.toThrow('Redis URL is required');
   });
 
   it('should throw error if connection fails', async () => {
-    const auth = {
-      props: {
-        url: 'redis://invalid:6379',
-      },
-    } as any;
-
     mockRedisInstance.connect.mockRejectedValue(new Error('Connection failed'));
 
-    await expect(redisConnect(auth)).rejects.toThrow('Failed to connect to Redis: Connection failed');
+    await expect(
+      redisConnect(authWith({ url: 'redis://invalid:6379' }))
+    ).rejects.toThrow('Failed to connect to Redis: Connection failed');
   });
 
   it('should throw error if ping fails', async () => {
-    const auth = {
-      props: {
-        url: 'redis://localhost:6379',
-      },
-    } as any;
-
     mockRedisInstance.ping.mockRejectedValue(new Error('Ping failed'));
 
-    await expect(redisConnect(auth)).rejects.toThrow('Failed to connect to Redis: Ping failed');
+    await expect(
+      redisConnect(authWith({ url: 'redis://localhost:6379' }))
+    ).rejects.toThrow('Failed to connect to Redis: Ping failed');
   });
 
   it('should handle non-Error exceptions', async () => {
-    const auth = {
-      props: {
-        url: 'redis://localhost:6379',
-      },
-    } as any;
-
     mockRedisInstance.connect.mockRejectedValue('String error');
 
-    await expect(redisConnect(auth)).rejects.toThrow('Failed to connect to Redis: Unknown error');
+    await expect(
+      redisConnect(authWith({ url: 'redis://localhost:6379' }))
+    ).rejects.toThrow('Failed to connect to Redis: Unknown error');
   });
 });

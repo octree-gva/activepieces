@@ -3,13 +3,29 @@ import { stateStoreAuth } from '../../stateStoreAuth';
 import { conversationIdProp } from '../../props';
 import { redisConnect } from '../utils/redis';
 import { Conversation, ConversationEvent, UNKNOWN_STATE } from '../../types';
-import { getConversationKey, getEventsKey, getFsmFromAuth } from '../utils/validation';
+import {
+  getAllowedNextStates,
+  getConversationKey,
+  getEventsKey,
+  getFsmFromAuth,
+  parseConversation,
+} from '../utils/validation';
+import { getConversationActionOutputSchema } from '../output-schemas';
 
 export const getConversationAction = createAction({
   name: 'get_conversation',
-  displayName: 'Get Conversation State',
-  description: 'Retrieve the current state and data for a conversation. Creates a new conversation with initial state if it does not exist.',
+  displayName: 'Get or Create Conversation',
+  description:
+    'Get the current state and data for a user. Creates a new conversation at the FSM initial state when the user has none.',
   auth: stateStoreAuth,
+  audience: 'both',
+  classification: 'WRITE',
+  aiMetadata: {
+    description:
+      'Loads the conversation for a user id in the connection namespace, or creates one at the FSM initial state. Returns conversation state/data, whether it was created, and allowed_next_states from the FSM for routing.',
+    idempotent: false,
+  },
+  outputSchema: getConversationActionOutputSchema,
   props: {
     conversation_id: conversationIdProp,
   },
@@ -17,40 +33,31 @@ export const getConversationAction = createAction({
     const namespace = context.auth.props.namespace;
     const { conversation_id } = context.propsValue;
     const client = await redisConnect(context.auth);
+    const fsm = getFsmFromAuth(context.auth);
     try {
       const conversationKey = getConversationKey(namespace, conversation_id);
 
-      // Try to get existing conversation
       const existing = await client.get(conversationKey);
+      const existingConversation = parseConversation(existing);
 
-      if (existing) {
-        const conversation = JSON.parse(existing as string) as Conversation;
-        if (conversation) {
-          return {
-            ok: true,
-            created: false,
-            conversation,
-          };
-        }
+      if (existingConversation) {
+        return {
+          ok: true,
+          created: false,
+          conversation: existingConversation,
+          allowed_next_states: getAllowedNextStates(existingConversation.state, fsm),
+        };
       }
 
-      // Conversation doesn't exist, create it
-      let initialState = UNKNOWN_STATE;
-      const fsm = getFsmFromAuth(context.auth);
-      if (fsm?.initial) {
-        initialState = fsm.initial;
-      }
-
+      const initialState = fsm?.initial ?? UNKNOWN_STATE;
       const newConversation: Conversation = {
         state: initialState,
         data: {},
       };
 
-      // Use SET with NX to ensure atomicity
       const setResult = await client.set(conversationKey, JSON.stringify(newConversation), 'NX');
 
       if (setResult === 'OK') {
-        // Successfully created - emit event
         const eventsKey = getEventsKey(namespace);
         const event: ConversationEvent = {
           namespace,
@@ -74,25 +81,26 @@ export const getConversationAction = createAction({
           ok: true,
           created: true,
           conversation: newConversation,
-        };
-      } else {
-        // Another process created it, re-read
-        const existingAfter = await client.get(conversationKey);
-        const conversation = JSON.parse(existingAfter as string) as Conversation;
-        if (conversation) {
-          return {
-            ok: true,
-            created: false,
-            conversation,
-          };
-        }
-        // Should not happen, but handle it
-        return {
-          ok: true,
-          created: true,
-          conversation: newConversation,
+          allowed_next_states: getAllowedNextStates(newConversation.state, fsm),
         };
       }
+
+      const existingAfter = parseConversation(await client.get(conversationKey));
+      if (existingAfter) {
+        return {
+          ok: true,
+          created: false,
+          conversation: existingAfter,
+          allowed_next_states: getAllowedNextStates(existingAfter.state, fsm),
+        };
+      }
+
+      return {
+        ok: true,
+        created: true,
+        conversation: newConversation,
+        allowed_next_states: getAllowedNextStates(newConversation.state, fsm),
+      };
     } catch (error) {
       throw new Error(`Redis operation failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {

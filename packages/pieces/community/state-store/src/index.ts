@@ -6,8 +6,6 @@ import { conversationChangedTrigger } from './lib/triggers/conversation-changed'
 import { conversationChangedWebhookTrigger } from './lib/triggers/conversation-changed-webhook';
 import { stateStoreAuth } from './stateStoreAuth';
 
-export { stateStoreAuth } from './stateStoreAuth';
-
 export const stateStore = createPiece({
   displayName: 'State Store',
   description: 'Redis-backed conversation state machine with FSM validation and event streaming',

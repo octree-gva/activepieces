@@ -5,6 +5,9 @@ import {
   getSchemaKey,
   getConversationKey,
   getEventsKey,
+  getAllowedNextStates,
+  listFsmStates,
+  mergeConversationData,
 } from '../../../src/lib/utils/validation';
 import { z } from 'zod';
 
@@ -50,28 +53,28 @@ describe('validation', () => {
       expect(result.error).toBeUndefined();
     });
 
-    it('should return valid when fsm has no transitions', () => {
+    it('should return invalid when fsm has empty transitions and state changes', () => {
       const fsm = { initial: 'state1', transitions: {} };
       const result = validateTransition('state1', 'state2', fsm);
-      expect(result.valid).toBe(true);
-      expect(result.error).toBeUndefined();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Unknown current state');
     });
 
     it('should return valid when fsm transitions is null', () => {
-      const fsm = { initial: 'state1', transitions: null as any };
+      const fsm = { initial: 'state1', transitions: null as never };
       const result = validateTransition('state1', 'state2', fsm);
       expect(result.valid).toBe(true);
       expect(result.error).toBeUndefined();
     });
 
     it('should return valid when fsm transitions is undefined', () => {
-      const fsm = { initial: 'state1', transitions: undefined as any };
+      const fsm = { initial: 'state1', transitions: undefined as never };
       const result = validateTransition('state1', 'state2', fsm);
       expect(result.valid).toBe(true);
       expect(result.error).toBeUndefined();
     });
 
-    it('should return valid when current state has no transitions defined', () => {
+    it('should return invalid when current state has no transitions defined', () => {
       const fsm = {
         initial: 'state1',
         transitions: {
@@ -79,8 +82,8 @@ describe('validation', () => {
         },
       };
       const result = validateTransition('state1', 'state2', fsm);
-      expect(result.valid).toBe(true);
-      expect(result.error).toBeUndefined();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Unknown current state');
     });
 
     it('should return valid when transition is allowed', () => {
@@ -108,6 +111,17 @@ describe('validation', () => {
       expect(result.error).toContain('state1');
       expect(result.error).toContain('state3');
       expect(result.error).toContain('state2');
+    });
+
+    it('should return valid for same-state even when self-loop is not listed', () => {
+      const fsm = {
+        initial: 'state1',
+        transitions: {
+          state1: ['state2'],
+        },
+      };
+      const result = validateTransition('state1', 'state1', fsm);
+      expect(result.valid).toBe(true);
     });
 
     it('should return valid when transitioning to same state if allowed', () => {
@@ -230,7 +244,7 @@ describe('validation', () => {
       const fsm = {
         initial: 'state1',
         transitions: {
-          state1: ['state2', 123 as any],
+          state1: ['state2', 123],
         },
       };
       const result = validateFsm(fsm);
@@ -312,6 +326,54 @@ describe('validation', () => {
       if (!result.success) {
         expect(result.error.issues[0].message).toBeDefined();
       }
+    });
+  });
+
+  describe('getAllowedNextStates', () => {
+    it('returns empty when fsm is missing', () => {
+      expect(getAllowedNextStates('START')).toEqual([]);
+    });
+
+    it('returns transitions for the current state', () => {
+      expect(
+        getAllowedNextStates('START', {
+          initial: 'START',
+          transitions: { START: ['PROPOSE', 'MENU'] },
+        })
+      ).toEqual(['PROPOSE', 'MENU']);
+    });
+
+    it('returns empty for unknown state', () => {
+      expect(
+        getAllowedNextStates('ORPHAN', {
+          initial: 'START',
+          transitions: { START: ['PROPOSE'] },
+        })
+      ).toEqual([]);
+    });
+  });
+
+  describe('listFsmStates', () => {
+    it('includes initial, keys, and targets', () => {
+      expect(
+        listFsmStates({
+          initial: 'START',
+          transitions: {
+            START: ['PROPOSE'],
+            PROPOSE: ['DONE'],
+          },
+        })
+      ).toEqual(['DONE', 'PROPOSE', 'START']);
+    });
+  });
+
+  describe('mergeConversationData', () => {
+    it('merges by default', () => {
+      expect(mergeConversationData({ a: 1 }, { b: 2 }, false)).toEqual({ a: 1, b: 2 });
+    });
+
+    it('replaces when replaceData is true', () => {
+      expect(mergeConversationData({ a: 1 }, { b: 2 }, true)).toEqual({ b: 2 });
     });
   });
 });

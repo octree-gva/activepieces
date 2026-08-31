@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Conversation, FsmDef } from '../../types';
 
 const conversationSchema = z.object({
   state: z.string(),
@@ -15,7 +16,6 @@ export const conversationEventSchema = z.object({
 
 export type ConversationEventPayload = z.infer<typeof conversationEventSchema>;
 
-/** Parse and validate webhook body as ConversationEvent. Returns null if invalid. */
 export function parseConversationEvent(body: string | unknown): ConversationEventPayload | null {
   let parsed: unknown;
   if (typeof body === 'string') {
@@ -32,18 +32,38 @@ export function parseConversationEvent(body: string | unknown): ConversationEven
   return result.success ? result.data : null;
 }
 
+export function parseConversation(raw: string | null | undefined): Conversation | null {
+  if (raw == null || raw === '') {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const result = conversationSchema.safeParse(parsed);
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
 export function validateTransition(
   currentState: string,
   newState: string,
   fsm?: { initial: string; transitions: Record<string, string[]> }
 ): { valid: boolean; error?: string } {
+  if (currentState === newState) {
+    return { valid: true };
+  }
+
   if (!fsm || !fsm.transitions) {
     return { valid: true };
   }
 
   const allowedStates = fsm.transitions[currentState];
   if (!allowedStates) {
-    return { valid: true };
+    return {
+      valid: false,
+      error: `Unknown current state "${currentState}". No transitions defined.`,
+    };
   }
 
   if (!allowedStates.includes(newState)) {
@@ -104,14 +124,49 @@ export function getSchemaKey(namespace: string): string {
   return `${namespace}:schema`;
 }
 
-export type FsmDef = { initial: string; transitions: Record<string, string[]> };
-
-/** Parse FSM from connection auth (validated at connection time). */
 export function getFsmFromAuth(auth: { props?: { fsm?: unknown } }): FsmDef | undefined {
   const raw = auth.props?.fsm;
   if (!raw) return undefined;
-  const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-  return parsed as FsmDef;
+  try {
+    const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const result = fsmSchema.safeParse(parsed);
+    return result.success ? result.data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function getAllowedNextStates(currentState: string, fsm?: FsmDef): string[] {
+  if (!fsm?.transitions) {
+    return [];
+  }
+  return fsm.transitions[currentState] ?? [];
+}
+
+export function listFsmStates(fsm: FsmDef): string[] {
+  const states = new Set<string>([fsm.initial, ...Object.keys(fsm.transitions)]);
+  for (const targets of Object.values(fsm.transitions)) {
+    for (const target of targets) {
+      states.add(target);
+    }
+  }
+  return Array.from(states).sort();
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function mergeConversationData(
+  existing: Record<string, unknown>,
+  incoming: unknown,
+  replaceData: boolean
+): Record<string, unknown> {
+  const patch = isPlainObject(incoming) ? incoming : {};
+  if (replaceData) {
+    return patch;
+  }
+  return { ...existing, ...patch };
 }
 
 export function getConversationKey(namespace: string, conversationId: string): string {

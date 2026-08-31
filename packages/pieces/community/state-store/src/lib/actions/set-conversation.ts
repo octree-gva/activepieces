@@ -3,30 +3,62 @@ import { stateStoreAuth } from '../../stateStoreAuth';
 import { conversationIdProp } from '../../props';
 import { redisConnect } from '../utils/redis';
 import { Conversation, ConversationEvent, UNKNOWN_STATE } from '../../types';
-import { getConversationKey, getEventsKey, validateTransition, getFsmFromAuth } from '../utils/validation';
+import {
+  getAllowedNextStates,
+  getConversationKey,
+  getEventsKey,
+  getFsmFromAuth,
+  mergeConversationData,
+  parseConversation,
+  validateTransition,
+} from '../utils/validation';
+import { stateDropdownProp } from '../common/state-dropdown';
+import { setConversationActionOutputSchema } from '../output-schemas';
 
 export const setConversationAction = createAction({
   name: 'set_conversation',
-  displayName: 'Update Conversation State',
-  description: 'Transition a conversation to a new state. Validates state transitions (FSM), then emits an event.',
+  displayName: 'Update Conversation',
+  description:
+    'Advance or jump a user conversation to a state and merge session data. Normal updates validate the FSM; turn on Jump to skip the FSM for intercepts.',
   auth: stateStoreAuth,
+  audience: 'both',
+  classification: 'WRITE',
+  aiMetadata: {
+    description:
+      'Updates the conversation for a user id: optional next state (FSM-validated unless Jump), and merges data into the existing session object. Use Jump for intercepts that must leave the FSM. Omit state to stay put and only patch data. Set Replace Data to wipe session data instead of merging.',
+    idempotent: true,
+  },
+  outputSchema: setConversationActionOutputSchema,
   props: {
     conversation_id: conversationIdProp,
-    state: Property.ShortText({
+    state: stateDropdownProp({
+      required: false,
       displayName: 'State',
-      description: 'New state to transition to',
-      required: true,
+      description:
+        'Next state. Leave empty to stay in the current state and only update data. Pick from the connection FSM.',
     }),
     data: Property.Json({
       displayName: 'Data',
-      description: 'Data object for the conversation state',
+      description: 'Session data to merge into the conversation (default) or replace when Replace Data is on.',
       required: false,
       defaultValue: {},
+    }),
+    replace_data: Property.Checkbox({
+      displayName: 'Replace Data',
+      description: 'When on, replace session data with Data instead of merging.',
+      required: false,
+      defaultValue: false,
+    }),
+    jump: Property.Checkbox({
+      displayName: 'Jump, skip FSM',
+      description: 'When on, move to State without checking the FSM (use for intercepts / special messages).',
+      required: false,
+      defaultValue: false,
     }),
   },
   async run(context) {
     const namespace = context.auth.props.namespace;
-    const { conversation_id, state, data } = context.propsValue;
+    const { conversation_id, state, data, replace_data, jump } = context.propsValue;
     const client = await redisConnect(context.auth);
 
     try {
@@ -34,9 +66,8 @@ export const setConversationAction = createAction({
       const eventsKey = getEventsKey(namespace);
       const fsm = getFsmFromAuth(context.auth);
 
-      // Load current conversation
       const existingStr = await client.get(conversationKey);
-      let currentConversation: Conversation | null = JSON.parse(existingStr as string) as Conversation;
+      let currentConversation = parseConversation(existingStr);
 
       if (!currentConversation) {
         currentConversation = {
@@ -45,11 +76,12 @@ export const setConversationAction = createAction({
         };
       }
 
-      // Validate transition
-      if (fsm && currentConversation) {
+      const nextState = state && state.length > 0 ? state : currentConversation.state;
+
+      if (!jump) {
         const transitionResult = validateTransition(
           currentConversation.state,
-          state,
+          nextState,
           fsm
         );
 
@@ -64,20 +96,17 @@ export const setConversationAction = createAction({
         }
       }
 
-      // Prepare new conversation
-      const newData = data && typeof data === 'object' && !Array.isArray(data)
-        ? data as Record<string, unknown>
-        : {};
-
       const newConversation: Conversation = {
-        state,
-        data: newData,
+        state: nextState,
+        data: mergeConversationData(
+          currentConversation.data,
+          data,
+          !!replace_data
+        ),
       };
 
-      // Write conversation (full replace)
       await client.set(conversationKey, JSON.stringify(newConversation));
 
-      // Emit event to Redis Streams
       const event: ConversationEvent = {
         namespace,
         conversation_id,
@@ -99,6 +128,7 @@ export const setConversationAction = createAction({
       return {
         ok: true,
         conversation: newConversation,
+        allowed_next_states: getAllowedNextStates(newConversation.state, fsm),
       };
     } catch (error) {
       throw new Error(`Redis operation failed: ${error instanceof Error ? error.message : String(error)}`);

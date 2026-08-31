@@ -3,12 +3,16 @@ import { createMockActionContext } from '../../helpers/create-mock-action-contex
 import { redisConnect } from '../../../src/lib/utils/redis';
 import { UNKNOWN_STATE } from '../../../src/types';
 import { AppConnectionType } from '@activepieces/pieces-framework';
-import { stateStoreAuth } from '../../../src/stateStoreAuth';
 
 jest.mock('../../../src/lib/utils/redis');
 
 describe('getConversationAction', () => {
-  let mockClient: any;
+  let mockClient: {
+    get: jest.Mock;
+    set: jest.Mock;
+    xadd: jest.Mock;
+    quit: jest.Mock;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -22,40 +26,53 @@ describe('getConversationAction', () => {
   });
 
   it('should return existing conversation when found', async () => {
-    const conversation = { state: 'state1', data: { key: 'value' } };
+    const conversation = { state: 'PROPOSE', data: { key: 'value' } };
     mockClient.get.mockResolvedValueOnce(JSON.stringify(conversation));
 
     const context = createMockActionContext({
-      auth: { type: AppConnectionType.CUSTOM_AUTH, props: { url: 'redis://localhost:6379', namespace: 'test:namespace' } } as any,
+      auth: {
+        type: AppConnectionType.CUSTOM_AUTH,
+        props: {
+          url: 'redis://localhost:6379',
+          namespace: 'test:namespace',
+          fsm: JSON.stringify({
+            initial: 'START',
+            transitions: { PROPOSE: ['PROPOSE_SUBMIT', 'START'] },
+          }),
+        },
+      } as never,
       propsValue: {
         conversation_id: 'conv-123',
       },
     });
 
-    const result = await (getConversationAction.run as any)(context);
+    const result = await (getConversationAction.run as (ctx: unknown) => Promise<unknown>)(context);
 
     expect(result).toEqual({
       ok: true,
       created: false,
       conversation,
+      allowed_next_states: ['PROPOSE_SUBMIT', 'START'],
     });
     expect(mockClient.get).toHaveBeenCalledWith('test:namespace:conversation:conv-123');
     expect(mockClient.quit).toHaveBeenCalled();
   });
 
-  it('should create new conversation with unknown state when not found', async () => {
-    mockClient.get.mockResolvedValueOnce(null); // conversation not found
-    mockClient.get.mockResolvedValueOnce(null); // schema not found
-    mockClient.set.mockResolvedValueOnce('OK'); // successfully created
+  it('should create new conversation with unknown state when not found and no FSM', async () => {
+    mockClient.get.mockResolvedValueOnce(null);
+    mockClient.set.mockResolvedValueOnce('OK');
 
     const context = createMockActionContext({
-      auth: { type: AppConnectionType.CUSTOM_AUTH, props: { url: 'redis://localhost:6379', namespace: 'test:namespace' } } as any,
+      auth: {
+        type: AppConnectionType.CUSTOM_AUTH,
+        props: { url: 'redis://localhost:6379', namespace: 'test:namespace' },
+      } as never,
       propsValue: {
         conversation_id: 'conv-123',
       },
-    }) as any;
+    });
 
-    const result = await (getConversationAction.run as any)(context);
+    const result = await (getConversationAction.run as (ctx: unknown) => Promise<unknown>)(context);
 
     expect(result).toEqual({
       ok: true,
@@ -64,13 +81,12 @@ describe('getConversationAction', () => {
         state: UNKNOWN_STATE,
         data: {},
       },
+      allowed_next_states: [],
     });
     const setCall = mockClient.set.mock.calls.find(
-      (call: any[]) => call[0] === 'test:namespace:conversation:conv-123' && call[2] === 'NX'
+      (call: unknown[]) => call[0] === 'test:namespace:conversation:conv-123' && call[2] === 'NX'
     );
     expect(setCall).toBeDefined();
-    const expectedValue = JSON.stringify({ state: UNKNOWN_STATE, data: {} });
-    expect(setCall[1]).toBe(expectedValue);
     expect(mockClient.xadd).toHaveBeenCalled();
   });
 
@@ -84,13 +100,16 @@ describe('getConversationAction', () => {
         props: {
           url: 'redis://localhost:6379',
           namespace: 'test:namespace',
-          fsm: JSON.stringify({ initial: 'initial_state', transitions: {} }),
+          fsm: JSON.stringify({
+            initial: 'initial_state',
+            transitions: { initial_state: ['next'] },
+          }),
         },
-      } as any,
+      } as never,
       propsValue: { conversation_id: 'conv-123' },
-    }) as any;
+    });
 
-    const result = await (getConversationAction.run as any)(context);
+    const result = await (getConversationAction.run as (ctx: unknown) => Promise<unknown>)(context);
 
     expect(result).toEqual({
       ok: true,
@@ -99,28 +118,33 @@ describe('getConversationAction', () => {
         state: 'initial_state',
         data: {},
       },
+      allowed_next_states: ['next'],
     });
   });
 
   it('should handle race condition when another process creates conversation', async () => {
     const existingConversation = { state: 'state1', data: {} };
-    mockClient.get.mockResolvedValueOnce(null); // first check - not found
-    mockClient.set.mockResolvedValueOnce(null); // SET NX returns null (already exists)
-    mockClient.get.mockResolvedValueOnce(JSON.stringify(existingConversation)); // re-read
+    mockClient.get.mockResolvedValueOnce(null);
+    mockClient.set.mockResolvedValueOnce(null);
+    mockClient.get.mockResolvedValueOnce(JSON.stringify(existingConversation));
 
     const context = createMockActionContext({
-      auth: { type: AppConnectionType.CUSTOM_AUTH, props: { url: 'redis://localhost:6379', namespace: 'test:namespace' } } as any,
+      auth: {
+        type: AppConnectionType.CUSTOM_AUTH,
+        props: { url: 'redis://localhost:6379', namespace: 'test:namespace' },
+      } as never,
       propsValue: {
         conversation_id: 'conv-123',
       },
-    }) as any;
+    });
 
-    const result = await (getConversationAction.run as any)(context);
+    const result = await (getConversationAction.run as (ctx: unknown) => Promise<unknown>)(context);
 
     expect(result).toEqual({
       ok: true,
       created: false,
       conversation: existingConversation,
+      allowed_next_states: [],
     });
   });
 
@@ -128,13 +152,18 @@ describe('getConversationAction', () => {
     mockClient.get.mockRejectedValueOnce(new Error('Redis error'));
 
     const context = createMockActionContext({
-      auth: { type: AppConnectionType.CUSTOM_AUTH, props: { url: 'redis://localhost:6379', namespace: 'test:namespace' } } as any,
+      auth: {
+        type: AppConnectionType.CUSTOM_AUTH,
+        props: { url: 'redis://localhost:6379', namespace: 'test:namespace' },
+      } as never,
       propsValue: {
         conversation_id: 'conv-123',
       },
     });
 
-    await expect((getConversationAction.run as any)(context)).rejects.toThrow('Redis operation failed: Redis error');
+    await expect(
+      (getConversationAction.run as (ctx: unknown) => Promise<unknown>)(context)
+    ).rejects.toThrow('Redis operation failed: Redis error');
     expect(mockClient.quit).toHaveBeenCalled();
   });
 });

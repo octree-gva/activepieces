@@ -21,8 +21,8 @@ export const namespaceProp = Property.ShortText({
 });
 
 export const conversationIdProp = Property.ShortText({
-  displayName: 'Conversation ID',
-  description: 'Unique identifier for the conversation',
+  displayName: 'User ID',
+  description: 'Stable user key for this conversation, e.g. the WhatsApp sender id (whatsapp:+351912345678). One conversation per user in this connection namespace.',
   required: true,
 });
 

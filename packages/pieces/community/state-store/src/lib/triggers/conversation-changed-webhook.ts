@@ -1,21 +1,25 @@
 import { createTrigger, TriggerStrategy, Property } from '@activepieces/pieces-framework';
 import { parseConversationEvent } from '../utils/validation';
+import { conversationChangedTriggerOutputSchema } from '../output-schemas';
 
-/**
- * Webhook variant for real-time conversation events.
- * Requires running the Redis bridge script that subscribes to the stream and POSTs here.
- */
 export const conversationChangedWebhookTrigger = createTrigger({
   name: 'conversation_changed_webhook',
   auth: undefined,
   displayName: 'On Conversation Changed (Webhook)',
-  description: 'Real-time trigger. Run the Redis bridge script to forward events from the stream to this webhook.',
+  description:
+    'Advanced real-time trigger. Run the Redis bridge script to forward stream events to this webhook. Prefer WhatsApp inbound for the bot loop.',
+  classification: 'READ',
+  aiMetadata: {
+    description:
+      'Webhook trigger for conversation change events forwarded by the Redis bridge. Advanced setup; not required for the standard WhatsApp message loop.',
+  },
+  outputSchema: conversationChangedTriggerOutputSchema,
   props: {
     setupInstructions: Property.MarkDown({
       value: `
-## Real-time via Redis Bridge
+## Advanced: Redis Bridge
 
-This trigger receives events when you run a bridge that subscribes to the Redis stream and forwards to this webhook.
+This trigger receives events when a bridge subscribes to the Redis stream and POSTs here. Most chatbots should use a WhatsApp (or channel) trigger plus Get/Update Conversation instead.
 
 **Webhook URL:** \`{{webhookUrl}}\`
 
@@ -29,11 +33,11 @@ This trigger receives events when you run a bridge that subscribes to the Redis 
 cd packages/pieces/community/state-store
 npx ts-node bin/redis-webhook-bridge.ts \\
   --webhook-url "{{webhookUrl}}/sync" \\
-  --redis-url "redis://:password@localhost:6379/1" \\
+  --redis-url "redis://redis:6379" \\
   --namespace "bot:proposal"
 \`\`\`
 
-The bridge uses XREAD BLOCK to wait for new events and POSTs each to the webhook. Keep it running (e.g. in a separate process or systemd service).
+Use the same Redis your Activepieces instance uses (see docker-compose Redis service). Keep the bridge running as a separate process if you need this path.
       `.trim(),
     }),
   },

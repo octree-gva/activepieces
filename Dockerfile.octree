@@ -158,6 +158,7 @@ ENV AP_API_KEY="api-key" \
 
 COPY --from=build /usr/src/app/packages/server/api/src/assets/default.cf /usr/local/etc/isolate
 COPY docker-entrypoint.octree.sh docker-entrypoint.sh
+COPY ecosystem.octree.config.js ecosystem.octree.config.js
 
 RUN mkdir -p \
     /usr/src/app/dist/packages/engine && \

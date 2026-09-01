@@ -1,118 +1,94 @@
-import { vi, type MockedFunction } from 'vitest';
+import { vi } from 'vitest';
 import { searchParticipatorySpace } from '../../../src/lib/domains/spaces/search-participatory-space';
-import { createSpacesApi } from '../../../src/lib/runtime/clients';
-import { extractAuth } from '../../../src/lib/utils/auth';
-import { resolveAuthContext } from '../../../src/lib/runtime/authMode';
+import { createMockActionContext } from '../../helpers/create-mock-action-context';
+import { decidimCustomAuth } from '../../helpers/decidim-test-fixtures';
 
-vi.mock('../../../src/lib/utils/auth');
-vi.mock('../../../src/lib/runtime/authMode');
-vi.mock('../../../src/lib/runtime/clients');
+const { searchSpaces } = vi.hoisted(() => ({
+  searchSpaces: vi.fn(),
+}));
 
-const extractAuthMock = extractAuth as MockedFunction<typeof extractAuth>;
-const resolveAuthMock = resolveAuthContext as MockedFunction<typeof resolveAuthContext>;
-const createSpacesApiMock = createSpacesApi as MockedFunction<typeof createSpacesApi>;
+vi.mock('../../../src/lib/runtime/authMode', () => ({
+  resolveAuthContext: vi.fn().mockResolvedValue({
+    mode: 'user',
+    rawAccessToken: 'token',
+    baseConfiguration: {},
+  }),
+  bearerAuthorization: vi.fn().mockReturnValue('Bearer token'),
+}));
 
-function ctx(props: Record<string, unknown>) {
-  return {
-    propsValue: props,
-    auth: { baseUrl: 'https://example.test', clientId: 'id', clientSecret: 'secret' },
-  } as never;
+vi.mock('../../../src/lib/runtime/clients', () => ({
+  createSpacesApi: vi.fn().mockReturnValue({
+    searchSpaces,
+  }),
+}));
+
+function run(props: Record<string, unknown> = {}) {
+  return searchParticipatorySpace.run(
+    createMockActionContext({
+      auth: decidimCustomAuth,
+      propsValue: props,
+    }) as Parameters<typeof searchParticipatorySpace.run>[0]
+  );
 }
 
 describe('searchParticipatorySpace action', () => {
-  const searchSpaces = vi.fn();
-
   beforeEach(() => {
     vi.clearAllMocks();
-    extractAuthMock.mockReturnValue({
-      baseUrl: 'https://example.test',
-      clientId: 'id',
-      clientSecret: 'secret',
-    });
-    resolveAuthMock.mockResolvedValue({
-      rawAccessToken: 'token',
-      baseConfiguration: {},
-    } as never);
-    createSpacesApiMock.mockReturnValue({ searchSpaces } as never);
+    searchSpaces.mockReset();
   });
 
-  it('returns one page when batch is shorter than perPage', async () => {
+  it('returns one page of spaces', async () => {
     searchSpaces.mockResolvedValueOnce({
       data: { data: [{ id: 1 }, { id: 2 }] },
     });
 
-    const out = (await searchParticipatorySpace.run(
-      ctx({
-        query: 'x',
-        perPage: 10,
-        maxResults: 500,
-      }),
-    )) as {
-      ok: boolean;
-      spaces: unknown[];
-      count: number;
-      pagesFetched: number;
-    };
+    const out = await run({ perPage: 10, page: 1 });
 
     expect(out.ok).toBe(true);
+    if (!out.ok) throw new Error('expected success');
     expect(out.spaces).toEqual([{ id: 1 }, { id: 2 }]);
     expect(out.count).toBe(2);
-    expect(out.pagesFetched).toBe(1);
     expect(searchSpaces).toHaveBeenCalledTimes(1);
   });
 
-  it('requests another page until maxResults', async () => {
-    searchSpaces
-      .mockResolvedValueOnce({
-        data: { data: [{ id: 0 }, { id: 1 }] },
+  it('forwards filters and pagination to searchSpaces', async () => {
+    searchSpaces.mockResolvedValueOnce({ data: { data: [] } });
+
+    await run({
+      spaceIds: [{ value: 12 }],
+      spaceManifests: [{ value: 'assemblies' }],
+      page: 2,
+      perPage: 25,
+    });
+
+    expect(searchSpaces).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorization: 'Bearer token',
+        page: 2,
+        perPage: 25,
+        filterIdIn: [12],
+        filterManifestNameIn: ['assemblies'],
       })
-      .mockResolvedValueOnce({
-        data: { data: [{ id: 99 }] },
-      });
-
-    const out = (await searchParticipatorySpace.run(
-      ctx({
-        query: 'q',
-        perPage: 2,
-        maxResults: 3,
-      }),
-    )) as {
-      ok: boolean;
-      spaces: unknown[];
-      pagesFetched: number;
-    };
-
-    expect(out.ok).toBe(true);
-    expect(out.spaces).toHaveLength(3);
-    expect(out.pagesFetched).toBe(2);
-    expect(searchSpaces).toHaveBeenCalledTimes(2);
+    );
   });
 
-  it('stops when API returns non-array data', async () => {
-    searchSpaces.mockResolvedValueOnce({ data: { data: 'bad' as never } });
+  it('returns empty spaces when API returns non-array data', async () => {
+    searchSpaces.mockResolvedValueOnce({ data: { data: 'bad' } });
 
-    const out = (await searchParticipatorySpace.run(
-      ctx({ query: 'x', perPage: 10, maxResults: 500 }),
-    )) as { ok: boolean; spaces: unknown[]; pagesFetched: number };
+    const out = await run({ perPage: 10 });
 
     expect(out.ok).toBe(true);
+    if (!out.ok) throw new Error('expected success');
     expect(out.spaces).toEqual([]);
-    expect(out.pagesFetched).toBe(1);
+    expect(out.count).toBe(0);
   });
 
-  it('returns error when no search criterion', async () => {
-    const out = (await searchParticipatorySpace.run(
-      ctx({
-        query: '',
-        spaceType: undefined,
-        advancedFilters: undefined,
-        perPage: 50,
-        maxResults: 500,
-      }),
-    )) as { ok: boolean; error: string };
+  it('searches when no filters are set', async () => {
+    searchSpaces.mockResolvedValueOnce({ data: { data: [] } });
 
-    expect(out.ok).toBe(false);
-    expect(out.error).toMatch(/Add a title search|advanced filter/i);
-    expect(searchSpaces).not.toHaveBeenCalled();
+    const out = await run({});
+
+    expect(out.ok).toBe(true);
+    expect(searchSpaces).toHaveBeenCalledTimes(1);
   });
 });

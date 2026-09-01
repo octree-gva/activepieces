@@ -95,7 +95,24 @@ Debug: connection FSM + recent stream events (optional User ID filter).
 
 **On Conversation Changed** (polling) — analytics / operators. Optional state filter. Not the bot loop (polling is too slow for chat).
 
-**On Conversation Changed (Webhook)** — advanced; needs `bin/redis-webhook-bridge.ts`. Prefer channel inbound triggers for the bot.
+**On Conversation Changed (Webhook)** — real-time via the Redis watcher. On enable, the trigger HTTP-subscribes `context.webhookUrl` with the connection namespace (optional state filter). One watcher process (PM2 in Octree Docker) forwards `{namespace}:events` stream payloads to all matching flows. Prefer channel inbound triggers for the main bot loop.
+
+### Watcher environment
+
+| Variable | Default | Role |
+| --- | --- | --- |
+| `AP_STATE_STORE_BRIDGE_URL` | `http://127.0.0.1:3847` | URL the piece uses for subscribe/unsubscribe on enable/disable |
+| `AP_STATE_STORE_BRIDGE_PORT` | `3847` | Port the watcher HTTP server binds |
+| `AP_REDIS_URL` | (required) | Redis for conversations, streams, and subscriber registry |
+
+Octree compose sets these on the `app` service. The watcher runs as PM2 `activepieces-state-store-bridge` in the same container.
+
+Local watcher only:
+
+```bash
+cd packages/pieces/community/state-store
+AP_REDIS_URL="redis://localhost:6379" npm run bridge
+```
 
 ## Local development
 

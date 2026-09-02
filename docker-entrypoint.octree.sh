@@ -49,6 +49,10 @@ if [ -z "$AP_WORKER_TOKEN" ]; then
     exit 1
 fi
 
+WORKER_TOKEN_CACHE_FILE="/usr/src/app/cache/.ap_worker_token"
+mkdir -p /usr/src/app/cache
+printf '%s' "$AP_WORKER_TOKEN" > "$WORKER_TOKEN_CACHE_FILE"
+
 # Postgres: wait-on TCP. Redis: 3x PING, 3s sleep between failures. AP_SKIP_WAIT_FOR_DEPS=1 skips both.
 WAIT_MS=120000
 if [ -n "${AP_POSTGRES_HOST:-}" ]; then
@@ -75,6 +79,28 @@ AP_WORKER_HEALTH_PORT_BASE=$((AP_PORT + 1))
 # Worker processes use AP_FRONTEND_URL for Socket.IO to the API. The public AP_FRONTEND_URL (browser / Traefik host:port) is often wrong inside the container — use the API listen address unless the operator overrides (e.g. external worker container).
 AP_WORKER_FRONTEND_URL="${AP_WORKER_FRONTEND_URL:-http://127.0.0.1:${AP_PORT}}"
 
+AP_OCTREE_EMBEDDED_WORKERS="${AP_OCTREE_EMBEDDED_WORKERS:-3}"
+WORKER_PM2_APPS=""
+if [ "$AP_OCTREE_EMBEDDED_WORKERS" -gt 0 ]; then
+    WORKER_PM2_APPS="
+    {
+        name: 'activepieces-worker',
+        script: 'packages/server/worker/dist/src/bootstrap.js',
+        node_args: '--enable-source-maps',
+        exec_mode: 'fork',
+        env: { AP_CONTAINER_TYPE: 'WORKER', AP_PORT: '${AP_WORKER_HEALTH_PORT_BASE}', AP_FRONTEND_URL: '${AP_WORKER_FRONTEND_URL}' },
+        increment_var: 'AP_PORT',
+        instances: ${AP_OCTREE_EMBEDDED_WORKERS},
+        kill_timeout: 3000,
+        log_date_format: 'YYYY-MM-DD HH:mm Z',
+        combine_logs: true,
+        merge_logs: true,
+        time: true,
+        out_file: '/var/log/run.log',
+        error_file: '/var/log/run.log',
+    },"
+fi
+
 # Build PM2 ecosystem config
 echo "
 module.exports = {
@@ -95,23 +121,7 @@ module.exports = {
         time: true,
         out_file: '/var/log/run.log',
         error_file: '/var/log/run.log',
-    },
-    {
-        name: 'activepieces-worker',
-        script: 'packages/server/worker/dist/src/bootstrap.js',
-        node_args: '--enable-source-maps',
-        exec_mode: 'fork',
-        env: { AP_CONTAINER_TYPE: 'WORKER', AP_PORT: '${AP_WORKER_HEALTH_PORT_BASE}', AP_FRONTEND_URL: '${AP_WORKER_FRONTEND_URL}' },
-        increment_var: 'AP_PORT',
-        instances: 3,
-        kill_timeout: 3000,
-        log_date_format: 'YYYY-MM-DD HH:mm Z',
-        combine_logs: true,
-        merge_logs: true,
-        time: true,
-        out_file: '/var/log/run.log',
-        error_file: '/var/log/run.log',
-    },
+    },${WORKER_PM2_APPS}
     {
         name: 'activepieces-state-store-bridge',
         ...require('./ecosystem.octree.config.js').apps[0],

@@ -45,8 +45,27 @@ pkg.workspaces = pkg.workspaces.filter((w) => fs.existsSync(w.replace('/*', ''))
 fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
 fs.writeFileSync('bunfig.toml', '[install]\nlinker = "isolated"\nminimumReleaseAge = 0\n')
 const lock = JSON.parse(fs.readFileSync('bun.lock', 'utf8').replace(/,(\s*[}\]])/g, '$1'))
+function workspacePath(spec) {
+  if (typeof spec !== 'string') return null
+  const marker = '@workspace:'
+  const i = spec.indexOf(marker)
+  return i === -1 ? null : spec.slice(i + marker.length)
+}
 for (const key of Object.keys(lock.workspaces || {})) {
   if (key !== '' && !fs.existsSync(key)) delete lock.workspaces[key]
+}
+for (const [name, info] of Object.entries(lock.packages || {})) {
+  const dir = workspacePath(Array.isArray(info) ? info[0] : '')
+  if (dir && !fs.existsSync(dir)) delete lock.packages[name]
+}
+for (const ws of Object.values(lock.workspaces || {})) {
+  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+    const deps = ws[field]
+    if (!deps) continue
+    for (const name of Object.keys(deps)) {
+      if (!lock.packages[name]) delete deps[name]
+    }
+  }
 }
 fs.writeFileSync('bun.lock', JSON.stringify(lock, null, 2) + '\n')
 EOF

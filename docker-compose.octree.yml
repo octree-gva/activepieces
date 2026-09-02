@@ -6,6 +6,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.octree
+      cache_from:
+        - type=registry,ref=ghcr.io/octree-gva/activepieces-octree:buildcache,ignore-error=true
     image: activepieces-octree:local
     container_name: activepieces-app
     restart: unless-stopped

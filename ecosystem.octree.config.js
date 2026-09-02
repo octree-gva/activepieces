@@ -6,6 +6,8 @@ module.exports = {
       instances: 1,
       exec_mode: 'fork',
       interpreter: 'ts-node',
+      // Image has no repo tsconfig.base.json (state-store tsconfig extends it).
+      interpreter_args: '--transpile-only --skip-project',
       kill_timeout: 3000,
       log_date_format: 'YYYY-MM-DD HH:mm Z',
       combine_logs: true,

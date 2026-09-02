@@ -19,9 +19,9 @@ services:
       - path: .env
         required: false
     environment:
-      # APP + Redis watcher bridge in this container; workers run in separate Dockerfile.worker replicas.
-      - AP_CONTAINER_TYPE=APP
-      - AP_OCTREE_EMBEDDED_WORKERS=0
+      # APP + Redis watcher. Embedded worker count comes from env (/.jelenv): 1 on the 3.5GiB node, 0 with Dockerfile.worker replicas.
+      - AP_CONTAINER_TYPE=${AP_CONTAINER_TYPE:-APP}
+      - AP_OCTREE_EMBEDDED_WORKERS=${AP_OCTREE_EMBEDDED_WORKERS:-0}
       # Listen on 80 to match published 8080:80.
       - AP_PORT=80
       # Local-dev defaults when .env is missing or leaves secrets empty (fresh clone from .env-example).

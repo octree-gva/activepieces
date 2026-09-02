@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Pull the octree branch, drop images/build cache, keep volumes, rebuild, start.
+set -euo pipefail
+
+LOG=/var/log/run.log
+HOME_DIR="${ACTIVEPIECES_HOME:-/home/hfroger/workspace/activepieces}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.octree.yml}"
+
+log() { echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') sync: $*" | tee -a "$LOG"; }
+
+if [ -f /.jelenv ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . /.jelenv
+  set +a
+fi
+
+HOME_DIR="${ACTIVEPIECES_HOME:-$HOME_DIR}"
+COMPOSE=(/usr/bin/docker compose --env-file /.jelenv -f "$COMPOSE_FILE")
+cd "$HOME_DIR"
+
+log "git pull in $HOME_DIR"
+# Dirty tree must not block updates. Stash, fast-forward, restore.
+STASHED=0
+if [ -n "$(git status --porcelain)" ]; then
+  log "stashing local changes"
+  git stash push -u -m "jelastic-sync $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  STASHED=1
+fi
+git pull --ff-only
+if [ "$STASHED" = 1 ]; then
+  log "restoring local stash"
+  git stash pop || log "stash pop conflicts — resolve in $HOME_DIR"
+fi
+
+if [ -f deploy/jelastic/activepieces.service ]; then
+  install -m 644 deploy/jelastic/activepieces.service /etc/systemd/system/activepieces.service
+  systemctl daemon-reload
+fi
+if [ -f deploy/jelastic/sync ]; then
+  install -m 755 deploy/jelastic/sync /usr/local/bin/sync
+fi
+
+log "stop compose (volumes kept)"
+systemctl stop activepieces 2>/dev/null || true
+"${COMPOSE[@]}" down --remove-orphans --rmi all || true
+
+log "prune image/build cache (volumes kept)"
+/usr/bin/docker builder prune -af >/dev/null
+/usr/bin/docker image prune -af >/dev/null
+
+log "rebuild $COMPOSE_FILE"
+"${COMPOSE[@]}" build --pull
+
+log "start"
+systemctl start activepieces
+log "done"

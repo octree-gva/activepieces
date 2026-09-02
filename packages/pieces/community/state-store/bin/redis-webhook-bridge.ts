@@ -12,9 +12,12 @@ function parseArgs(): { redisUrl: string; listenPort: number } {
     }
     return args[index + 1];
   };
-  const redisUrl = get('--redis-url') ?? process.env['AP_REDIS_URL'];
+  const redisUrl =
+    get('--redis-url') ??
+    process.env['AP_STATE_STORE_REDIS_URL'] ??
+    process.env['AP_REDIS_URL'];
   if (!redisUrl) {
-    throw new Error('Missing --redis-url or AP_REDIS_URL');
+    throw new Error('Missing --redis-url, AP_STATE_STORE_REDIS_URL, or AP_REDIS_URL');
   }
   const portArg = get('--listen-port');
   const listenPort = portArg ? Number.parseInt(portArg, 10) : getBridgePort();

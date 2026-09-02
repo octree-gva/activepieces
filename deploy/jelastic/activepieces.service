@@ -1,0 +1,27 @@
+[Unit]
+Description=Activepieces (docker compose)
+Documentation=https://github.com/octree-gva/activepieces
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/.jelenv
+WorkingDirectory=/home/hfroger/workspace/activepieces
+ExecStartPre=/bin/touch /var/log/run.log
+ExecStartPre=/bin/chmod 666 /var/log/run.log
+ExecStart=/usr/bin/docker compose --env-file /.jelenv -f docker-compose.octree.yml up --remove-orphans --no-build --no-color
+ExecStop=/usr/bin/docker compose --env-file /.jelenv -f docker-compose.octree.yml stop
+TimeoutStartSec=0
+TimeoutStopSec=90
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=0
+KillMode=mixed
+OOMScoreAdjust=-200
+StandardOutput=append:/var/log/run.log
+StandardError=append:/var/log/run.log
+
+[Install]
+WantedBy=multi-user.target

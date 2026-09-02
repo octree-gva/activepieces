@@ -1,5 +1,23 @@
 const WEBHOOK_RETRY_DELAYS_MS = [2000, 4000, 8000, 16000] as const;
 
+/** Public webhook hosts often do not resolve inside the container. */
+function rewriteWebhookUrl(url: string): string {
+  const rewritten = url.replace(/localhost/, '127.0.0.1');
+  const internalBase = process.env['AP_STATE_STORE_WEBHOOK_INTERNAL'];
+  if (!internalBase) {
+    return rewritten;
+  }
+  try {
+    const target = new URL(rewritten);
+    const base = new URL(internalBase);
+    target.protocol = base.protocol;
+    target.host = base.host;
+    return target.toString();
+  } catch {
+    return rewritten;
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -18,7 +36,7 @@ async function postWebhookOnce({
   url: string;
   payload: string;
 }): Promise<PostAttemptResult> {
-  const target = url.replace(/localhost/, '127.0.0.1');
+  const target = rewriteWebhookUrl(url);
   try {
     const res = await fetch(target, {
       method: 'POST',

@@ -124,7 +124,7 @@ module.exports = {
     },${WORKER_PM2_APPS}
     {
         name: 'activepieces-state-store-bridge',
-        ...require('./ecosystem.octree.config.js').apps[0],
+        ...require('/usr/src/app/ecosystem.octree.config.js').apps[0],
     }
     ]
 };

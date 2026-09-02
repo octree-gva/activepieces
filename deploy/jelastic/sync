@@ -46,8 +46,10 @@ systemctl stop activepieces 2>/dev/null || true
 "${COMPOSE[@]}" down --remove-orphans --rmi all || true
 
 log "prune image/build cache (volumes kept)"
-/usr/bin/docker builder prune -af >/dev/null
-/usr/bin/docker image prune -af >/dev/null
+# builder prune can stall on a large metadata.db, and redirecting stdout
+# to /dev/null deadlocks the CLI table writer. Bound it so sync proceeds.
+timeout 120 /usr/bin/docker builder prune -af || log "builder prune skipped (timeout or error)"
+timeout 60 /usr/bin/docker image prune -af || log "image prune skipped (timeout or error)"
 
 log "rebuild $COMPOSE_FILE"
 "${COMPOSE[@]}" build --pull

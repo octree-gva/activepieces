@@ -24,7 +24,7 @@ RUN npm install -g --no-fund --no-audit node-gyp typescript@4.9.4 esbuild@0.25.0
 WORKDIR /usr/src/app
 COPY .npmrc package.json bun.lock bunfig.toml ./
 COPY packages/ ./packages/
-RUN rm -rf packages/pieces/custom && \
+RUN rm -rf packages/pieces/custom packages/web packages/cli packages/tests-e2e packages/ee packages/server/api && \
     find packages/pieces/community -mindepth 1 -maxdepth 1 -type d \
       ! -name decidim \
       ! -name opnform \
@@ -37,17 +37,18 @@ RUN rm -rf packages/pieces/custom && \
       ! -name intercom \
       ! -name telegram-bot \
       -exec rm -rf {} + && \
-    rm -f bun.lock package-lock.json && \
+    rm -f package-lock.json && \
     node <<'EOF'
 const fs = require('fs')
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
 pkg.workspaces = pkg.workspaces.filter((w) => fs.existsSync(w.replace('/*', '')))
 fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
-const pkgPath = 'packages/server/api/package.json'
-const api = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
-if (api.dependencies) delete api.dependencies['@activepieces/piece-microsoft-teams-bot']
-if (api.devDependencies) delete api.devDependencies['@activepieces/piece-microsoft-teams-bot']
-fs.writeFileSync(pkgPath, JSON.stringify(api, null, 2) + '\n')
+fs.writeFileSync('bunfig.toml', '[install]\nlinker = "isolated"\nminimumReleaseAge = 0\n')
+const lock = JSON.parse(fs.readFileSync('bun.lock', 'utf8').replace(/,(\s*[}\]])/g, '$1'))
+for (const key of Object.keys(lock.workspaces || {})) {
+  if (key !== '' && !fs.existsSync(key)) delete lock.workspaces[key]
+}
+fs.writeFileSync('bun.lock', JSON.stringify(lock, null, 2) + '\n')
 EOF
 RUN --mount=type=cache,target=/root/.bun/install/cache bun install
 COPY . .

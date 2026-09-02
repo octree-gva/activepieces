@@ -5,9 +5,11 @@ import type { DecidimAccessToken } from '../../src/types';
 export const decidimCustomAuth = {
   type: AppConnectionType.CUSTOM_AUTH as AppConnectionType.CUSTOM_AUTH,
   props: {
+    name: 'Test OAuth app',
     baseUrl: 'https://example.decidim.com',
     clientId: 'test-client-id',
     clientSecret: 'test-client-secret',
+    scopes: 'oauth',
   },
 } as const;
 

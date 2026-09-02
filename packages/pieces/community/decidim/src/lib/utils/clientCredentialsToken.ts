@@ -1,14 +1,5 @@
 import { httpClient, HttpMethod } from '@activepieces/pieces-common';
 
-type DecidimConnectionAuth = {
-  baseUrl: string;
-  clientId: string;
-  clientSecret: string;
-};
-
-/**
- * OAuth2 client_credentials access token for the Decidim instance (same flow as connection validation).
- */
 export async function fetchDecidimClientCredentialsToken(
   auth: DecidimConnectionAuth
 ): Promise<string> {
@@ -20,11 +11,7 @@ export async function fetchDecidimClientCredentialsToken(
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: auth.clientId,
-      client_secret: auth.clientSecret,
-    }).toString(),
+    body: tokenRequestBody(auth),
   });
   const token = response.body?.access_token;
   if (!token) {
@@ -32,3 +19,22 @@ export async function fetchDecidimClientCredentialsToken(
   }
   return token;
 }
+
+function tokenRequestBody(auth: DecidimConnectionAuth): string {
+  const params = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: auth.clientId,
+    client_secret: auth.clientSecret,
+  });
+  if (auth.scopes) {
+    params.set('scope', auth.scopes);
+  }
+  return params.toString();
+}
+
+type DecidimConnectionAuth = {
+  baseUrl: string;
+  clientId: string;
+  clientSecret: string;
+  scopes?: string;
+};

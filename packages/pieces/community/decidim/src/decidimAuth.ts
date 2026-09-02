@@ -1,9 +1,14 @@
 import { PieceAuth, Property } from "@activepieces/pieces-framework";
-import { httpClient, HttpMethod } from "@activepieces/pieces-common";
+import { fetchDecidimClientCredentialsToken } from "./lib/utils/clientCredentialsToken";
 
 export const decidimAuth = PieceAuth.CustomAuth({
-  description: 'Enter your Decidim client credentials',
+  description: 'Enter your Decidim OAuth application credentials',
   props: {
+    name: Property.ShortText({
+      displayName: 'Name',
+      required: true,
+      description: 'OAuth application name from Decidim admin (OAuth applications).',
+    }),
     baseUrl: Property.ShortText({
       displayName: 'Base URL',
       required: true,
@@ -17,26 +22,30 @@ export const decidimAuth = PieceAuth.CustomAuth({
       displayName: 'Client Secret',
       required: true,
     }),
+    scopes: Property.ShortText({
+      displayName: 'Scopes',
+      required: true,
+      defaultValue: 'oauth',
+      description: 'Space-separated OAuth scopes, for example public system or public oauth whatsapp.',
+    }),
+  },
+  getConnectionIdentifier: async ({ auth }) => {
+    const name = auth.name.trim();
+    return name === '' ? undefined : name;
   },
   validate: async ({ auth }) => {
     try {
-      await httpClient.sendRequest({
-        method: HttpMethod.POST,
-        url: `${auth.baseUrl}/oauth/token`,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: auth.clientId,
-          client_secret: auth.clientSecret,
-        }).toString(),
+      await fetchDecidimClientCredentialsToken({
+        baseUrl: auth.baseUrl,
+        clientId: auth.clientId,
+        clientSecret: auth.clientSecret,
+        scopes: auth.scopes,
       });
       return { valid: true };
     } catch {
       return {
         valid: false,
-        error: 'Invalid Base URL, Client ID or Client Secret',
+        error: 'Invalid Base URL, Client ID, Client Secret or Scopes',
       };
     }
   },

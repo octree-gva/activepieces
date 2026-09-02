@@ -6,7 +6,7 @@ Integration with a [Decidim](https://decidim.org/) instance via the REST API and
 
 | Path | Purpose |
 |------|---------|
-| `src/decidimAuth.ts` | Piece auth (base URL + OAuth client credentials). |
+| `src/decidimAuth.ts` | Piece auth (name, base URL, client ID, client secret, space-separated scopes). |
 | `src/lib/props.ts` | Shared property definitions (labels, descriptions, dropdowns). |
 | `src/lib/registry/actions.ts` | List of actions registered on the piece. |
 | `src/lib/domains/*` | One folder per API area (users, spaces, components, …). Each action is a small file; heavy mapping lives in `*.helpers.ts` or focused modules like `spaces-search-params.ts`. |
@@ -99,6 +99,10 @@ npm run test
 - **Unit**: helpers, `spaces-search-params`, mocked actions.
 - **Integration**: behind env vars (see individual test files).
 
-## Piece auth validation
+## Piece auth
 
-`decidimAuth.validate` treats any request failure as invalid credentials (it does not return the upstream error text). That keeps the settings UI simple; use server logs if token exchange fails unexpectedly.
+Connection fields: **Name**, **Base URL**, **Client ID**, **Client Secret**, **Scopes** (space-separated, default `oauth`).
+
+`decidimAuth.validate` exchanges client credentials for a token (including the configured scopes). Any request failure is treated as invalid credentials (it does not return the upstream error text). That keeps the settings UI simple; use server logs if token exchange fails unexpectedly.
+
+**Custom API Call** sends `Authorization` from the Headers input when that value is set. If Authorization is empty, the step uses a Bearer token minted from the connection (client credentials + connection scopes).

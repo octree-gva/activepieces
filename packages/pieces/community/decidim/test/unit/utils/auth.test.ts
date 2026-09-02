@@ -11,6 +11,15 @@ describe('extractAuth', () => {
     expect(extractAuth({ auth: validAuth })).toEqual(validAuth);
   });
 
+  it('should keep name and scopes when present', () => {
+    const withOptional = {
+      ...validAuth,
+      name: 'My app',
+      scopes: 'public oauth',
+    };
+    expect(extractAuth({ auth: withOptional })).toEqual(withOptional);
+  });
+
   it('should throw when auth is undefined', () => {
     expect(() => extractAuth({ auth: undefined })).toThrow('Auth is required');
   });

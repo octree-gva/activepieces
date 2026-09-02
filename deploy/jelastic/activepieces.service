@@ -11,7 +11,7 @@ EnvironmentFile=/.jelenv
 WorkingDirectory=/home/hfroger/workspace/activepieces
 ExecStartPre=/bin/touch /var/log/run.log
 ExecStartPre=/bin/chmod 666 /var/log/run.log
-ExecStart=/usr/bin/docker compose --env-file /.jelenv -f docker-compose.octree.yml up --remove-orphans --no-build --no-color
+ExecStart=/usr/bin/docker compose --env-file /.jelenv -f docker-compose.octree.yml up --remove-orphans --no-build --scale worker=0 --no-color
 ExecStop=/usr/bin/docker compose --env-file /.jelenv -f docker-compose.octree.yml stop
 TimeoutStartSec=0
 TimeoutStopSec=90

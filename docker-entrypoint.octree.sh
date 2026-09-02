@@ -49,8 +49,9 @@ if [ -z "$AP_WORKER_TOKEN" ]; then
     exit 1
 fi
 
-WORKER_TOKEN_CACHE_FILE="/usr/src/app/cache/.ap_worker_token"
-mkdir -p /usr/src/app/cache
+AP_CACHE_BASE_PATH="${AP_CACHE_BASE_PATH:-/opt/ap-cache}"
+WORKER_TOKEN_CACHE_FILE="${AP_CACHE_BASE_PATH}/.ap_worker_token"
+mkdir -p "$AP_CACHE_BASE_PATH"
 printf '%s' "$AP_WORKER_TOKEN" > "$WORKER_TOKEN_CACHE_FILE"
 
 # Postgres: wait-on TCP. Redis: 3x PING, 3s sleep between failures. AP_SKIP_WAIT_FOR_DEPS=1 skips both.

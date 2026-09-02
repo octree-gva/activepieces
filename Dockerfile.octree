@@ -28,9 +28,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 RUN export ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then \
-      curl -fSL https://github.com/oven-sh/bun/releases/download/bun-v1.3.1/bun-linux-x64-baseline.zip -o bun.zip; \
+      curl -fSL --retry 5 --retry-delay 2 https://github.com/oven-sh/bun/releases/download/bun-v1.3.3/bun-linux-x64-baseline.zip -o bun.zip; \
     elif [ "$ARCH" = "aarch64" ]; then \
-      curl -fSL https://github.com/oven-sh/bun/releases/download/bun-v1.3.1/bun-linux-aarch64.zip -o bun.zip; \
+      curl -fSL --retry 5 --retry-delay 2 https://github.com/oven-sh/bun/releases/download/bun-v1.3.3/bun-linux-aarch64.zip -o bun.zip; \
     fi
 
 RUN unzip bun.zip \
@@ -60,11 +60,29 @@ WORKDIR /usr/src/app
 
 COPY .npmrc package.json bun.lock bunfig.toml ./
 COPY packages/ ./packages/
-
-RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install --frozen-lockfile
-
 COPY . .
+
+# bun 1.3.x panics on 700+ community workspaces + isolated linker.
+# Keep only the octree pieces and hoist before install.
+RUN rm -rf packages/pieces/custom && \
+    find packages/pieces/community -mindepth 1 -maxdepth 1 -type d \
+      ! -name decidim \
+      ! -name opnform \
+      ! -name whatsapp \
+      ! -name state-store \
+      ! -name slack \
+      ! -name square \
+      ! -name matrix \
+      ! -name facebook-leads \
+      ! -name intercom \
+      ! -name telegram-bot \
+      -exec rm -rf {} + && \
+    rm -f bun.lock package-lock.json && \
+    printf '[install]\nlinker = "hoisted"\n' > bunfig.toml
+
+# Do not reuse the bun cache from the failed isolated-linker install.
+ENV NODE_OPTIONS=--max-old-space-size=1536
+RUN bun install --linker hoisted
 
 RUN node <<'EOF'
 const fs = require('fs')
@@ -131,6 +149,7 @@ WORKDIR /usr/src/app
 
 ENV AP_API_KEY="api-key" \
     AP_CACHE_PATH="./dev/cache" \
+    AP_CACHE_BASE_PATH="/opt/ap-cache" \
     AP_CHATBOT_ENABLED=true \
     AP_CONFIG_PATH="./dev/config" \
     AP_DB_TYPE=POSTGRES \

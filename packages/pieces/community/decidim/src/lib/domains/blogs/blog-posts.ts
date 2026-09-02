@@ -14,15 +14,8 @@ import { resolveAuthContext } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
 import { createBlogsApi } from '../../runtime/clients';
 import {
-  blogOrderDirectionProp,
-  blogOrderProp,
   blogPostIdProp,
   decidimComponentIdProp,
-  decidimSpaceIdProp,
-  decidimSpaceManifestProp,
-  localesProp,
-  pageProp,
-  perPageProp,
   userAccessTokenProp,
 } from '../../props';
 import { buildBlogReadRequest, buildBlogsListRequest } from './blog-posts.helpers';
@@ -32,13 +25,13 @@ export const blogPosts = createAction({
   name: 'blogPosts',
   auth: decidimAuth,
   requireAuth: true,
-  displayName: 'Blog posts',
-  description: 'List or read Decidim blog posts (GET /blogs, GET /blogs/{id})',
+  displayName: 'Blog',
+  description: 'Search or read Decidim blog posts',
   props: {
     accessToken: userAccessTokenProp(false),
     action: Property.StaticDropdown({
       displayName: 'Action',
-      description: 'Search lists posts; Read loads one post by id',
+      description: 'The action to perform',
       required: true,
       options: {
         options: [
@@ -49,48 +42,27 @@ export const blogPosts = createAction({
     }),
     searchOptions: Property.DynamicProperties({
       auth: decidimAuth,
-      displayName: 'Search options',
-      description: 'Options for listing blog posts',
+      displayName: 'Search Options',
+      description: 'Options for searching blog posts',
       required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({
-        action,
-        auth,
-      }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth) return {};
+      refreshers: ['action'],
+      props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
         if (action !== 'search') return {};
         return {
-          page: pageProp(false),
-          perPage: perPageProp(false),
-          locales: localesProp(false),
-          spaceManifest: decidimSpaceManifestProp(false),
-          spaceId: decidimSpaceIdProp(false),
-          componentId: decidimComponentIdProp(false),
-          order: blogOrderProp(false),
-          orderDirection: blogOrderDirectionProp(false),
+          componentId: decidimComponentIdProp(true),
         };
       },
     }),
     readOptions: Property.DynamicProperties({
       auth: decidimAuth,
-      displayName: 'Read options',
-      description: 'Options for reading a single blog post',
+      displayName: 'Read Options',
+      description: 'Options for reading a blog post',
       required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({
-        action,
-        auth,
-      }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth) return {};
+      refreshers: ['action'],
+      props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
         if (action !== 'read') return {};
         return {
           blogPostId: blogPostIdProp(true),
-          locales: localesProp(false),
-          spaceManifest: decidimSpaceManifestProp(false),
-          spaceId: decidimSpaceIdProp(false),
-          componentId: decidimComponentIdProp(false),
-          order: blogOrderProp(false),
-          orderDirection: blogOrderDirectionProp(false),
         };
       },
     }),
@@ -115,9 +87,9 @@ export const blogPosts = createAction({
       if (action === 'search') {
         const searchOptions =
           (context.propsValue['searchOptions'] as Record<string, unknown>) || {};
+        assertProp(searchOptions['componentId'], 'Component ID is required for Search');
         await propsValidation.validateZod(searchOptions, {
-          page: z.number().int().min(1).optional(),
-          perPage: z.number().int().min(1).max(100).optional(),
+          componentId: z.number().int().positive(),
         });
 
         const { request, effectivePerPage } = buildBlogsListRequest({

@@ -10,15 +10,8 @@ import { resolveAuthContext } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
 import { createProposalsApi } from '../../runtime/clients';
 import {
-  blogOrderDirectionProp,
   decidimComponentIdProp,
-  decidimSpaceIdProp,
-  decidimSpaceManifestProp,
-  localesProp,
-  pageProp,
-  perPageProp,
   proposalIdProp,
-  proposalOrderProp,
   userAccessTokenProp,
   voteWeightProp,
 } from '../../props';
@@ -33,17 +26,18 @@ export const proposals = createAction({
   name: 'proposals',
   auth: decidimAuth,
   requireAuth: true,
-  displayName: 'Proposals',
+  displayName: 'Proposal',
   description:
-    'List, read, or vote on published proposals. Use User access token for participant-scoped operations.',
+    'Search, read, or vote on published proposals. Use User access token for participant-scoped operations.',
   props: {
     accessToken: userAccessTokenProp(false),
     action: Property.StaticDropdown({
       displayName: 'Action',
+      description: 'The action to perform',
       required: true,
       options: {
         options: [
-          { label: 'Search (list)', value: 'search' },
+          { label: 'Search', value: 'search' },
           { label: 'Read', value: 'read' },
           { label: 'Vote', value: 'vote' },
         ],
@@ -51,48 +45,38 @@ export const proposals = createAction({
     }),
     searchOptions: Property.DynamicProperties({
       auth: decidimAuth,
-      displayName: 'Search options',
+      displayName: 'Search Options',
+      description: 'Options for searching proposals',
       required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth || action !== 'search') return {};
+      refreshers: ['action'],
+      props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
+        if (action !== 'search') return {};
         return {
-          page: pageProp(false),
-          perPage: perPageProp(false),
-          locales: localesProp(false),
-          spaceManifest: decidimSpaceManifestProp(false),
-          spaceId: decidimSpaceIdProp(false),
-          componentId: decidimComponentIdProp(false),
-          order: proposalOrderProp(false),
-          orderDirection: blogOrderDirectionProp(false),
+          componentId: decidimComponentIdProp(true),
         };
       },
     }),
     readOptions: Property.DynamicProperties({
       auth: decidimAuth,
-      displayName: 'Read options',
+      displayName: 'Read Options',
+      description: 'Options for reading a proposal',
       required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth || action !== 'read') return {};
+      refreshers: ['action'],
+      props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
+        if (action !== 'read') return {};
         return {
           proposalId: proposalIdProp(true),
-          locales: localesProp(false),
-          spaceManifest: decidimSpaceManifestProp(false),
-          spaceId: decidimSpaceIdProp(false),
-          componentId: decidimComponentIdProp(false),
-          order: proposalOrderProp(false),
-          orderDirection: blogOrderDirectionProp(false),
         };
       },
     }),
     voteOptions: Property.DynamicProperties({
       auth: decidimAuth,
-      displayName: 'Vote options',
+      displayName: 'Vote Options',
+      description: 'Options for voting on a proposal',
       required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth || action !== 'vote') return {};
+      refreshers: ['action'],
+      props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
+        if (action !== 'vote') return {};
         return {
           proposalId: proposalIdProp(true),
           voteWeight: voteWeightProp(true),

@@ -10,7 +10,7 @@ import { response } from '../../utils/response';
 import { assertProp } from '../../utils/assertProp';
 import { resolveAuthContext, bearerAuthorization } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
-import { createDraftProposalsApi } from '../../runtime/clients';
+import { createDraftProposalsApi, createProposalsApi } from '../../runtime/clients';
 import { decidimComponentIdProp, draftProposalIdProp, userAccessTokenProp } from '../../props';
 import type {
   DraftProposalsApiCreateDraftProposalRequest,
@@ -24,15 +24,18 @@ import {
   draftProposalsUserTokenError,
   parseDraftProposalId,
   parseDraftUpdateBody,
+  parseRequiredComponentId,
+  unpublishedDrafts,
 } from './draft-proposals.helpers';
+import { buildProposalsListRequest } from './proposals.helpers';
 
 export const draftProposals = createAction({
   name: 'draftProposals',
   auth: decidimAuth,
   requireAuth: true,
-  displayName: 'Draft proposals',
+  displayName: 'Draft proposal',
   description:
-    'Create, read, update, withdraw, or publish draft proposals. Requires a user access token (e.g. from Impersonate).',
+    'Search, create, read, update, withdraw, or publish draft proposals. Requires a user access token (e.g. from Impersonate).',
   props: {
     accessToken: userAccessTokenProp(false),
     connectionSetup: Property.DynamicProperties({
@@ -52,9 +55,11 @@ export const draftProposals = createAction({
     }),
     action: Property.StaticDropdown({
       displayName: 'Action',
+      description: 'The action to perform',
       required: true,
       options: {
         options: [
+          { label: 'Search', value: 'search' },
           { label: 'Create', value: 'create' },
           { label: 'Read', value: 'read' },
           { label: 'Update', value: 'update' },
@@ -63,9 +68,19 @@ export const draftProposals = createAction({
         ],
       },
     }),
+    searchOptions: Property.DynamicProperties({
+      auth: decidimAuth,
+      displayName: 'Search Options',
+      required: false,
+      refreshers: ['action', 'auth'],
+      props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
+        if (!auth || action !== 'search') return {};
+        return { componentId: decidimComponentIdProp(true) };
+      },
+    }),
     createOptions: Property.DynamicProperties({
       auth: decidimAuth,
-      displayName: 'Create options',
+      displayName: 'Create Options',
       required: false,
       refreshers: ['action', 'auth'],
       props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
@@ -80,7 +95,7 @@ export const draftProposals = createAction({
       refreshers: ['action', 'auth'],
       props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
         if (!auth) return {};
-        if (action === 'create') return {};
+        if (action === 'create' || action === 'search') return {};
         return { draftProposalId: draftProposalIdProp(true) };
       },
     }),
@@ -117,6 +132,29 @@ export const draftProposals = createAction({
       const api = createDraftProposalsApi(resolved.baseConfiguration, resolved.rawAccessToken);
       const authHeader = bearerAuthorization(resolved.rawAccessToken);
       const action = context.propsValue.action;
+
+      if (action === 'search') {
+        const o = (context.propsValue.searchOptions as Record<string, unknown>) || {};
+        assertProp(o.componentId, 'component_id is required');
+        parseRequiredComponentId(o.componentId);
+        const proposalsApi = createProposalsApi(
+          resolved.baseConfiguration,
+          resolved.rawAccessToken
+        );
+        const { request } = buildProposalsListRequest({
+          accessToken: resolved.rawAccessToken,
+          searchOptions: o,
+        });
+        const result = await proposalsApi.listProposals(request);
+        const list = (result.data as { data?: unknown[] })?.data ?? [];
+        const arr = Array.isArray(list) ? list : [];
+        const drafts = unpublishedDrafts(arr);
+        return response({
+          drafts,
+          count: drafts.length,
+          auth_mode: resolved.mode,
+        });
+      }
 
       if (action === 'create') {
         const o = (context.propsValue.createOptions as Record<string, unknown>) || {};

@@ -60,11 +60,21 @@ Use **`access_token`** from **Impersonate** (or paste a token) into **User acces
 
 1. **Search Component** — find `manifest_name: proposals`, note `component_id`.
 2. **Impersonate** — map `{{step.access_token}}` into the next step.
-3. **Draft proposals → Create** — set **User access token** to `{{impersonate.access_token}}`, **Component ID** from step 1.
-4. **Draft proposals → Update** — title/body JSON.
-5. **Draft proposals → Publish** — use draft id from create/read.
+3. **Draft proposal → Create** — set **User access token** to `{{impersonate.access_token}}`, **Component ID** from step 1.
+4. **Draft proposal → Update** — title/body JSON.
+5. **Draft proposal → Publish** — use draft id from create/read.
 
-Published listing/voting: **Proposals** action with the same optional user token when needed.
+Published listing/voting: **Proposal** action with the same optional user token when needed.
+
+**Organizations** — Search by host, Read by id.
+
+**Blog** — Search by component id, Read by id.
+
+**Proposal** — Search by component id, Read, Vote.
+
+**Draft proposal** — Search by component id, Create, Read, Update, Withdraw, Publish.
+
+**Search Users** — list users scoped by the current token.
 
 ## OpenAPI coverage
 

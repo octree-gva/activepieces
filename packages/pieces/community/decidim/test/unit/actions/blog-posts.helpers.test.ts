@@ -5,6 +5,7 @@ import {
   normalizePagePerPage,
   parseOptionalPositiveInt,
   parseOptionalSpaceManifest,
+  parseRequiredPositiveInt,
 } from '../../../src/lib/domains/blogs/blog-posts.helpers';
 
 describe('normalizePagePerPage', () => {
@@ -47,35 +48,50 @@ describe('parseOptionalPositiveInt', () => {
   it('throws for zero', () => {
     expect(() => parseOptionalPositiveInt('X', 0)).toThrow('X must be a positive integer');
   });
+
+  it('parses numeric strings', () => {
+    expect(parseOptionalPositiveInt('X', '3')).toBe(3);
+  });
+
+  it('returns undefined for null', () => {
+    expect(parseOptionalPositiveInt('X', null)).toBeUndefined();
+  });
+});
+
+describe('parseRequiredPositiveInt', () => {
+  it('parses a positive int', () => {
+    expect(parseRequiredPositiveInt('Component ID', 9)).toBe(9);
+  });
+
+  it('throws when missing', () => {
+    expect(() => parseRequiredPositiveInt('Component ID', undefined)).toThrow(
+      'Component ID is required'
+    );
+  });
 });
 
 describe('buildBlogsListRequest', () => {
-  it('maps filters and locales to SDK request', () => {
+  it('maps component_id to SDK request', () => {
     const { request, effectivePerPage } = buildBlogsListRequest({
       accessToken: 't',
-      searchOptions: {
-        page: 2,
-        perPage: 10,
-        locales: [{ value: 'en' }],
-        spaceManifest: 'participatory_processes',
-        spaceId: 3,
-        componentId: 9,
-        order: 'published_at',
-        orderDirection: 'desc',
-      },
+      searchOptions: { componentId: 9 },
     });
-    expect(effectivePerPage).toBe(10);
+    expect(effectivePerPage).toBe(50);
     expect(request).toMatchObject({
       authorization: 'Bearer t',
-      page: 2,
-      perPage: 10,
-      locales: ['en'],
-      spaceManifest: 'participatory_processes',
-      spaceId: 3,
+      page: 1,
+      perPage: 50,
       componentId: 9,
-      order: 'published_at',
-      orderDirection: 'desc',
     });
+  });
+
+  it('requires componentId', () => {
+    expect(() =>
+      buildBlogsListRequest({
+        accessToken: 't',
+        searchOptions: {},
+      })
+    ).toThrow('Component ID is required');
   });
 });
 
@@ -89,22 +105,14 @@ describe('buildBlogReadRequest', () => {
     ).toThrow();
   });
 
-  it('includes optional scope fields', () => {
+  it('builds a read request by id', () => {
     const req = buildBlogReadRequest({
       accessToken: 'tok',
-      readOptions: {
-        blogPostId: 42,
-        componentId: 7,
-        order: 'published_at',
-        orderDirection: 'asc',
-      },
+      readOptions: { blogPostId: 42 },
     });
     expect(req).toMatchObject({
       id: 42,
       authorization: 'Bearer tok',
-      componentId: 7,
-      order: 'published_at',
-      orderDirection: 'asc',
     });
   });
 });

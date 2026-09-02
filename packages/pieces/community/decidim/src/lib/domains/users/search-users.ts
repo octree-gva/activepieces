@@ -12,12 +12,12 @@ import { computeHasMore } from '../components/search-component.helpers';
 import type { UsersApiListUsersRequest } from '@octree/decidim-sdk';
 import type { DecidimResourceList } from '../../types/decidim-api';
 
-export const usersList = createAction({
+export const searchUsers = createAction({
   name: 'usersList',
   auth: decidimAuth,
   requireAuth: true,
-  displayName: 'Users list',
-  description: 'GET /users — list users (scoped by token)',
+  displayName: 'Search Users',
+  description: 'Search users (GET /users, scoped by token)',
   props: {
     accessToken: userAccessTokenProp(false),
     page: pageProp(false),

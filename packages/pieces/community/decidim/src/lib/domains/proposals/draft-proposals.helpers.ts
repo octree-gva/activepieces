@@ -33,3 +33,18 @@ export function buildCreateDraftProposalPayload(
 ): CreateDraftProposalPayload {
   return { data: { component_id: componentId } };
 }
+
+export function parseRequiredComponentId(value: unknown): number {
+  return z.number().int().positive().parse(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
+}
+
+export function unpublishedDrafts(items: unknown[]): unknown[] {
+  return items.filter((item) => {
+    if (!isRecord(item) || !isRecord(item.meta)) return false;
+    return item.meta.published === false;
+  });
+}

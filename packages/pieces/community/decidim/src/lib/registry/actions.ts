@@ -11,7 +11,7 @@ import { typedComponents } from '../domains/components/typed-components';
 import { organizations } from '../domains/organizations/organizations';
 import { organizationExtendedData } from '../domains/organizations/organization-extended-data';
 import { roles } from '../domains/roles/roles';
-import { usersList } from '../domains/users/users-list';
+import { searchUsers } from '../domains/users/search-users';
 import { createMagicLink } from '../domains/users/create-magic-link';
 import { customApiCallAction } from '../actions/custom-api-call';
 import { meExtendedData } from '../domains/users/me-extended-data';
@@ -35,5 +35,5 @@ export const allActions: Action[] = [
   searchParticipatorySpace,
   typedComponents,
   upsertParticipant,
-  usersList,
+  searchUsers,
 ];

@@ -65,3 +65,17 @@ export function createMockActionContext<
     ...overrides,
   } as ActionContext<PieceAuth, ActionProps>;
 }
+
+export async function loadDynamicProps(
+  prop: unknown,
+  propsValue: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  if (prop === null || typeof prop !== 'object' || !('props' in prop)) {
+    throw new Error('expected DynamicProperties');
+  }
+  const fn = Reflect.get(prop, 'props');
+  if (typeof fn !== 'function') {
+    throw new Error('expected DynamicProperties');
+  }
+  return fn(propsValue, {});
+}

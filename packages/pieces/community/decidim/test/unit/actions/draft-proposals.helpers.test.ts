@@ -3,6 +3,8 @@ import {
   parseDraftProposalId,
   parseDraftUpdateBody,
   buildCreateDraftProposalPayload,
+  parseRequiredComponentId,
+  unpublishedDrafts,
 } from '../../../src/lib/domains/proposals/draft-proposals.helpers';
 
 describe('draftProposalsUserTokenError', () => {
@@ -48,5 +50,28 @@ describe('buildCreateDraftProposalPayload', () => {
     expect(buildCreateDraftProposalPayload(9)).toEqual({
       data: { component_id: 9 },
     });
+  });
+});
+
+describe('parseRequiredComponentId', () => {
+  it('parses a positive id', () => {
+    expect(parseRequiredComponentId(4)).toBe(4);
+  });
+
+  it('throws when missing', () => {
+    expect(() => parseRequiredComponentId(undefined)).toThrow();
+  });
+});
+
+describe('unpublishedDrafts', () => {
+  it('keeps only unpublished items', () => {
+    expect(
+      unpublishedDrafts([
+        { id: '1', meta: { published: false } },
+        { id: '2', meta: { published: true } },
+        { id: '3' },
+        null,
+      ])
+    ).toEqual([{ id: '1', meta: { published: false } }]);
   });
 });

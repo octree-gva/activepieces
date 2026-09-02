@@ -5,7 +5,6 @@ import type {
 } from '@octree/decidim-sdk';
 import { bearerAuthorization } from '../../runtime/authMode';
 import { asBlogsApiBlogRequest, asBlogsApiBlogsRequest } from '../../runtime/sdk-casts';
-import { parseLocales } from '../../runtime/locales';
 
 export { bearerAuthorization } from '../../runtime/authMode';
 
@@ -39,17 +38,12 @@ export function parseOptionalPositiveInt(label: string, value: unknown) {
   return Math.trunc(n);
 }
 
-export function parseOptionalOrder(value: unknown): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  const s = String(value).trim();
-  return s === '' ? undefined : s;
-}
-
-export function parseOptionalOrderDirection(
-  value: unknown
-): 'asc' | 'desc' | undefined {
-  if (value === undefined || value === null || value === '') return undefined;
-  return z.enum(['asc', 'desc']).parse(value);
+export function parseRequiredPositiveInt(label: string, value: unknown): number {
+  const n = parseOptionalPositiveInt(label, value);
+  if (n === undefined) {
+    throw new Error(`${label} is required`);
+  }
+  return n;
 }
 
 export function buildBlogsListRequest(args: {
@@ -57,28 +51,14 @@ export function buildBlogsListRequest(args: {
   searchOptions: Record<string, unknown>;
 }): { request: BlogsApiListBlogPostsRequest; effectivePerPage: number } {
   const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
-  const o = args.searchOptions;
-  const { page, effectivePerPage } = normalizePagePerPage(
-    o['page'],
-    o['perPage']
-  );
-
-  const spaceManifest = parseOptionalSpaceManifest(o['spaceManifest']);
-  const spaceId = parseOptionalPositiveInt('Space ID', o['spaceId']);
-  const componentId = parseOptionalPositiveInt('Component ID', o['componentId']);
-  const order = parseOptionalOrder(o['order']);
-  const orderDirection = parseOptionalOrderDirection(o['orderDirection']);
+  const componentId = parseRequiredPositiveInt('Component ID', args.searchOptions['componentId']);
+  const { page, effectivePerPage } = normalizePagePerPage(undefined, undefined);
 
   const request = asBlogsApiBlogsRequest({
     authorization: auth,
     page,
     perPage: effectivePerPage,
-    locales: parseLocales(o['locales']),
-    ...(spaceManifest !== undefined ? { spaceManifest } : {}),
-    ...(spaceId !== undefined ? { spaceId } : {}),
-    ...(componentId !== undefined ? { componentId } : {}),
-    ...(order !== undefined ? { order } : {}),
-    ...(orderDirection !== undefined ? { orderDirection } : {}),
+    componentId,
   });
 
   return { request, effectivePerPage };
@@ -89,23 +69,10 @@ export function buildBlogReadRequest(args: {
   readOptions: Record<string, unknown>;
 }): BlogsApiGetBlogPostRequest {
   const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
-  const o = args.readOptions;
-  const id = z.number().int().positive('Blog post ID must be > 0').parse(o['blogPostId']);
-
-  const spaceManifest = parseOptionalSpaceManifest(o['spaceManifest']);
-  const spaceId = parseOptionalPositiveInt('Space ID', o['spaceId']);
-  const componentId = parseOptionalPositiveInt('Component ID', o['componentId']);
-  const order = parseOptionalOrder(o['order']);
-  const orderDirection = parseOptionalOrderDirection(o['orderDirection']);
+  const id = z.number().int().positive('Blog post ID must be > 0').parse(args.readOptions['blogPostId']);
 
   return asBlogsApiBlogRequest({
     id,
     authorization: auth,
-    locales: parseLocales(o['locales']),
-    ...(spaceManifest !== undefined ? { spaceManifest } : {}),
-    ...(spaceId !== undefined ? { spaceId } : {}),
-    ...(componentId !== undefined ? { componentId } : {}),
-    ...(order !== undefined ? { order } : {}),
-    ...(orderDirection !== undefined ? { orderDirection } : {}),
   });
 }

@@ -5,13 +5,13 @@
     "": {
       "name": "@octree/piece-decidim",
       "dependencies": {
-        "@octree/decidim-sdk": "https://git.octree.ch/api/v4/projects/464/packages/npm/@octree/decidim-sdk/-/@octree/decidim-sdk-0.2.8.tgz",
+        "@octree/decidim-sdk": "https://git.octree.ch/api/v4/projects/464/packages/npm/@octree/decidim-sdk/-/@octree/decidim-sdk-0.3.5.tgz",
         "tslib": "^2.3.0",
       },
     },
   },
   "packages": {
-    "@octree/decidim-sdk": ["@octree/decidim-sdk@https://git.octree.ch/api/v4/projects/464/packages/npm/@octree/decidim-sdk/-/@octree/decidim-sdk-0.2.8.tgz", { "dependencies": { "axios": "1.7.7" } }],
+    "@octree/decidim-sdk": ["@octree/decidim-sdk@https://git.octree.ch/api/v4/projects/464/packages/npm/@octree/decidim-sdk/-/@octree/decidim-sdk-0.3.5.tgz", { "dependencies": { "axios": "1.7.7" } }],
 
     "asynckit": ["asynckit@0.4.0", "", {}, "sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q=="],
 

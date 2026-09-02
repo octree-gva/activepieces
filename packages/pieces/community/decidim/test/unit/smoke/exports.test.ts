@@ -68,8 +68,8 @@ describe('decidim piece exports smoke', () => {
     const spaces = await import('../../../src/lib/domains/spaces/get-participatory-space');
     expect(spaces).toBeDefined();
 
-    const usersList = await import('../../../src/lib/domains/users/users-list');
-    expect(usersList).toBeDefined();
+    const users = await import('../../../src/lib/domains/users/search-users');
+    expect(users).toBeDefined();
 
     const me = await import('../../../src/lib/domains/users/me-extended-data');
     expect(me).toBeDefined();

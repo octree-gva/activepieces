@@ -9,78 +9,57 @@ import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode'
 import { getErrorMessage } from '../../runtime/errors';
 import { createOrganizationsApi } from '../../runtime/clients';
 import {
-  localesProp,
+  organizationHostProp,
   organizationIdStringProp,
-  pageProp,
-  perPageProp,
-  updateOrganizationPayloadProp,
   userAccessTokenProp,
 } from '../../props';
-import { parseLocales } from '../../runtime/locales';
-import { computeHasMore } from '../components/search-component.helpers';
 import type {
   OrganizationsApiGetOrganizationRequest,
   OrganizationsApiListOrganizationsRequest,
-  OrganizationsApiUpdateOrganizationRequest,
 } from '@octree/decidim-sdk';
-import { updateOrganizationPayloadFromRecord } from '../../runtime/sdk-casts';
 
 export const organizations = createAction({
   name: 'organizations',
   auth: decidimAuth,
   requireAuth: true,
   displayName: 'Organizations',
-  description: 'List, get, or update organizations (admin scopes)',
+  description: 'Search organizations by host, or read one by id',
   props: {
     accessToken: userAccessTokenProp(false),
     action: Property.StaticDropdown({
       displayName: 'Action',
+      description: 'The action to perform',
       required: true,
       options: {
         options: [
-          { label: 'List', value: 'list' },
+          { label: 'Search', value: 'search' },
           { label: 'Read', value: 'read' },
-          { label: 'Update', value: 'update' },
         ],
       },
     }),
-    listOptions: Property.DynamicProperties({
+    searchOptions: Property.DynamicProperties({
       auth: decidimAuth,
-      displayName: 'List options',
+      displayName: 'Search Options',
+      description: 'Options for searching organizations',
       required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth || action !== 'list') return {};
+      refreshers: ['action'],
+      props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
+        if (action !== 'search') return {};
         return {
-          page: pageProp(false),
-          perPage: perPageProp(false),
-          locales: localesProp(false),
+          host: organizationHostProp(true),
         };
       },
     }),
     readOptions: Property.DynamicProperties({
       auth: decidimAuth,
-      displayName: 'Read options',
+      displayName: 'Read Options',
+      description: 'Options for reading an organization',
       required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth || action !== 'read') return {};
+      refreshers: ['action'],
+      props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
+        if (action !== 'read') return {};
         return {
           organizationId: organizationIdStringProp(true),
-          locales: localesProp(false),
-        };
-      },
-    }),
-    updateOptions: Property.DynamicProperties({
-      auth: decidimAuth,
-      displayName: 'Update options',
-      required: false,
-      refreshers: ['action', 'auth'],
-      props: async ({ action, auth }: Record<string, unknown>): Promise<InputPropertyMap> => {
-        if (!auth || action !== 'update') return {};
-        return {
-          organizationId: organizationIdStringProp(true),
-          payload: updateOrganizationPayloadProp(true),
         };
       },
     }),
@@ -98,27 +77,25 @@ export const organizations = createAction({
       const auth = bearerAuthorization(resolved.rawAccessToken);
       const action = context.propsValue.action;
 
-      if (action === 'list') {
-        const o = (context.propsValue.listOptions as Record<string, unknown>) || {};
+      if (action === 'search') {
+        const o = (context.propsValue.searchOptions as Record<string, unknown>) || {};
+        assertProp(o.host, 'Host is required for Search');
         await propsValidation.validateZod(o, {
-          page: z.number().int().min(1).optional(),
-          perPage: z.number().int().min(1).max(100).optional(),
+          host: z.string().min(1),
         });
-        const page = z.number().int().min(1).default(1).parse(o.page ?? 1);
-        const perPage = z.number().int().min(1).max(100).default(50).parse(o.perPage ?? 50);
+        const host = z.string().min(1).parse(o.host).trim();
         const listReq: OrganizationsApiListOrganizationsRequest = {
           authorization: auth,
-          page,
-          perPage,
-          locales: parseLocales(o.locales),
+          page: 1,
+          perPage: 100,
         };
         const result = await api.listOrganizations(listReq);
         const list = (result.data as { data?: unknown[] })?.data ?? [];
         const arr = Array.isArray(list) ? list : [];
+        const organizations = arr.filter((row) => organizationHostEquals(row, host));
         return response({
-          organizations: arr,
-          count: arr.length,
-          has_more: computeHasMore(arr.length, perPage),
+          organizations,
+          count: organizations.length,
           auth_mode: resolved.mode,
         });
       }
@@ -130,30 +107,8 @@ export const organizations = createAction({
         const readReq: OrganizationsApiGetOrganizationRequest = {
           id,
           authorization: auth,
-          locales: parseLocales(o.locales),
         };
         const result = await api.getOrganization(readReq);
-        return response({
-          organization: (result.data as { data?: unknown })?.data,
-          organization_id: id,
-          auth_mode: resolved.mode,
-        });
-      }
-
-      if (action === 'update') {
-        const o = (context.propsValue.updateOptions as Record<string, unknown>) || {};
-        assertProp(o.organizationId, 'Organization ID required');
-        assertProp(o.payload, 'Payload required');
-        const id = z.string().min(1).parse(o.organizationId);
-        const payload = o.payload as Record<string, unknown>;
-        await propsValidation.validateZod({ payload }, { payload: z.record(z.string(), z.unknown()) });
-        const updateOrganizationPayload = updateOrganizationPayloadFromRecord(payload);
-        const updateReq: OrganizationsApiUpdateOrganizationRequest = {
-          id,
-          authorization: auth,
-          updateOrganizationPayload,
-        };
-        const result = await api.updateOrganization(updateReq);
         return response({
           organization: (result.data as { data?: unknown })?.data,
           organization_id: id,
@@ -167,3 +122,16 @@ export const organizations = createAction({
     }
   },
 });
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
+}
+
+function organizationHostEquals(org: unknown, host: string): boolean {
+  if (!isRecord(org)) return false;
+  if (typeof org.host === 'string' && org.host === host) return true;
+  if (isRecord(org.attributes) && typeof org.attributes.host === 'string') {
+    return org.attributes.host === host;
+  }
+  return false;
+}

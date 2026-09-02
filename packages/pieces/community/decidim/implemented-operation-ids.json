@@ -29,7 +29,6 @@
   "setOrganizationExtendedData",
   "setUserData",
   "updateDraftProposal",
-  "updateOrganization",
   "userData",
   "users",
   "voteProposal",

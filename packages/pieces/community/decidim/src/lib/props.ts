@@ -314,6 +314,14 @@ export function organizationIdStringProp(required = false) {
   });
 }
 
+export function organizationHostProp(required = false) {
+  return Property.ShortText({
+    displayName: 'Host',
+    required,
+    description: 'Organization hostname (e.g. participate.example.org)',
+  });
+}
+
 export function organizationNumericIdProp(required = false) {
   return Property.Number({
     displayName: 'Organization numeric ID',

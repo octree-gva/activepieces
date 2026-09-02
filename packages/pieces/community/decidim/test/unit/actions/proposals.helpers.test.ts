@@ -5,54 +5,27 @@ import {
 } from '../../../src/lib/domains/proposals/proposals.helpers';
 
 describe('buildProposalsListRequest', () => {
-  it('defaults pagination like the action', () => {
+  it('maps component_id', () => {
     const { request, effectivePerPage } = buildProposalsListRequest({
-      accessToken: 't',
-      searchOptions: {},
+      accessToken: 'tok',
+      searchOptions: { componentId: 9 },
     });
     expect(effectivePerPage).toBe(50);
     expect(request).toMatchObject({
-      authorization: 'Bearer t',
+      authorization: 'Bearer tok',
       page: 1,
       perPage: 50,
-    });
-  });
-
-  it('maps filters and locales', () => {
-    const { request, effectivePerPage } = buildProposalsListRequest({
-      accessToken: 'tok',
-      searchOptions: {
-        page: 2,
-        perPage: 10,
-        locales: [{ value: 'en' }],
-        spaceManifest: 'participatory_processes',
-        spaceId: 3,
-        componentId: 9,
-        order: 'published_at',
-        orderDirection: 'desc',
-      },
-    });
-    expect(effectivePerPage).toBe(10);
-    expect(request).toMatchObject({
-      authorization: 'Bearer tok',
-      page: 2,
-      perPage: 10,
-      locales: ['en'],
-      spaceManifest: 'participatory_processes',
-      spaceId: 3,
       componentId: 9,
-      order: 'published_at',
-      orderDirection: 'desc',
     });
   });
 
-  it('rejects perPage > 100', () => {
+  it('requires componentId', () => {
     expect(() =>
       buildProposalsListRequest({
         accessToken: 't',
-        searchOptions: { perPage: 101 },
+        searchOptions: {},
       })
-    ).toThrow();
+    ).toThrow('Component ID is required');
   });
 });
 
@@ -66,22 +39,14 @@ describe('buildProposalReadRequest', () => {
     ).toThrow();
   });
 
-  it('includes optional scope fields', () => {
+  it('builds a read request by id', () => {
     const req = buildProposalReadRequest({
       accessToken: 'raw',
-      readOptions: {
-        proposalId: 7,
-        componentId: 2,
-        order: 'published_at',
-        orderDirection: 'asc',
-      },
+      readOptions: { proposalId: 7 },
     });
     expect(req).toMatchObject({
       id: 7,
       authorization: 'Bearer raw',
-      componentId: 2,
-      order: 'published_at',
-      orderDirection: 'asc',
     });
   });
 });

@@ -13,9 +13,9 @@ RUN apt-get update && \
 
 RUN export ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then \
-      curl -fSL --retry 5 --retry-delay 2 https://github.com/oven-sh/bun/releases/download/bun-v1.3.1/bun-linux-x64-baseline.zip -o bun.zip; \
+      curl -fSL --retry 5 --retry-delay 2 https://github.com/oven-sh/bun/releases/download/bun-v1.3.3/bun-linux-x64-baseline.zip -o bun.zip; \
     elif [ "$ARCH" = "aarch64" ]; then \
-      curl -fSL --retry 5 --retry-delay 2 https://github.com/oven-sh/bun/releases/download/bun-v1.3.1/bun-linux-aarch64.zip -o bun.zip; \
+      curl -fSL --retry 5 --retry-delay 2 https://github.com/oven-sh/bun/releases/download/bun-v1.3.3/bun-linux-aarch64.zip -o bun.zip; \
     fi && \
     unzip bun.zip && mv bun-*/bun /usr/local/bin/bun && chmod +x /usr/local/bin/bun && rm -rf bun.zip bun-*
 
@@ -24,13 +24,39 @@ RUN npm install -g --no-fund --no-audit node-gyp typescript@4.9.4 esbuild@0.25.0
 WORKDIR /usr/src/app
 COPY .npmrc package.json bun.lock bunfig.toml ./
 COPY packages/ ./packages/
-RUN --mount=type=cache,target=/root/.bun/install/cache bun install --frozen-lockfile
+RUN rm -rf packages/pieces/custom && \
+    find packages/pieces/community -mindepth 1 -maxdepth 1 -type d \
+      ! -name decidim \
+      ! -name opnform \
+      ! -name whatsapp \
+      ! -name state-store \
+      ! -name slack \
+      ! -name square \
+      ! -name matrix \
+      ! -name facebook-leads \
+      ! -name intercom \
+      ! -name telegram-bot \
+      -exec rm -rf {} + && \
+    rm -f bun.lock package-lock.json && \
+    node <<'EOF'
+const fs = require('fs')
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+pkg.workspaces = pkg.workspaces.filter((w) => fs.existsSync(w.replace('/*', '')))
+fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
+const pkgPath = 'packages/server/api/package.json'
+const api = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+if (api.dependencies) delete api.dependencies['@activepieces/piece-microsoft-teams-bot']
+if (api.devDependencies) delete api.devDependencies['@activepieces/piece-microsoft-teams-bot']
+fs.writeFileSync(pkgPath, JSON.stringify(api, null, 2) + '\n')
+EOF
+RUN --mount=type=cache,target=/root/.bun/install/cache bun install
 COPY . .
 
 # Build the dependency graph (engine bundle), then bundle the worker entry into one self-contained file.
 # Use the GLOBAL esbuild (npm -g, correct arch) not `npx` — npx resolves the bun-local esbuild whose
 # native binary can be the wrong platform when the lockfile was generated on another OS.
 # isolated-vm / the optional socket.io native addons stay external.
+ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npx turbo run build --filter=@activepieces/engine && \
     esbuild packages/server/worker/src/bootstrap.ts \
         --bundle --platform=node --format=cjs --target=node20 \
@@ -38,8 +64,16 @@ RUN npx turbo run build --filter=@activepieces/engine && \
         --external:isolated-vm --external:bufferutil --external:utf-8-validate --external:esbuild \
         --outfile=/out/worker.js
 
-# Prebuilt isolated-vm (the engine child resolves it at runtime via NODE_PATH).
-RUN --mount=type=cache,target=/root/.bun/install/cache cd /usr/src && bun install isolated-vm@6.0.2
+# isolated-vm + esbuild for the run image. npm install --prefix / fails on Node 24
+# ("Tracker idealTree already exists"); stage both here and COPY onto /node_modules.
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    cd /usr/src && bun install isolated-vm@6.0.2 esbuild@0.25.0 && \
+    mkdir -p /out/runtime-modules && \
+    cp -a /usr/src/node_modules/isolated-vm /out/runtime-modules/isolated-vm && \
+    cp -a /usr/src/node_modules/esbuild /out/runtime-modules/esbuild && \
+    if [ -d /usr/src/node_modules/@esbuild ]; then \
+      cp -a /usr/src/node_modules/@esbuild /out/runtime-modules/@esbuild; \
+    fi
 
 ### STAGE 2: Run (minimal) ###
 FROM node:24.14.0-bullseye-slim AS run
@@ -49,9 +83,6 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates procps && \
     rm -rf /var/lib/apt/lists/*
 
-# esbuild (JS API) compiles CODE steps; at /node_modules so --external:esbuild worker.js resolves it, like isolated-vm.
-RUN npm install --prefix / --no-fund --no-audit --no-save esbuild@0.25.0 && npm cache clean --force
-
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -59,9 +90,9 @@ ENV AP_CONTAINER_TYPE=WORKER
 ENV AP_CACHE_BASE_PATH=/tmp/cache
 
 COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
-# isolated-vm at the filesystem-root node_modules so the forked engine resolves it by ancestor walk
-# from /tmp/cache/.../main.js (Node's standard resolution, independent of cwd/NODE_PATH).
-COPY --from=build /usr/src/node_modules/isolated-vm /node_modules/isolated-vm
+# isolated-vm + esbuild at filesystem-root node_modules so the forked engine / CODE steps
+# resolve them by ancestor walk from /tmp/cache/.../main.js (independent of cwd/NODE_PATH).
+COPY --from=build /out/runtime-modules /node_modules
 COPY --from=build /out/worker.js ./worker.js
 COPY --from=build /usr/src/app/dist/packages/engine ./dist/packages/engine
 # apVersionUtil reads <cwd>/package.json for the release version; the worker↔app version gate needs it

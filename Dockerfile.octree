@@ -80,10 +80,6 @@ RUN rm -rf packages/pieces/custom && \
     rm -f bun.lock package-lock.json && \
     printf '[install]\nlinker = "hoisted"\n' > bunfig.toml
 
-# Do not reuse the bun cache from the failed isolated-linker install.
-ENV NODE_OPTIONS=--max-old-space-size=1536
-RUN bun install --linker hoisted
-
 RUN node <<'EOF'
 const fs = require('fs')
 const pkgPath = 'packages/server/api/package.json'
@@ -110,6 +106,9 @@ for (const [from, to] of replacements) {
 }
 fs.writeFileSync(modPath, src)
 EOF
+
+ENV NODE_OPTIONS=--max-old-space-size=1536
+RUN bun install --linker hoisted
 
 RUN npx turbo run build \
   --filter=web \

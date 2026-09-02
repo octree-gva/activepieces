@@ -6,6 +6,7 @@ import { draftProposals } from '../domains/proposals/draft-proposals';
 import { searchComponent } from '../domains/components/search-component';
 import { searchParticipatorySpace } from '../domains/spaces/search-participatory-space';
 import { impersonate } from '../domains/users/impersonate';
+import { getToken } from '../domains/users/get-token';
 import { getParticipatorySpace } from '../domains/spaces/get-participatory-space';
 import { typedComponents } from '../domains/components/typed-components';
 import { organizations } from '../domains/organizations/organizations';
@@ -24,6 +25,7 @@ export const allActions: Action[] = [
   customApiCallAction,
   draftProposals,
   getParticipatorySpace,
+  getToken,
   impersonate,
   organizationExtendedData,
   organizations,

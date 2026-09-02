@@ -71,6 +71,9 @@ describe('decidim piece exports smoke', () => {
     const users = await import('../../../src/lib/domains/users/search-users');
     expect(users).toBeDefined();
 
+    const token = await import('../../../src/lib/domains/users/get-token');
+    expect(token).toBeDefined();
+
     const me = await import('../../../src/lib/domains/users/me-extended-data');
     expect(me).toBeDefined();
   });

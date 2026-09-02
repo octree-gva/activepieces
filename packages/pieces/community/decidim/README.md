@@ -39,6 +39,7 @@ Avoid empty `catch` blocks. Top-level action `catch` should surface a string via
 | `ok` | `true` on success, `false` when `error` is set |
 | `error` | Human-readable message from the last failure |
 | `access_token` | Impersonate, some user flows |
+| `accessToken` | **Get Token** — the minted OAuth token only |
 | `auth_mode` | `system` or `user` |
 | `proposal_id`, `draft_proposal_id`, `component_id`, `space_id` | For chaining steps |
 | `has_more` | List steps when `count === per_page` |
@@ -51,8 +52,9 @@ Avoid empty `catch` blocks. Top-level action `catch` should surface a string via
 
 ## Chaining outputs
 
-Use **`access_token`** from **Impersonate** (or paste a token) into **User access token (optional)** on actions that use `resolveAuthContext`.
+Use **`access_token`** from **Impersonate** or **`accessToken`** from **Get Token** (or paste a token) into **User access token (optional)** on actions that use `resolveAuthContext`.
 
+- **Get Token** returns only `accessToken`. Grant type is **ROPC** (nickname + scope; registers missing users, accepts TOS, skips confirmation) or **Client Credentials** (scope only). `client_id` / `client_secret` come from the connection.
 - **Impersonate** returns `access_token`, `token`, `user`, `expires_in`, `scope`.
 - **Draft proposals** needs a user token; the action fails if only client credentials are used.
 

@@ -17,6 +17,7 @@ import {
 import { DecidimAccessToken } from '../../../types';
 import axios from 'axios';
 import {
+  hostProp,
   usernameProp,
   fetchUserInfoProp,
   registerOnMissingProp,
@@ -124,6 +125,7 @@ export const impersonate = createAction({
   description: 'Get an access token to do action as a participant',
 
   props: {
+    host: hostProp(),
     username: usernameProp(true),
     fetchUserInfo: fetchUserInfoProp(false),
     registerOnMissing: registerOnMissingProp(false),

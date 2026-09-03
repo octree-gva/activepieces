@@ -1,4 +1,40 @@
 import { Property } from "@activepieces/pieces-framework";
+import { decidimAuth } from "../decidimAuth";
+import { listTenantHosts, readConnectionProps } from "./utils/tenantPack";
+
+export function hostProp() {
+  return Property.Dropdown({
+    displayName: 'Platform host',
+    description:
+      'Decidim instance URL from the connection tenant pack. Use (X) to map a host from a previous step.',
+    required: true,
+    refreshers: ['auth'],
+    auth: decidimAuth,
+    options: async ({ auth }) => {
+      if (!auth) {
+        return {
+          disabled: true,
+          options: [],
+          placeholder: 'Select a Decidim connection first',
+        };
+      }
+      try {
+        const connection = readConnectionProps(auth);
+        const hosts = listTenantHosts(connection.tenants);
+        return {
+          disabled: false,
+          options: hosts.map((host) => ({ label: host, value: host })),
+        };
+      } catch {
+        return {
+          disabled: true,
+          options: [],
+          placeholder: 'Fix Tenants JSON on the connection',
+        };
+      }
+    },
+  });
+}
 
 export function usernameProp(required = false) {
   return Property.ShortText({

@@ -10,6 +10,7 @@ import { resolveAuthContext } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
 import { createProposalsApi } from '../../runtime/clients';
 import {
+  hostProp,
   decidimComponentIdProp,
   proposalIdProp,
   userAccessTokenProp,
@@ -30,6 +31,7 @@ export const proposals = createAction({
   description:
     'Search, read, or vote on published proposals. Use User access token for participant-scoped operations.',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(false),
     action: Property.StaticDropdown({
       displayName: 'Action',

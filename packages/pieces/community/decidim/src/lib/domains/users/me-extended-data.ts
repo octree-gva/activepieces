@@ -16,7 +16,7 @@ import type {
   UsersApiSetUserExtendedDataRequest,
 } from '@octree/decidim-sdk';
 import { createUsersApi } from '../../runtime/clients';
-import { userAccessTokenProp } from '../../props';
+import { hostProp, userAccessTokenProp } from '../../props';
 
 export const meExtendedData = createAction({
   name: 'meExtendedData',
@@ -26,6 +26,7 @@ export const meExtendedData = createAction({
   description:
     'GET/PUT /me/extended_data (userData / setUserData). Requires a user access token; empty token uses client credentials and usually fails with 401/403.',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(false),
     action: Property.StaticDropdown({
       displayName: 'Action',

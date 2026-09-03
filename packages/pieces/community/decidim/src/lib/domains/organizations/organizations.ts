@@ -9,6 +9,7 @@ import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode'
 import { getErrorMessage } from '../../runtime/errors';
 import { createOrganizationsApi } from '../../runtime/clients';
 import {
+  hostProp,
   organizationHostProp,
   organizationIdStringProp,
   userAccessTokenProp,
@@ -25,6 +26,7 @@ export const organizations = createAction({
   displayName: 'Organizations',
   description: 'Search organizations by host, or read one by id',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(false),
     action: Property.StaticDropdown({
       displayName: 'Action',

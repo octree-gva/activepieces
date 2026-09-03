@@ -1,20 +1,24 @@
 import { assertProp } from './assertProp';
+import {
+  readConnectionProps,
+  resolveTenantAuth,
+} from './tenantPack';
 
-export function extractAuth(context: { auth: unknown }): DecidimAuth {
-  const authValue = context.auth as { type?: string; props?: DecidimAuth } | DecidimAuth;
-  if(!authValue) {
-    throw new Error('Auth is required');
-  }
-
-  const auth = (authValue as { type?: string; props?: DecidimAuth }).props
-    ? (authValue as { props: DecidimAuth }).props
-    : authValue as DecidimAuth;
-
-  assertProp(auth.clientId, 'Client ID is required');
-  assertProp(auth.clientSecret, 'Client Secret is required');
-  assertProp(auth.baseUrl, 'Base URL is required');
-
-  return auth;
+export function extractAuth(context: {
+  auth: unknown;
+  propsValue?: Record<string, unknown>;
+}): DecidimAuth {
+  const connection = readConnectionProps(context.auth);
+  const host = context.propsValue?.host;
+  assertProp(
+    typeof host === 'string' ? host : undefined,
+    'Platform host is required'
+  );
+  return resolveTenantAuth({
+    tenantsRaw: connection.tenants,
+    host,
+    name: connection.name,
+  });
 }
 
 export type DecidimAuth = {

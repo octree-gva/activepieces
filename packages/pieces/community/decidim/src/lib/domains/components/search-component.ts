@@ -5,6 +5,7 @@ import { decidimAuth } from '../../../decidimAuth';
 import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import {
+  hostProp,
   componentIdsFilterProp,
   componentManifestsFilterProp,
   localesProp,
@@ -38,6 +39,7 @@ export const searchComponent = createAction({
   displayName: 'Search Component',
   description: 'Search or list components (proposals, meetings, blogs, etc.)',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(false),
     componentIds: componentIdsFilterProp(false),
     componentManifests: componentManifestsFilterProp(false),

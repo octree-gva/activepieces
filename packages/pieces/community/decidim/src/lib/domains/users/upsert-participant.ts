@@ -10,6 +10,7 @@ import { getErrorMessage } from '../../runtime/errors';
 import { asUsersApiUsersRequest } from '../../runtime/sdk-casts';
 import { createParticipant, updateParticipant } from './participant-crud';
 import {
+  hostProp,
   emailProp,
   extendedDataProp,
   fetchUserInfoProp,
@@ -48,6 +49,7 @@ export const upsertParticipant = createAction({
   displayName: 'Upsert participant',
   description: 'Find participant by key and create if missing',
   props: {
+    host: hostProp(),
     by: upsertByProp(),
     options: Property.DynamicProperties({
       auth: decidimAuth,

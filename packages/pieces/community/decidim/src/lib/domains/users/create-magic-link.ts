@@ -9,7 +9,7 @@ import { getErrorMessage } from '../../runtime/errors';
 import { magicLinkResultResourceData } from '../../runtime/sdk-casts';
 import { createUsersApi } from '../../runtime/clients';
 import type { UsersApiGenerateMagicLinkRequest } from '@octree/decidim-sdk';
-import { userAccessTokenProp } from '../../props';
+import { hostProp, userAccessTokenProp } from '../../props';
 
 /** Hostname: letters, digits, dots, hyphens, underscores (no IPv6). Userinfo rejected separately. */
 const REDIRECT_HOST_RE = /^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$/;
@@ -58,6 +58,7 @@ export const createMagicLink = createAction({
   description:
     'POST /me/magic_links (generateMagicLink). Requires a user access token (resource owner), e.g. from Impersonate.',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(true),
     redirectUrl: Property.ShortText({
       displayName: 'Redirect URL',

@@ -7,7 +7,7 @@ import { response } from '../../utils/response';
 import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
 import { createUsersApi } from '../../runtime/clients';
-import { pageProp, perPageProp, userAccessTokenProp } from '../../props';
+import { hostProp, pageProp, perPageProp, userAccessTokenProp } from '../../props';
 import { computeHasMore } from '../components/search-component.helpers';
 import type { UsersApiListUsersRequest } from '@octree/decidim-sdk';
 import type { DecidimResourceList } from '../../types/decidim-api';
@@ -19,6 +19,7 @@ export const searchUsers = createAction({
   displayName: 'Search Users',
   description: 'Search users (GET /users, scoped by token)',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(false),
     page: pageProp(false),
     perPage: perPageProp(false),

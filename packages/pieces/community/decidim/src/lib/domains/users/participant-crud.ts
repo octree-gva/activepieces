@@ -17,6 +17,7 @@ import { introspectToken } from '../../utils/introspecToken';
 import { buildOAuthGrantParam, createImpersonateToken } from './impersonate';
 import { assertProp } from '../../utils/assertProp';
 import {
+  hostProp,
   participantExtendedDataFiltersProp,
   participantNicknamesFilterProp,
   participantUserIdsFilterProp,
@@ -311,6 +312,7 @@ export const participantCrud = createAction({
   displayName: 'Participant',
   description: 'Manage decidim participants',
   props: {
+    host: hostProp(),
     action: Property.StaticDropdown({
       displayName: 'Action',
       description: 'The action to perform',

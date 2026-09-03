@@ -6,7 +6,7 @@ import { response } from '../../utils/response';
 import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
 import { createSpacesApi } from '../../runtime/clients';
-import { localesProp, userAccessTokenProp } from '../../props';
+import { hostProp, localesProp, userAccessTokenProp } from '../../props';
 import { parseLocales } from '../../runtime/locales';
 import type {
   SpacesApiShowAssemblyRequest,
@@ -23,6 +23,7 @@ export const getParticipatorySpace = createAction({
   displayName: 'Get participatory space',
   description: 'GET one space by type and id (/spaces/{manifest}/{id})',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(false),
     spaceType: Property.StaticDropdown({
       displayName: 'Space type',

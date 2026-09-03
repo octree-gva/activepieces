@@ -1,54 +1,163 @@
+import { AppConnectionType } from '@activepieces/pieces-framework';
 import { extractAuth } from '../../../src/lib/utils/auth';
 
+const tenants = JSON.stringify({
+  'https://example.com': {
+    client_id: 'test-client-id',
+    client_secret: 'test-client-secret',
+    scopes: 'oauth',
+  },
+  'https://other.example.com': {
+    client_id: 'other-client-id',
+    client_secret: 'other-client-secret',
+    scopes: 'public oauth',
+  },
+});
+
+const packAuth = {
+  type: AppConnectionType.CUSTOM_AUTH,
+  props: {
+    name: 'My app',
+    tenants,
+  },
+};
+
 describe('extractAuth', () => {
-  const validAuth = {
-    clientId: 'test-client-id',
-    clientSecret: 'test-client-secret',
-    baseUrl: 'https://example.com',
-  };
-
-  it('should return auth object when valid', () => {
-    expect(extractAuth({ auth: validAuth })).toEqual(validAuth);
-  });
-
-  it('should keep name and scopes when present', () => {
-    const withOptional = {
-      ...validAuth,
+  it('maps host to credentials from the tenant pack', () => {
+    expect(
+      extractAuth({
+        auth: packAuth,
+        propsValue: { host: 'https://example.com' },
+      })
+    ).toEqual({
       name: 'My app',
+      baseUrl: 'https://example.com',
+      clientId: 'test-client-id',
+      clientSecret: 'test-client-secret',
+      scopes: 'oauth',
+    });
+  });
+
+  it('selects a different tenant when host changes', () => {
+    expect(
+      extractAuth({
+        auth: packAuth,
+        propsValue: { host: 'https://other.example.com' },
+      }).clientId
+    ).toBe('other-client-id');
+  });
+
+  it('accepts flat connection props without type wrapper', () => {
+    expect(
+      extractAuth({
+        auth: { name: 'My app', tenants },
+        propsValue: { host: 'https://other.example.com' },
+      })
+    ).toEqual({
+      name: 'My app',
+      baseUrl: 'https://other.example.com',
+      clientId: 'other-client-id',
+      clientSecret: 'other-client-secret',
       scopes: 'public oauth',
-    };
-    expect(extractAuth({ auth: withOptional })).toEqual(withOptional);
+    });
   });
 
-  it('should throw when auth is undefined', () => {
-    expect(() => extractAuth({ auth: undefined })).toThrow('Auth is required');
+  it.each([
+    ['https://example.com/', 'https://example.com'],
+    ['  https://example.com  ', 'https://example.com'],
+    ['https://example.com', 'https://example.com'],
+  ])('normalizes host %j to %j', (host, expected) => {
+    expect(
+      extractAuth({ auth: packAuth, propsValue: { host } }).baseUrl
+    ).toBe(expected);
   });
 
-  it('should throw when auth is null', () => {
-    expect(() => extractAuth({ auth: null })).toThrow('Auth is required');
+  it.each([
+    [undefined, 'Auth is required'],
+    [null, 'Auth is required'],
+  ])('throws when auth is %j', (auth, message) => {
+    expect(() =>
+      extractAuth({ auth, propsValue: { host: 'https://example.com' } })
+    ).toThrow(message);
   });
 
-  it('should throw when clientId is empty string', () => {
-    expect(() => extractAuth({ auth: { ...validAuth, clientId: '' } })).toThrow('Client ID is required');
+  it.each([
+    [{}, 'Platform host is required'],
+    [{ host: '' }, 'Platform host is required'],
+    [{ host: '   ' }, 'Platform host is required'],
+    [{ host: 12 }, 'Platform host is required'],
+    [{ host: null }, 'Platform host is required'],
+    [{ host: undefined }, 'Platform host is required'],
+  ])('throws when propsValue is %j', (propsValue, message) => {
+    expect(() => extractAuth({ auth: packAuth, propsValue })).toThrow(message);
   });
 
-  it('should throw when clientId is missing', () => {
-    expect(() => extractAuth({ auth: { clientSecret: validAuth.clientSecret, baseUrl: validAuth.baseUrl } })).toThrow('Client ID is required');
+  it('throws when propsValue is omitted', () => {
+    expect(() => extractAuth({ auth: packAuth })).toThrow(
+      'Platform host is required'
+    );
   });
 
-  it('should throw when clientSecret is empty string', () => {
-    expect(() => extractAuth({ auth: { ...validAuth, clientSecret: '' } })).toThrow('Client Secret is required');
+  it('throws when host is unknown (fail closed)', () => {
+    expect(() =>
+      extractAuth({
+        auth: packAuth,
+        propsValue: { host: 'https://unknown.example.com' },
+      })
+    ).toThrow('Unknown platform host: https://unknown.example.com');
   });
 
-  it('should throw when clientSecret is missing', () => {
-    expect(() => extractAuth({ auth: { clientId: validAuth.clientId, baseUrl: validAuth.baseUrl } })).toThrow('Client Secret is required');
+  it('never uses the first pack entry when host is wrong', () => {
+    expect(() =>
+      extractAuth({
+        auth: packAuth,
+        propsValue: { host: 'https://example.com.evil' },
+      })
+    ).toThrow('Unknown platform host');
   });
 
-  it('should throw when baseUrl is empty string', () => {
-    expect(() => extractAuth({ auth: { ...validAuth, baseUrl: '' } })).toThrow('Base URL is required');
+  it('throws when tenants JSON is invalid', () => {
+    expect(() =>
+      extractAuth({
+        auth: { name: 'x', tenants: '{not-json' },
+        propsValue: { host: 'https://example.com' },
+      })
+    ).toThrow('Tenants JSON is invalid');
   });
 
-  it('should throw when baseUrl is missing', () => {
-    expect(() => extractAuth({ auth: { clientId: validAuth.clientId, clientSecret: validAuth.clientSecret } })).toThrow('Base URL is required');
+  it('throws when connection name is missing', () => {
+    expect(() =>
+      extractAuth({
+        auth: { tenants },
+        propsValue: { host: 'https://example.com' },
+      })
+    ).toThrow('Name is required');
+  });
+
+  it('throws when tenants field is missing', () => {
+    expect(() =>
+      extractAuth({
+        auth: { name: 'x' },
+        propsValue: { host: 'https://example.com' },
+      })
+    ).toThrow('Tenants JSON is required');
+  });
+
+  it('throws on legacy single-tenant shape', () => {
+    expect(() =>
+      extractAuth({
+        auth: {
+          type: AppConnectionType.CUSTOM_AUTH,
+          props: {
+            name: 'legacy',
+            baseUrl: 'https://example.com',
+            clientId: 'id',
+            clientSecret: 'secret',
+            scopes: 'oauth',
+          },
+        },
+        propsValue: { host: 'https://example.com' },
+      })
+    ).toThrow('Tenants JSON is required');
   });
 });

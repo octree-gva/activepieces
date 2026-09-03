@@ -6,7 +6,7 @@ import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import { assertProp } from '../../utils/assertProp';
 import { getErrorMessage } from '../../runtime/errors';
-import { usernameProp } from '../../props';
+import { hostProp, usernameProp } from '../../props';
 
 const grantTypeSchema = z.enum(['password', 'client_credentials']);
 
@@ -17,6 +17,7 @@ export const getToken = createAction({
   displayName: 'Get Token',
   description: 'Request an OAuth access token (ROPC or client credentials)',
   props: {
+    host: hostProp(),
     grantType: Property.StaticDropdown({
       displayName: 'Grant type',
       description: 'ROPC impersonates a participant. Client credentials is machine-to-machine.',

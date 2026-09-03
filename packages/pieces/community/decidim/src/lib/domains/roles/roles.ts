@@ -9,6 +9,7 @@ import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode'
 import { getErrorMessage } from '../../runtime/errors';
 import { createRolesApi } from '../../runtime/clients';
 import {
+  hostProp,
   createRolePayloadProp,
   pageProp,
   perPageProp,
@@ -31,6 +32,7 @@ export const roles = createAction({
   displayName: 'Roles',
   description: 'List, read, create, or destroy roles (admin)',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(false),
     action: Property.StaticDropdown({
       displayName: 'Action',

@@ -13,6 +13,7 @@ import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode'
 import { getErrorMessage } from '../../runtime/errors';
 import { createComponentsApi } from '../../runtime/clients';
 import {
+  hostProp,
   decidimSpaceIdProp,
   decidimSpaceManifestProp,
   localesProp,
@@ -36,6 +37,7 @@ export const typedComponents = createAction({
   displayName: 'Blog / Proposal components',
   description: 'List or read blog_components or proposal_components (OpenAPI typed component endpoints)',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(false),
     componentKind: Property.StaticDropdown({
       displayName: 'Component kind',

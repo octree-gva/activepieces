@@ -12,6 +12,7 @@ import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode'
 import { getErrorMessage } from '../../runtime/errors';
 import { createOrganizationsExtendedDataApi } from '../../runtime/clients';
 import {
+  hostProp,
   objectPathPropOrganization,
   organizationNumericIdProp,
   userAccessTokenProp,
@@ -24,6 +25,7 @@ export const organizationExtendedData = createAction({
   displayName: 'Organization extended data',
   description: 'GET/PUT organization extended_data hash',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(false),
     action: Property.StaticDropdown({
       displayName: 'Action',

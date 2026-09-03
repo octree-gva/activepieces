@@ -7,6 +7,7 @@ import {
   PiecePropValueSchema,
   StaticPropsValue,
 } from '@activepieces/pieces-framework';
+import { decidimTestHost } from './decidim-test-fixtures';
 
 export function createMockActionContext<
   PieceAuth extends PieceAuthProperty = PieceAuthProperty,
@@ -14,10 +15,14 @@ export function createMockActionContext<
 >(
   overrides?: Partial<ActionContext<PieceAuth, ActionProps>>
 ): ActionContext<PieceAuth, ActionProps> {
+  const { propsValue: overrideProps, ...restOverrides } = overrides ?? {};
+  const propsValue = {
+    host: decidimTestHost,
+    ...(overrideProps ?? {}),
+  } as StaticPropsValue<ActionProps>;
   return {
     executionType: 'BEGIN' as ExecutionType.BEGIN,
     auth: {} as PiecePropValueSchema<PieceAuth>,
-    propsValue: {} as StaticPropsValue<ActionProps>,
     step: { name: 'test-step' },
     store: {
       get: vi.fn(),
@@ -62,7 +67,8 @@ export function createMockActionContext<
       update: vi.fn(),
     },
     generateResumeUrl: vi.fn(),
-    ...overrides,
+    ...restOverrides,
+    propsValue,
   } as ActionContext<PieceAuth, ActionProps>;
 }
 

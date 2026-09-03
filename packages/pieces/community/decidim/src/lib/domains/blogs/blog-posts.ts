@@ -14,6 +14,7 @@ import { resolveAuthContext } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
 import { createBlogsApi } from '../../runtime/clients';
 import {
+  hostProp,
   blogPostIdProp,
   decidimComponentIdProp,
   userAccessTokenProp,
@@ -28,6 +29,7 @@ export const blogPosts = createAction({
   displayName: 'Blog',
   description: 'Search or read Decidim blog posts',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(false),
     action: Property.StaticDropdown({
       displayName: 'Action',

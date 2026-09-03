@@ -65,21 +65,16 @@ describe('getToken action', () => {
     expect(getToken.displayName).toBe('Get Token');
   });
 
-  it('strips a trailing slash from the base URL', async () => {
+  it('strips a trailing slash from the selected host', async () => {
     sendRequest.mockResolvedValueOnce({
       body: { access_token: 'cc-token' },
     });
 
     await getToken.run(
       createMockActionContext({
-        auth: {
-          ...decidimCustomAuth,
-          props: {
-            ...decidimCustomAuth.props,
-            baseUrl: 'https://example.decidim.com/',
-          },
-        },
+        auth: decidimCustomAuth,
         propsValue: {
+          host: 'https://example.decidim.com/',
           grantType: 'client_credentials',
           scope: 'public',
         },

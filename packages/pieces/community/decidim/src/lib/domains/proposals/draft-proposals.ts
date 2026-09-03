@@ -11,7 +11,7 @@ import { assertProp } from '../../utils/assertProp';
 import { resolveAuthContext, bearerAuthorization } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
 import { createDraftProposalsApi, createProposalsApi } from '../../runtime/clients';
-import { decidimComponentIdProp, draftProposalIdProp, userAccessTokenProp } from '../../props';
+import { hostProp, decidimComponentIdProp, draftProposalIdProp, userAccessTokenProp } from '../../props';
 import type {
   DraftProposalsApiCreateDraftProposalRequest,
   DraftProposalsApiGetDraftProposalRequest,
@@ -37,6 +37,7 @@ export const draftProposals = createAction({
   description:
     'Search, create, read, update, withdraw, or publish draft proposals. Requires a user access token (e.g. from Impersonate).',
   props: {
+    host: hostProp(),
     accessToken: userAccessTokenProp(false),
     connectionSetup: Property.DynamicProperties({
       auth: decidimAuth,

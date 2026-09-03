@@ -1,7 +1,21 @@
 import { createCustomApiCallAction } from '@activepieces/pieces-common';
 import { decidimAuth } from '../../decidimAuth';
+import { hostProp } from '../props';
 import { extractAuth } from '../utils/auth';
 import { fetchDecidimClientCredentialsToken } from '../utils/clientCredentialsToken';
+
+export function resolveCustomApiBaseUrl(
+  auth: unknown,
+  propsValue?: Record<string, unknown>
+): string {
+  if (!auth) {
+    throw new Error('Decidim connection is required');
+  }
+  if (!propsValue?.host) {
+    return '';
+  }
+  return extractAuth({ auth, propsValue }).baseUrl.replace(/\/$/, '');
+}
 
 export const customApiCallAction = createCustomApiCallAction({
   auth: decidimAuth,
@@ -9,11 +23,9 @@ export const customApiCallAction = createCustomApiCallAction({
   displayName: 'Custom API Call',
   description:
     'Send an authenticated request to your Decidim REST API. Authorization defaults to the connection token; override the Authorization header to use another token.',
-  baseUrl: (auth) => {
-    if (!auth) {
-      throw new Error('Decidim connection is required');
-    }
-    return extractAuth({ auth }).baseUrl.replace(/\/$/, '');
+  baseUrl: (auth, propsValue) => resolveCustomApiBaseUrl(auth, propsValue),
+  extraProps: {
+    host: hostProp(),
   },
   props: {
     headers: {
@@ -28,12 +40,13 @@ export const customApiCallAction = createCustomApiCallAction({
     if (!auth) {
       throw new Error('Decidim connection is required');
     }
-    return customApiCallAuthHeaders({ auth, headers: propsValue.headers });
+    return customApiCallAuthHeaders({ auth, propsValue, headers: propsValue.headers });
   },
 });
 
 export async function customApiCallAuthHeaders(input: {
   auth: unknown;
+  propsValue?: Record<string, unknown>;
   headers: unknown;
 }): Promise<Record<string, string>> {
   const userAuthorization = headerValue(input.headers, 'Authorization');
@@ -42,6 +55,7 @@ export async function customApiCallAuthHeaders(input: {
   }
   const { baseUrl, clientId, clientSecret, scopes } = extractAuth({
     auth: input.auth,
+    propsValue: input.propsValue,
   });
   const accessToken = await fetchDecidimClientCredentialsToken({
     baseUrl,

@@ -41,16 +41,24 @@ type ParticipantCrudRunResult = {
 const mockAuth = {
   type: AppConnectionType.CUSTOM_AUTH as AppConnectionType.CUSTOM_AUTH,
   props: {
-    baseUrl: 'http://test.com',
-    clientId: 'clientId',
-    clientSecret: 'clientSecret',
+    name: 'Test OAuth app',
+    tenants: JSON.stringify({
+      'http://test.com': {
+        client_id: 'clientId',
+        client_secret: 'clientSecret',
+        scopes: 'oauth',
+      },
+    }),
   },
 } as const;
 
 function participantContext(propsValue: Record<string, unknown>): ParticipantCrudContext {
   return createMockActionContext({
     auth: mockAuth,
-    propsValue: propsValue,
+    propsValue: {
+      host: 'http://test.com',
+      ...propsValue,
+    },
   }) as unknown as ParticipantCrudContext;
 }
 

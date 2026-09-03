@@ -3,6 +3,7 @@ import { decidimAuth } from '../../../decidimAuth';
 import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import {
+  hostProp,
   spaceIdsFilterProp,
   spaceManifestsFilterProp,
   spaceSearchLanguagesProp,
@@ -29,6 +30,7 @@ export const searchParticipatorySpace = createAction({
   displayName: 'Search Participatory Space',
   description: 'Search assemblies, processes, conferences, or initiatives',
   props: {
+    host: hostProp(),
     accessToken: Property.ShortText({
       displayName: 'User token',
       required: false,

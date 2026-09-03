@@ -85,9 +85,14 @@ describe('impersonate validation', () => {
   const mockAuth = {
     type: AppConnectionType.CUSTOM_AUTH as AppConnectionType.CUSTOM_AUTH,
     props: {
-      baseUrl: 'https://example.decidim.com',
-      clientId: 'test-client-id',
-      clientSecret: 'test-client-secret',
+      name: 'Test OAuth app',
+      tenants: JSON.stringify({
+        'https://example.decidim.com': {
+          client_id: 'test-client-id',
+          client_secret: 'test-client-secret',
+          scopes: 'oauth',
+        },
+      }),
     },
   } as const;
 

@@ -6,7 +6,7 @@ Integration with a [Decidim](https://decidim.org/) instance via the REST API and
 
 | Path | Purpose |
 |------|---------|
-| `src/decidimAuth.ts` | Piece auth (name, base URL, client ID, client secret, space-separated scopes). |
+| `src/decidimAuth.ts` | Piece auth: connection **Name** + **Tenants JSON** (host → credentials map). |
 | `src/lib/props.ts` | Shared property definitions (labels, descriptions, dropdowns). |
 | `src/lib/registry/actions.ts` | List of actions registered on the piece. |
 | `src/lib/domains/*` | One folder per API area (users, spaces, components, …). Each action is a small file; heavy mapping lives in `*.helpers.ts` or focused modules like `spaces-search-params.ts`. |
@@ -99,10 +99,36 @@ npm run test
 - **Unit**: helpers, `spaces-search-params`, mocked actions.
 - **Integration**: behind env vars (see individual test files).
 
-## Piece auth
+## Piece auth (tenant pack)
 
-Connection fields: **Name**, **Base URL**, **Client ID**, **Client Secret**, **Scopes** (space-separated, default `oauth`).
+**Breaking in 1.0.0.** Old single-host connections (Base URL + Client ID + Client Secret + Scopes) must be recreated.
 
-`decidimAuth.validate` exchanges client credentials for a token (including the configured scopes). Any request failure is treated as invalid credentials (it does not return the upstream error text). That keeps the settings UI simple; use server logs if token exchange fails unexpectedly.
+Connection fields:
 
-**Custom API Call** sends `Authorization` from the Headers input when that value is set. If Authorization is empty, the step uses a Bearer token minted from the connection (client credentials + connection scopes).
+- **Name** — label in the connections list.
+- **Tenants JSON** — object keyed by Decidim instance URL:
+
+```json
+{
+  "https://participate.city.fr": {
+    "client_id": "...",
+    "client_secret": "...",
+    "scopes": "oauth"
+  }
+}
+```
+
+On save, `decidimAuth.validate` mints a client-credentials token for **every** host and collects failures (it does not fail on the first row only). Secrets live in LongText (visible in the connection form).
+
+Every Decidim **action** has a required **Platform host** dropdown (keys of that JSON). Map it from a previous step with (X) when the host is known at runtime (e.g. WhatsApp → lookup → host). Webhook triggers do not call Decidim and have no host field.
+
+`extractAuth` resolves `{ baseUrl, clientId, clientSecret, scopes }` from the selected host. Unknown host fails closed (no fallback to the first key).
+
+**Custom API Call** also requires **Platform host**. Relative URLs use that host as the base. `Authorization` from Headers still overrides the minted connection token.
+
+## Multi-tenant WhatsApp flow
+
+1. One Decidim connection with the full tenant pack.
+2. Lookup WhatsApp `phone_number_id` → platform host URL (Tables / state-store; non-secret).
+3. Decidim steps: same connection + **Platform host** from the lookup.
+4. Get Token / Impersonate only after host is set; they still return token only.

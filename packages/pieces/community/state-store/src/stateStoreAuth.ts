@@ -1,25 +1,31 @@
 import { PieceAuth, Property } from '@activepieces/pieces-framework';
-import { redisUrlProp, redisUseSslProp, fsmProp } from './props';
+import {
+  redisUrlProp,
+  redisUseSslProp,
+  fsmProp,
+  bridgeUrlProp,
+} from './props';
 import { createRedisClient } from './lib/utils/redis';
 import { validateFsm } from './lib/utils/validation';
 
 export const stateStoreAuth = PieceAuth.CustomAuth({
-  displayName: 'Redis Connection',
-  description: 'Configure Redis connection and state machine (FSM)',
+  displayName: 'State Store Connection',
+  description: 'Redis, namespace, optional FSM, and watcher URL.',
   required: true,
   props: {
     url: redisUrlProp,
     useSsl: redisUseSslProp,
     namespace: Property.ShortText({
       displayName: 'Namespace',
-      description: 'Namespace (e.g., "bot:proposal")',
+      description: 'Isolates FSM instances in Redis (e.g. `orders`).',
       required: true,
     }),
+    bridgeUrl: bridgeUrlProp,
     fsmHelp: Property.MarkDown({
       value: `
 ## FSM (Finite State Machine)
 
-An [FSM](https://en.wikipedia.org/wiki/Finite-state_machine) is a model where a conversation is in exactly one state at a time. Transitions between states are validated against your definition.
+An [FSM](https://en.wikipedia.org/wiki/Finite-state_machine) is a model where an instance is in exactly one state at a time. Transitions between states are validated against your definition.
 
 **JSON format:**
 \`\`\`json
@@ -33,10 +39,10 @@ An [FSM](https://en.wikipedia.org/wiki/Finite-state_machine) is a model where a 
 }
 \`\`\`
 
-- \`initial\`: starting state for new conversations
-- \`transitions\`: map each state to an array of allowed next states. **Update Conversation** validates transitions unless **Jump, skip FSM** is on (intercepts).
-- Same-state updates always succeed so you can merge session data without leaving the state.
-- Namespace is the bot; User ID on each action is the WhatsApp sender (or other stable user key). No go-back / history.
+- \`initial\`: starting state for new instances
+- \`transitions\`: map each state to an array of allowed next states. **Update State** validates transitions unless **Jump, skip FSM** is on.
+- Same-state updates always succeed so you can merge data without leaving the state.
+- Conversation ID is the stable key for one FSM instance. No history / go-back.
       `.trim(),
     }),
     fsm: fsmProp,
@@ -49,24 +55,25 @@ An [FSM](https://en.wikipedia.org/wiki/Finite-state_machine) is a model where a 
     if (!url) {
       return { valid: false, error: 'Redis URL is required' };
     }
-    if (!fsm) {
-      return { valid: false, error: 'FSM is required' };
-    }
     if (!namespace) {
       return { valid: false, error: 'Namespace is required' };
     }
-    let fsmJson: unknown;
-    try {
-      fsmJson = typeof fsm === 'string' ? JSON.parse(fsm) : fsm;
-    } catch {
-      return { valid: false, error: 'Invalid FSM JSON' };
-    }
-    if (!fsmJson || typeof fsmJson !== 'object') {
-      return { valid: false, error: 'Invalid FSM JSON' };
-    }
-    const fsmResult = validateFsm(fsmJson);
-    if (!fsmResult.valid) {
-      return { valid: false, error: fsmResult.error ?? 'Invalid FSM' };
+    const fsmRaw =
+      typeof fsm === 'string' ? fsm.trim() : fsm == null ? '' : fsm;
+    if (fsmRaw !== '' && fsmRaw != null) {
+      let fsmJson: unknown;
+      try {
+        fsmJson = typeof fsmRaw === 'string' ? JSON.parse(fsmRaw) : fsmRaw;
+      } catch {
+        return { valid: false, error: 'Invalid FSM JSON' };
+      }
+      if (!fsmJson || typeof fsmJson !== 'object') {
+        return { valid: false, error: 'Invalid FSM JSON' };
+      }
+      const fsmResult = validateFsm(fsmJson);
+      if (!fsmResult.valid) {
+        return { valid: false, error: fsmResult.error ?? 'Invalid FSM' };
+      }
     }
     try {
       const client = await createRedisClient(url, useSsl);

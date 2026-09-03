@@ -6,8 +6,12 @@ import {
   getConversationKey,
   getEventsKey,
   getAllowedNextStates,
+  getFsmFromAuth,
   listFsmStates,
   mergeConversationData,
+  conversationPayloadChanged,
+  shouldEmitConversationEvent,
+  resolvePropString,
 } from '../../../src/lib/utils/validation';
 import { z } from 'zod';
 
@@ -374,6 +378,107 @@ describe('validation', () => {
 
     it('replaces when replaceData is true', () => {
       expect(mergeConversationData({ a: 1 }, { b: 2 }, true)).toEqual({ b: 2 });
+    });
+  });
+
+  describe('getFsmFromAuth', () => {
+    it('returns undefined for empty string', () => {
+      expect(getFsmFromAuth({ props: { fsm: '' } })).toBeUndefined();
+      expect(getFsmFromAuth({ props: { fsm: '   ' } })).toBeUndefined();
+    });
+
+    it('parses a valid FSM string', () => {
+      expect(
+        getFsmFromAuth({
+          props: {
+            fsm: JSON.stringify({
+              initial: 'START',
+              transitions: { START: ['DONE'] },
+            }),
+          },
+        })
+      ).toEqual({ initial: 'START', transitions: { START: ['DONE'] } });
+    });
+  });
+
+  describe('conversationPayloadChanged', () => {
+    it('returns true when previous is null', () => {
+      expect(
+        conversationPayloadChanged({
+          previous: null,
+          current: { state: 'START', data: {} },
+        })
+      ).toBe(true);
+    });
+
+    it('returns true when data changes', () => {
+      expect(
+        conversationPayloadChanged({
+          previous: { state: 'START', data: { a: 1 } },
+          current: { state: 'START', data: { a: 1, b: 2 } },
+        })
+      ).toBe(true);
+    });
+
+    it('returns true when state changes', () => {
+      expect(
+        conversationPayloadChanged({
+          previous: { state: 'START', data: {} },
+          current: { state: 'PROPOSE', data: {} },
+        })
+      ).toBe(true);
+    });
+
+    it('returns false when state and data are identical', () => {
+      expect(
+        conversationPayloadChanged({
+          previous: { state: 'START', data: {} },
+          current: { state: 'START', data: {} },
+        })
+      ).toBe(false);
+    });
+  });
+
+  describe('shouldEmitConversationEvent', () => {
+    const baseEvent = {
+      namespace: 'orders',
+      conversation_id: 'c1',
+      previous: { state: 'PROPOSE', data: {} },
+      current: { state: 'PROPOSE', data: { title: 'A' } },
+      at: '2026-01-01T00:00:00Z',
+    };
+
+    it('emits data-only changes', () => {
+      expect(shouldEmitConversationEvent({ event: baseEvent })).toBe(true);
+    });
+
+    it('skips true no-ops', () => {
+      expect(
+        shouldEmitConversationEvent({
+          event: {
+            ...baseEvent,
+            previous: { state: 'PROPOSE', data: { title: 'A' } },
+            current: { state: 'PROPOSE', data: { title: 'A' } },
+          },
+        })
+      ).toBe(false);
+    });
+
+    it('respects state filter', () => {
+      expect(
+        shouldEmitConversationEvent({ event: baseEvent, stateFilter: 'PROPOSE' })
+      ).toBe(true);
+      expect(
+        shouldEmitConversationEvent({ event: baseEvent, stateFilter: 'START' })
+      ).toBe(false);
+    });
+  });
+
+  describe('resolvePropString', () => {
+    it('reads plain strings and DynamicProperties wrappers', () => {
+      expect(resolvePropString('PROPOSE')).toBe('PROPOSE');
+      expect(resolvePropString({ value: 'PROPOSE' })).toBe('PROPOSE');
+      expect(resolvePropString(undefined)).toBeUndefined();
     });
   });
 });

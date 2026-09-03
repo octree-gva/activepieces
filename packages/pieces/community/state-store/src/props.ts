@@ -2,7 +2,8 @@ import { Property } from '@activepieces/pieces-framework';
 
 export const redisUrlProp = Property.ShortText({
   displayName: 'Redis URL',
-  description: 'Redis connection URL (e.g., redis://default:redis_password@localhost:6379/1 or rediss://default:redis_password@localhost:6380/1 for SSL)',
+  description:
+    'Redis connection URL (e.g., redis://default:redis_password@localhost:6379/1 or rediss://default:redis_password@localhost:6380/1 for SSL)',
   required: true,
 });
 
@@ -15,21 +16,22 @@ export const redisUseSslProp = Property.Checkbox({
 
 export const namespaceProp = Property.ShortText({
   displayName: 'Namespace',
-  description: 'Namespace (e.g., "bot:proposal")',
+  description: 'Isolates FSM instances in Redis (e.g. `orders`).',
   required: true,
   defaultValue: `${process.env['AP_STATE_STORE_NAMESPACE'] || 'ap:default'}`,
 });
 
 export const conversationIdProp = Property.ShortText({
-  displayName: 'User ID',
-  description: 'Stable user key for this conversation, e.g. the WhatsApp sender id (whatsapp:+351912345678). One conversation per user in this connection namespace.',
+  displayName: 'Conversation ID',
+  description: 'Stable id for one FSM instance in this namespace.',
   required: true,
 });
 
 export const fsmProp = Property.LongText({
   displayName: 'FSM',
-  description: 'Finite State Machine definition with initial state and transitions',
-  required: true,
+  description:
+    'Optional. `initial` plus `transitions`. Empty means any state is allowed.',
+  required: false,
   defaultValue: JSON.stringify({
     initial: 'START',
     transitions: {
@@ -38,4 +40,12 @@ export const fsmProp = Property.LongText({
       PROPOSE_SUBMIT: ['START'],
     },
   }),
+});
+
+export const bridgeUrlProp = Property.ShortText({
+  displayName: 'Watcher URL',
+  description:
+    'HTTP URL of the Redis watcher used by On State Changed (Webhook).',
+  required: false,
+  defaultValue: 'http://127.0.0.1:3847',
 });

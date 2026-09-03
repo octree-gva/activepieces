@@ -1,4 +1,7 @@
-import { Property } from '@activepieces/pieces-framework';
+import {
+  InputPropertyMap,
+  Property,
+} from '@activepieces/pieces-framework';
 import { stateStoreAuth } from '../../stateStoreAuth';
 import { getFsmFromAuth, listFsmStates } from '../utils/validation';
 
@@ -11,34 +14,45 @@ export function stateDropdownProp({
   displayName: string;
   description: string;
 }) {
-  return Property.Dropdown({
+  return Property.DynamicProperties({
     displayName,
     description,
     required,
     auth: stateStoreAuth,
     refreshers: [],
-    options: async ({ auth }) => {
+    props: async ({ auth }): Promise<InputPropertyMap> => {
       if (!auth) {
         return {
-          disabled: true,
-          options: [],
-          placeholder: 'Connect State Store first',
+          value: Property.ShortText({
+            displayName,
+            description,
+            required,
+            defaultValue: '',
+          }),
         };
       }
       const fsm = getFsmFromAuth(auth);
       if (!fsm) {
         return {
-          disabled: true,
-          options: [],
-          placeholder: 'FSM not configured on the connection',
+          value: Property.ShortText({
+            displayName,
+            description,
+            required,
+          }),
         };
       }
       return {
-        disabled: false,
-        options: listFsmStates(fsm).map((state) => ({
-          label: state,
-          value: state,
-        })),
+        value: Property.StaticDropdown({
+          displayName,
+          description,
+          required,
+          options: {
+            options: listFsmStates(fsm).map((state) => ({
+              label: state,
+              value: state,
+            })),
+          },
+        }),
       };
     },
   });

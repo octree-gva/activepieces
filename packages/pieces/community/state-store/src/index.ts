@@ -8,7 +8,8 @@ import { stateStoreAuth } from './stateStoreAuth';
 
 export const stateStore = createPiece({
   displayName: 'State Store',
-  description: 'Redis-backed conversation state machine with FSM validation and event streaming',
+  description:
+    'Store and advance a finite-state machine in Redis. Optional FSM JSON validates transitions.',
   minimumSupportedRelease: '0.36.1',
   logoUrl:
     'https://raw.githubusercontent.com/octree-gva/activepieces/refs/heads/packages/octree/packages/pieces/community/state-store/src/lib/logo.svg',

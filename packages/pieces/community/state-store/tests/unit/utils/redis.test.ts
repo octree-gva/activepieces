@@ -14,6 +14,7 @@ function authWith(props: Partial<StateStoreAuthValue['props']>): StateStoreAuthV
       url: 'redis://localhost:6379',
       useSsl: false,
       namespace: 'test',
+      bridgeUrl: undefined,
       fsmHelp: undefined,
       fsm: JSON.stringify({ initial: 'START', transitions: { START: [] } }),
       ...props,

@@ -6,14 +6,14 @@ import { debugSchemaActionOutputSchema } from '../output-schemas';
 
 export const debugSchemaAction = createAction({
   name: 'debug_schema',
-  displayName: 'Inspect State Configuration',
-  description: 'View the configured state machine schema and recent conversation events for troubleshooting',
+  displayName: 'Inspect FSM',
+  description: 'Show the connection FSM and recent state-change events.',
   auth: stateStoreAuth,
   audience: 'both',
   classification: 'READ',
   aiMetadata: {
     description:
-      'Returns the connection FSM schema and recent conversation change events from the Redis stream. Optional User ID filters events for one user. Use when debugging transitions or monitoring activity.',
+      'Returns the connection FSM schema and recent state-change events from the Redis stream. Optional Conversation ID filters events for one FSM instance. Use when debugging transitions or monitoring activity.',
     idempotent: true,
   },
   outputSchema: debugSchemaActionOutputSchema,
@@ -25,8 +25,8 @@ export const debugSchemaAction = createAction({
       defaultValue: 10,
     }),
     conversation_id: Property.ShortText({
-      displayName: 'User ID',
-      description: 'If set, only return events for this user',
+      displayName: 'Conversation ID',
+      description: 'If set, only return events for this FSM instance',
       required: false,
     }),
   },

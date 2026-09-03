@@ -14,15 +14,15 @@ import { getConversationActionOutputSchema } from '../output-schemas';
 
 export const getConversationAction = createAction({
   name: 'get_conversation',
-  displayName: 'Get or Create Conversation',
+  displayName: 'Get or Create State',
   description:
-    'Get the current state and data for a user. Creates a new conversation at the FSM initial state when the user has none.',
+    'Return the current state and data for a Conversation ID. Creates one at FSM `initial` (or `unknown` if no FSM).',
   auth: stateStoreAuth,
   audience: 'both',
   classification: 'WRITE',
   aiMetadata: {
     description:
-      'Loads the conversation for a user id in the connection namespace, or creates one at the FSM initial state. Returns conversation state/data, whether it was created, and allowed_next_states from the FSM for routing.',
+      'Loads the FSM instance for a Conversation ID in the connection namespace, or creates one at the FSM initial state (or unknown when no FSM). Returns state/data, whether it was created, and allowed_next_states for routing.',
     idempotent: false,
   },
   outputSchema: getConversationActionOutputSchema,

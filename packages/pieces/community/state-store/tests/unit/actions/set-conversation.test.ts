@@ -232,6 +232,84 @@ describe('setConversationAction', () => {
       conversation: { state: 'PROPOSE', data: {} },
       allowed_next_states: ['PROPOSE_SUBMIT', 'START'],
     });
+    expect(mockClient.xadd).toHaveBeenCalled();
+  });
+
+  it('allows any transition when FSM is missing', async () => {
+    mockClient.get.mockResolvedValueOnce(
+      JSON.stringify({ state: 'START', data: {} })
+    );
+
+    const context = createMockActionContext({
+      auth: authProps({ fsm: undefined }) as never,
+      propsValue: {
+        conversation_id: 'user-1',
+        state: 'DONE',
+        data: {},
+        replace_data: false,
+        jump: false,
+      },
+    });
+
+    const result = await (setConversationAction.run as (ctx: unknown) => Promise<unknown>)(context);
+
+    expect(result).toEqual({
+      ok: true,
+      conversation: { state: 'DONE', data: {} },
+      allowed_next_states: [],
+    });
+  });
+
+  it('skips xadd when state and data are unchanged', async () => {
+    mockClient.get.mockResolvedValueOnce(
+      JSON.stringify({ state: 'PROPOSE', data: { title: 'A' } })
+    );
+
+    const context = createMockActionContext({
+      auth: authProps() as never,
+      propsValue: {
+        conversation_id: 'user-1',
+        state: 'PROPOSE',
+        data: { title: 'A' },
+        replace_data: true,
+        jump: false,
+      },
+    });
+
+    const result = await (setConversationAction.run as (ctx: unknown) => Promise<unknown>)(context);
+
+    expect(result).toEqual({
+      ok: true,
+      conversation: { state: 'PROPOSE', data: { title: 'A' } },
+      allowed_next_states: ['PROPOSE_SUBMIT', 'START'],
+    });
+    expect(mockClient.set).toHaveBeenCalled();
+    expect(mockClient.xadd).not.toHaveBeenCalled();
+  });
+
+  it('reads state from DynamicProperties value wrapper', async () => {
+    mockClient.get.mockResolvedValueOnce(
+      JSON.stringify({ state: 'START', data: {} })
+    );
+
+    const context = createMockActionContext({
+      auth: authProps() as never,
+      propsValue: {
+        conversation_id: 'user-1',
+        state: { value: 'PROPOSE' },
+        data: {},
+        replace_data: false,
+        jump: false,
+      },
+    });
+
+    const result = await (setConversationAction.run as (ctx: unknown) => Promise<unknown>)(context);
+
+    expect(result).toEqual({
+      ok: true,
+      conversation: { state: 'PROPOSE', data: {} },
+      allowed_next_states: ['PROPOSE_SUBMIT', 'START'],
+    });
   });
 
   it('quits redis on error', async () => {

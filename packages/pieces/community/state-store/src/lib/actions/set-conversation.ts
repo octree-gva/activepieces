@@ -4,12 +4,14 @@ import { conversationIdProp } from '../../props';
 import { redisConnect } from '../utils/redis';
 import { Conversation, ConversationEvent, UNKNOWN_STATE } from '../../types';
 import {
+  conversationPayloadChanged,
   getAllowedNextStates,
   getConversationKey,
   getEventsKey,
   getFsmFromAuth,
   mergeConversationData,
   parseConversation,
+  resolvePropString,
   validateTransition,
 } from '../utils/validation';
 import { stateDropdownProp } from '../common/state-dropdown';
@@ -17,15 +19,15 @@ import { setConversationActionOutputSchema } from '../output-schemas';
 
 export const setConversationAction = createAction({
   name: 'set_conversation',
-  displayName: 'Update Conversation',
+  displayName: 'Update State',
   description:
-    'Advance or jump a user conversation to a state and merge session data. Normal updates validate the FSM; turn on Jump to skip the FSM for intercepts.',
+    'Move to a next state and/or merge data. Transitions are checked against the connection FSM unless Jump is on.',
   auth: stateStoreAuth,
   audience: 'both',
   classification: 'WRITE',
   aiMetadata: {
     description:
-      'Updates the conversation for a user id: optional next state (FSM-validated unless Jump), and merges data into the existing session object. Use Jump for intercepts that must leave the FSM. Omit state to stay put and only patch data. Set Replace Data to wipe session data instead of merging.',
+      'Updates an FSM instance by Conversation ID: optional next state (FSM-validated unless Jump), and merges data into the existing payload. Omit state to stay put and only patch data. Set Replace Data to wipe data instead of merging.',
     idempotent: true,
   },
   outputSchema: setConversationActionOutputSchema,
@@ -35,30 +37,31 @@ export const setConversationAction = createAction({
       required: false,
       displayName: 'State',
       description:
-        'Next state. Leave empty to stay in the current state and only update data. Pick from the connection FSM.',
+        'Next FSM state. Leave empty to stay and only update data.',
     }),
     data: Property.Json({
       displayName: 'Data',
-      description: 'Session data to merge into the conversation (default) or replace when Replace Data is on.',
+      description: 'Payload stored on the current state. Merged by default.',
       required: false,
       defaultValue: {},
     }),
     replace_data: Property.Checkbox({
       displayName: 'Replace Data',
-      description: 'When on, replace session data with Data instead of merging.',
+      description: 'Replace the payload instead of merging.',
       required: false,
       defaultValue: false,
     }),
     jump: Property.Checkbox({
       displayName: 'Jump, skip FSM',
-      description: 'When on, move to State without checking the FSM (use for intercepts / special messages).',
+      description: 'Do not check transitions. Use to force a state.',
       required: false,
       defaultValue: false,
     }),
   },
   async run(context) {
     const namespace = context.auth.props.namespace;
-    const { conversation_id, state, data, replace_data, jump } = context.propsValue;
+    const { conversation_id, data, replace_data, jump } = context.propsValue;
+    const state = resolvePropString(context.propsValue.state);
     const client = await redisConnect(context.auth);
 
     try {
@@ -67,14 +70,11 @@ export const setConversationAction = createAction({
       const fsm = getFsmFromAuth(context.auth);
 
       const existingStr = await client.get(conversationKey);
-      let currentConversation = parseConversation(existingStr);
-
-      if (!currentConversation) {
-        currentConversation = {
-          state: fsm?.initial ?? UNKNOWN_STATE,
-          data: {},
-        };
-      }
+      const previousConversation = parseConversation(existingStr);
+      const currentConversation: Conversation = previousConversation ?? {
+        state: fsm?.initial ?? UNKNOWN_STATE,
+        data: {},
+      };
 
       const nextState = state && state.length > 0 ? state : currentConversation.state;
 
@@ -107,23 +107,30 @@ export const setConversationAction = createAction({
 
       await client.set(conversationKey, JSON.stringify(newConversation));
 
-      const event: ConversationEvent = {
-        namespace,
-        conversation_id,
-        previous: currentConversation,
-        current: newConversation,
-        at: new Date().toISOString(),
-      };
+      if (
+        conversationPayloadChanged({
+          previous: previousConversation,
+          current: newConversation,
+        })
+      ) {
+        const event: ConversationEvent = {
+          namespace,
+          conversation_id,
+          previous: previousConversation,
+          current: newConversation,
+          at: new Date().toISOString(),
+        };
 
-      await client.xadd(
-        eventsKey,
-        'MAXLEN',
-        '~',
-        '10000',
-        '*',
-        'payload',
-        JSON.stringify(event)
-      );
+        await client.xadd(
+          eventsKey,
+          'MAXLEN',
+          '~',
+          '10000',
+          '*',
+          'payload',
+          JSON.stringify(event)
+        );
+      }
 
       return {
         ok: true,

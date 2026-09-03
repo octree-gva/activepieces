@@ -6,13 +6,18 @@ import {
 import { DedupeStrategy, Polling, pollingHelper } from '@activepieces/pieces-common';
 import { stateStoreAuth } from '../../stateStoreAuth';
 import { redisConnect } from '../utils/redis';
-import { getEventsKey, parseConversationEvent } from '../utils/validation';
+import {
+  getEventsKey,
+  parseConversationEvent,
+  resolvePropString,
+  shouldEmitConversationEvent,
+} from '../utils/validation';
 import { ConversationEvent } from '../../types';
 import { stateDropdownProp } from '../common/state-dropdown';
 import { conversationChangedTriggerOutputSchema } from '../output-schemas';
 
 type TriggerProps = {
-  state_filter?: string;
+  state_filter?: unknown;
 };
 
 const polling: Polling<
@@ -24,7 +29,7 @@ const polling: Polling<
     const { namespace } = auth.props;
     const client = await redisConnect(auth);
     const eventsKey = getEventsKey(namespace);
-    const stateFilter = propsValue.state_filter;
+    const stateFilter = resolvePropString(propsValue.state_filter);
 
     try {
       const streamId =
@@ -53,7 +58,7 @@ const polling: Polling<
           if (!event) {
             continue;
           }
-          if (stateFilter && event.current.state !== stateFilter) {
+          if (!shouldEmitConversationEvent({ event, stateFilter })) {
             continue;
           }
           items.push({
@@ -73,25 +78,25 @@ const polling: Polling<
 export const conversationChangedTrigger = createTrigger({
   name: 'conversation_changed',
   auth: stateStoreAuth,
-  displayName: 'On Conversation Changed',
+  displayName: 'On State Changed',
   description:
-    'Fires when a conversation state changes in this namespace. Side-flow for analytics or operators — not the main WhatsApp bot loop.',
+    'Fires when an FSM instance changes state or data in this namespace.',
   classification: 'READ',
   aiMetadata: {
     description:
-      'Polling trigger for conversation change events in the connection namespace. Optional state filter keeps only events whose new state matches. Prefer WhatsApp inbound for the bot loop; use this for side effects.',
+      'Polling trigger for FSM state-change events in the connection namespace. Optional state filter keeps only events whose new state matches.',
   },
   outputSchema: conversationChangedTriggerOutputSchema,
   props: {
     state_filter: stateDropdownProp({
       required: false,
       displayName: 'State Filter',
-      description: 'If set, only emit events whose new (current) state matches this value.',
+      description: 'If set, only events whose new state matches.',
     }),
   },
   sampleData: {
-    namespace: 'bot:proposal',
-    conversation_id: 'whatsapp:+351...',
+    namespace: 'orders',
+    conversation_id: 'user-123',
     previous: {
       state: 'PROPOSE',
       data: {},

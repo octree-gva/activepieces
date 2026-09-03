@@ -126,7 +126,8 @@ export function getSchemaKey(namespace: string): string {
 
 export function getFsmFromAuth(auth: { props?: { fsm?: unknown } }): FsmDef | undefined {
   const raw = auth.props?.fsm;
-  if (!raw) return undefined;
+  if (raw == null) return undefined;
+  if (typeof raw === 'string' && raw.trim() === '') return undefined;
   try {
     const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
     const result = fsmSchema.safeParse(parsed);
@@ -134,6 +135,53 @@ export function getFsmFromAuth(auth: { props?: { fsm?: unknown } }): FsmDef | un
   } catch {
     return undefined;
   }
+}
+
+export function conversationPayloadChanged({
+  previous,
+  current,
+}: {
+  previous: Conversation | null;
+  current: Conversation;
+}): boolean {
+  if (!previous) {
+    return true;
+  }
+  if (previous.state !== current.state) {
+    return true;
+  }
+  return JSON.stringify(previous.data) !== JSON.stringify(current.data);
+}
+
+export function shouldEmitConversationEvent({
+  event,
+  stateFilter,
+}: {
+  event: ConversationEventPayload;
+  stateFilter?: string | null;
+}): boolean {
+  if (!conversationPayloadChanged({ previous: event.previous, current: event.current })) {
+    return false;
+  }
+  if (stateFilter && event.current.state !== stateFilter) {
+    return false;
+  }
+  return true;
+}
+
+export function resolvePropString(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (
+    value != null &&
+    typeof value === 'object' &&
+    'value' in value &&
+    typeof (value as { value: unknown }).value === 'string'
+  ) {
+    return (value as { value: string }).value;
+  }
+  return undefined;
 }
 
 export function getAllowedNextStates(currentState: string, fsm?: FsmDef): string[] {

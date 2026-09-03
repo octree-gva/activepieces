@@ -49,7 +49,7 @@ export const debugSchemaActionOutputSchema: OutputSchema = {
       listItems: [
         { key: 'id', label: 'Stream ID' },
         { key: 'namespace', label: 'Namespace' },
-        { key: 'conversation_id', label: 'User ID' },
+        { key: 'conversation_id', label: 'Conversation ID' },
         { key: 'at', label: 'At', format: 'datetime' },
       ],
     },
@@ -60,7 +60,7 @@ export const debugSchemaActionOutputSchema: OutputSchema = {
 export const conversationChangedTriggerOutputSchema: OutputSchema = {
   fields: [
     { key: 'namespace', label: 'Namespace' },
-    { key: 'conversation_id', label: 'User ID' },
+    { key: 'conversation_id', label: 'Conversation ID' },
     { key: 'previous', label: 'Previous', children: conversationFields },
     { key: 'current', label: 'Current', children: conversationFields },
     { key: 'at', label: 'At', format: 'datetime' },

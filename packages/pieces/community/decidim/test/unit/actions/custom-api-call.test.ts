@@ -4,6 +4,7 @@ import {
   customApiCallAction,
   customApiCallAuthHeaders,
   resolveCustomApiBaseUrl,
+  resolveCustomApiRequestUrl,
 } from '../../../src/lib/actions/custom-api-call';
 import {
   decidimCustomAuth,
@@ -208,5 +209,57 @@ describe('customApiCallAction', () => {
 
   it('requires auth', () => {
     expect(customApiCallAction.requireAuth).toBe(true);
+  });
+});
+
+describe('resolveCustomApiRequestUrl', () => {
+  it('joins a relative URL with the selected host', () => {
+    expect(
+      resolveCustomApiRequestUrl({
+        auth: decidimCustomAuth,
+        propsValue: { host: decidimTestHost },
+        url: '/api/rest_full/v0.3',
+      })
+    ).toBe('https://example.decidim.com/api/rest_full/v0.3');
+  });
+
+  it('joins a relative URL with the selected host in a multi-tenant pack', () => {
+    expect(
+      resolveCustomApiRequestUrl({
+        auth: secondHostAuth,
+        propsValue: { host: 'https://second.decidim.com' },
+        url: 'api/rest_full/v0.3',
+      })
+    ).toBe('https://second.decidim.com/api/rest_full/v0.3');
+  });
+
+  it('leaves an absolute URL unchanged', () => {
+    expect(
+      resolveCustomApiRequestUrl({
+        auth: decidimCustomAuth,
+        propsValue: { host: decidimTestHost },
+        url: 'https://other.example/path',
+      })
+    ).toBe('https://other.example/path');
+  });
+
+  it('leaves a relative URL unchanged when host is missing', () => {
+    expect(
+      resolveCustomApiRequestUrl({
+        auth: decidimCustomAuth,
+        propsValue: {},
+        url: '/api/rest_full/v0.3',
+      })
+    ).toBe('/api/rest_full/v0.3');
+  });
+
+  it('fails closed on unknown host', () => {
+    expect(() =>
+      resolveCustomApiRequestUrl({
+        auth: decidimCustomAuth,
+        propsValue: { host: 'https://missing.example' },
+        url: '/api/rest_full/v0.3',
+      })
+    ).toThrow('Unknown platform host');
   });
 });

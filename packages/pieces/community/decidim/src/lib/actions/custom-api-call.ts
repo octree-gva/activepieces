@@ -1,4 +1,5 @@
 import { createCustomApiCallAction } from '@activepieces/pieces-common';
+import { createAction } from '@activepieces/pieces-framework';
 import { decidimAuth } from '../../decidimAuth';
 import { hostProp } from '../props';
 import { extractAuth } from '../utils/auth';
@@ -17,32 +18,25 @@ export function resolveCustomApiBaseUrl(
   return extractAuth({ auth, propsValue }).baseUrl.replace(/\/$/, '');
 }
 
-export const customApiCallAction = createCustomApiCallAction({
-  auth: decidimAuth,
-  name: 'custom_api_call',
-  displayName: 'Custom API Call',
-  description:
-    'Send an authenticated request to your Decidim REST API. Authorization defaults to the connection token; override the Authorization header to use another token.',
-  baseUrl: (auth, propsValue) => resolveCustomApiBaseUrl(auth, propsValue),
-  extraProps: {
-    host: hostProp(),
-  },
-  props: {
-    headers: {
-      defaultValue: {
-        Authorization: '',
-      },
-      description:
-        'Authorization defaults to the Bearer token from this connection. Set Authorization to override it (for example a token from Get Token or Impersonate).',
-    },
-  },
-  authMapping: async (auth, propsValue) => {
-    if (!auth) {
-      throw new Error('Decidim connection is required');
-    }
-    return customApiCallAuthHeaders({ auth, propsValue, headers: propsValue.headers });
-  },
-});
+export function resolveCustomApiRequestUrl(input: {
+  auth: unknown;
+  propsValue?: Record<string, unknown>;
+  url: string;
+}): string {
+  if (input.url.startsWith('http://') || input.url.startsWith('https://')) {
+    return input.url;
+  }
+  const baseUrl = resolveCustomApiBaseUrl(input.auth, input.propsValue);
+  if (!(baseUrl.startsWith('http://') || baseUrl.startsWith('https://'))) {
+    return input.url;
+  }
+  return joinBaseUrlWithRelativePath({
+    baseUrl,
+    relativePath: input.url,
+  });
+}
+
+export const customApiCallAction = createDecidimCustomApiCallAction();
 
 export async function customApiCallAuthHeaders(input: {
   auth: unknown;
@@ -67,6 +61,99 @@ export async function customApiCallAuthHeaders(input: {
     Authorization: `Bearer ${accessToken}`,
     Accept: 'application/json',
   };
+}
+
+function createDecidimCustomApiCallAction() {
+  const stock = createCustomApiCallAction({
+    auth: decidimAuth,
+    name: 'custom_api_call',
+    displayName: 'Custom API Call',
+    description:
+      'Send an authenticated request to your Decidim REST API. Authorization defaults to the connection token; override the Authorization header to use another token.',
+    baseUrl: () => '',
+    extraProps: {
+      host: hostProp(),
+    },
+    props: {
+      headers: {
+        defaultValue: {
+          Authorization: '',
+        },
+        description:
+          'Authorization defaults to the Bearer token from this connection. Set Authorization to override it (for example a token from Get Token or Impersonate).',
+      },
+    },
+    authMapping: async (auth, propsValue) => {
+      if (!auth) {
+        throw new Error('Decidim connection is required');
+      }
+      return customApiCallAuthHeaders({
+        auth,
+        propsValue,
+        headers: propsValue.headers,
+      });
+    },
+  });
+
+  return createAction({
+    auth: decidimAuth,
+    name: stock.name,
+    displayName: stock.displayName,
+    description: stock.description,
+    requireAuth: stock.requireAuth,
+    audience: stock.audience,
+    classification: stock.classification,
+    props: stock.props,
+    run: async (context) => stock.run(withAbsoluteCustomApiUrl(context)),
+  });
+}
+
+function withAbsoluteCustomApiUrl<
+  T extends { auth: unknown; propsValue: Record<string, unknown> },
+>(context: T): T {
+  const urlValue = readUrlValue(context.propsValue.url);
+  if (urlValue === undefined) {
+    return context;
+  }
+  const absolute = resolveCustomApiRequestUrl({
+    auth: context.auth,
+    propsValue: context.propsValue,
+    url: urlValue,
+  });
+  if (absolute === urlValue) {
+    return context;
+  }
+  return {
+    ...context,
+    propsValue: {
+      ...context.propsValue,
+      url: { url: absolute },
+    },
+  };
+}
+
+function joinBaseUrlWithRelativePath(input: {
+  baseUrl: string;
+  relativePath: string;
+}): string {
+  const baseUrlWithSlash = input.baseUrl.endsWith('/')
+    ? input.baseUrl
+    : `${input.baseUrl}/`;
+  const relativePathWithoutSlash = input.relativePath.startsWith('/')
+    ? input.relativePath.slice(1)
+    : input.relativePath;
+  return `${baseUrlWithSlash}${relativePathWithoutSlash}`;
+}
+
+function readUrlValue(urlBag: unknown): string | undefined {
+  if (typeof urlBag === 'string') {
+    return urlBag;
+  }
+  if (!isRecord(urlBag)) {
+    return undefined;
+  }
+  const url = urlBag.url;
+  return typeof url === 'string' ? url : undefined;
 }
 
 function headerValue(headers: unknown, name: string): string | undefined {

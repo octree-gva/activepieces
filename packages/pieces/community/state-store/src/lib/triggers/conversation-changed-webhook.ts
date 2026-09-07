@@ -31,13 +31,8 @@ export const conversationChangedWebhookTrigger = createTrigger({
   outputSchema: conversationChangedTriggerOutputSchema,
   props: {
     setupInstructions: Property.MarkDown({
-      value: `
-## On State Changed (Webhook)
-
-On enable, this trigger registers \`{{webhookUrl}}\` with the Redis watcher for the connection namespace (and optional State Filter).
-
-**Webhook URL:** \`{{webhookUrl}}\`
-      `.trim(),
+      value:
+        'Enabling this flow registers it with the Redis watcher for the connection namespace and optional State Filter.',
     }),
     watcherStatus: Property.DynamicProperties({
       displayName: 'Watcher status',

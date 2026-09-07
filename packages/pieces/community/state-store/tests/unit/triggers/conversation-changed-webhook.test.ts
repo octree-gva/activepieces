@@ -107,4 +107,12 @@ describe('conversationChangedWebhookTrigger', () => {
     });
     expect(result).toEqual([]);
   });
+
+  it('static setup help does not require webhook URL interpolation', () => {
+    const setup = conversationChangedWebhookTrigger.props.setupInstructions;
+    const text = setup.description ?? '';
+    expect(text).toMatch(/registers it with the Redis watcher/i);
+    expect(text).not.toMatch(/\{\{webhookUrl\}\}/);
+    expect(text).not.toMatch(/AP_STATE_STORE_BRIDGE/);
+  });
 });

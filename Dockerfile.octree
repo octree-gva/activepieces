@@ -1,12 +1,10 @@
-FROM node:24.14.0-bullseye-slim AS base
+FROM node:24.14.0-bookworm-slim AS base
 
 ENV LANG=en_US.UTF-8 \
     LANGUAGE=en_US:en \
     LC_ALL=en_US.UTF-8
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
+RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         openssh-client \
         python3 \
@@ -24,7 +22,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         redis-tools && \
     yarn config set python /usr/bin/python3 && \
     sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
-    locale-gen en_US.UTF-8
+    locale-gen en_US.UTF-8 && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN export ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then \

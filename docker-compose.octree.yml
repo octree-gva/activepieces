@@ -1,4 +1,4 @@
-# Octree stack: app (API + state-store bridge) + Dockerfile.worker replicas + postgres + redis.
+# Octree stack: app (API + state-store bridge) + Dockerfile.worker.octree replicas + postgres + redis.
 # Start everything: docker compose -f docker-compose.octree.yml up --build --scale worker=3
 # (deploy.replicas is ignored outside Swarm; use --scale for local replica count.)
 services:
@@ -23,7 +23,7 @@ services:
       - path: .env
         required: false
     environment:
-      # APP + Redis watcher. Embedded worker count comes from env (/.jelenv): 1 on the 3.5GiB node, 0 with Dockerfile.worker replicas.
+      # APP + Redis watcher. Embedded worker count comes from env (/.jelenv): 1 on the 3.5GiB node, 0 with Dockerfile.worker.octree replicas.
       - AP_CONTAINER_TYPE=${AP_CONTAINER_TYPE:-APP}
       - AP_OCTREE_EMBEDDED_WORKERS=${AP_OCTREE_EMBEDDED_WORKERS:-0}
       # Listen on 80 to match published 8080:80.
@@ -55,7 +55,7 @@ services:
   worker:
     build:
       context: .
-      dockerfile: Dockerfile.worker
+      dockerfile: Dockerfile.worker.octree
     restart: unless-stopped
     depends_on:
       app:

@@ -1,0 +1,124 @@
+# The unified worker image (ADR 0003): one worker = one sandbox = one job at a time. The worker polls,
+# resolves, and forks the engine child in-process (SANDBOX_CODE_ONLY: node child + isolated-vm); scale
+# is horizontal (more replicas, each capped at 0.5 CPU / 1 GB). The worker entry is esbuild-bundled into
+# a single file (like the engine), so the final image carries NO workspace node_modules — just node +
+# bun + isolated-vm + esbuild + two bundles. The heavy ai-sdk graph behind the chat agent is bundled but
+# lazy (dynamic import), so it never evaluates unless a chat job runs. Kept small on purpose.
+
+### STAGE 1: Build (toolchain lives here only, never in the final image) ###
+# Bookworm: bullseye-security indexes openssl/ca-certificates whose pool .debs 404.
+FROM node:24.14.0-bookworm-slim AS build
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 g++ build-essential curl ca-certificates unzip git
+
+RUN export ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then \
+      curl -fSL --retry 5 --retry-delay 2 https://github.com/oven-sh/bun/releases/download/bun-v1.3.3/bun-linux-x64-baseline.zip -o bun.zip; \
+    elif [ "$ARCH" = "aarch64" ]; then \
+      curl -fSL --retry 5 --retry-delay 2 https://github.com/oven-sh/bun/releases/download/bun-v1.3.3/bun-linux-aarch64.zip -o bun.zip; \
+    fi && \
+    unzip bun.zip && mv bun-*/bun /usr/local/bin/bun && chmod +x /usr/local/bin/bun && rm -rf bun.zip bun-*
+
+RUN npm install -g --no-fund --no-audit node-gyp typescript@4.9.4 esbuild@0.25.0
+
+WORKDIR /usr/src/app
+COPY .npmrc package.json bun.lock bunfig.toml ./
+COPY packages/ ./packages/
+RUN rm -rf packages/pieces/custom packages/web packages/cli packages/tests-e2e packages/ee packages/server/api && \
+    find packages/pieces/community -mindepth 1 -maxdepth 1 -type d \
+      ! -name decidim \
+      ! -name opnform \
+      ! -name whatsapp \
+      ! -name state-store \
+      ! -name slack \
+      ! -name square \
+      ! -name matrix \
+      ! -name facebook-leads \
+      ! -name intercom \
+      ! -name telegram-bot \
+      -exec rm -rf {} + && \
+    rm -f package-lock.json && \
+    node <<'EOF'
+const fs = require('fs')
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+pkg.workspaces = pkg.workspaces.filter((w) => fs.existsSync(w.replace('/*', '')))
+fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
+fs.writeFileSync('bunfig.toml', '[install]\nlinker = "isolated"\nminimumReleaseAge = 0\n')
+const lock = JSON.parse(fs.readFileSync('bun.lock', 'utf8').replace(/,(\s*[}\]])/g, '$1'))
+function workspacePath(spec) {
+  if (typeof spec !== 'string') return null
+  const marker = '@workspace:'
+  const i = spec.indexOf(marker)
+  return i === -1 ? null : spec.slice(i + marker.length)
+}
+for (const key of Object.keys(lock.workspaces || {})) {
+  if (key !== '' && !fs.existsSync(key)) delete lock.workspaces[key]
+}
+for (const [name, info] of Object.entries(lock.packages || {})) {
+  const dir = workspacePath(Array.isArray(info) ? info[0] : '')
+  if (dir && !fs.existsSync(dir)) delete lock.packages[name]
+}
+for (const ws of Object.values(lock.workspaces || {})) {
+  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+    const deps = ws[field]
+    if (!deps) continue
+    for (const name of Object.keys(deps)) {
+      if (!lock.packages[name]) delete deps[name]
+    }
+  }
+}
+fs.writeFileSync('bun.lock', JSON.stringify(lock, null, 2) + '\n')
+EOF
+RUN --mount=type=cache,target=/root/.bun/install/cache bun install
+COPY . .
+
+# Build the dependency graph (engine bundle), then bundle the worker entry into one self-contained file.
+# Use the GLOBAL esbuild (npm -g, correct arch) not `npx` — npx resolves the bun-local esbuild whose
+# native binary can be the wrong platform when the lockfile was generated on another OS.
+# isolated-vm / the optional socket.io native addons stay external.
+ENV NODE_OPTIONS=--max-old-space-size=4096
+RUN npx turbo run build --filter=@activepieces/engine && \
+    esbuild packages/server/worker/src/bootstrap.ts \
+        --bundle --platform=node --format=cjs --target=node20 \
+        --tsconfig=tsconfig.base.json \
+        --external:isolated-vm --external:bufferutil --external:utf-8-validate --external:esbuild \
+        --outfile=/out/worker.js
+
+# isolated-vm + esbuild for the run image. npm install --prefix / fails on Node 24
+# ("Tracker idealTree already exists"); stage both here and COPY onto /node_modules.
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    cd /usr/src && bun install isolated-vm@6.0.2 esbuild@0.25.0 && \
+    mkdir -p /out/runtime-modules && \
+    cp -a /usr/src/node_modules/isolated-vm /out/runtime-modules/isolated-vm && \
+    cp -a /usr/src/node_modules/esbuild /out/runtime-modules/esbuild && \
+    if [ -d /usr/src/node_modules/@esbuild ]; then \
+      cp -a /usr/src/node_modules/@esbuild /out/runtime-modules/@esbuild; \
+    fi
+
+### STAGE 2: Run (minimal) ###
+FROM node:24.14.0-bookworm-slim AS run
+
+# ca-certificates: TLS for piece downloads. procps: `ps`, which tree-kill spawns to reap the engine.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates procps && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV AP_CONTAINER_TYPE=WORKER
+ENV AP_CACHE_BASE_PATH=/tmp/cache
+
+COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
+# isolated-vm + esbuild at filesystem-root node_modules so the forked engine / CODE steps
+# resolve them by ancestor walk from /tmp/cache/.../main.js (independent of cwd/NODE_PATH).
+COPY --from=build /out/runtime-modules /node_modules
+COPY --from=build /out/worker.js ./worker.js
+COPY --from=build /usr/src/app/dist/packages/engine ./dist/packages/engine
+# apVersionUtil reads <cwd>/package.json for the release version; the worker↔app version gate needs it
+# to match the app's, so ship the workspace package.json (not 0.0.0).
+COPY --from=build /usr/src/app/package.json ./package.json
+
+LABEL service=activepieces-worker
+ENTRYPOINT ["node", "worker.js"]

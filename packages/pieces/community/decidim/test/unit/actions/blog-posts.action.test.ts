@@ -44,28 +44,31 @@ describe('blogPosts action', () => {
   });
 
   it('search lists posts by component_id', async () => {
-    listBlogPosts.mockResolvedValueOnce({ data: { data: [{ id: 1 }], meta: { page: 1 } } });
+    listBlogPosts.mockResolvedValueOnce({
+      data: { data: [{ id: 1 }, { id: 2 }], meta: { count: 2 } },
+    });
     const out = await run({
       action: 'search',
-      searchOptions: { componentId: 9 },
+      searchOptions: { componentId: 9, perPage: 2 },
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.data).toEqual([{ id: 1 }]);
-    expect(out.meta).toEqual({ page: 1 });
+    expect(out.data).toEqual([{ id: 1 }, { id: 2 }]);
+    expect(out.count).toBe(2);
+    expect(out.has_more).toBe(true);
     expect(listBlogPosts).toHaveBeenCalledWith(
       expect.objectContaining({ componentId: 9 })
     );
   });
 
-  it('search forwards page, perPage and limit cap', async () => {
+  it('search forwards page and perPage', async () => {
     listBlogPosts.mockResolvedValueOnce({ data: { data: [] } });
     await run({
       action: 'search',
-      searchOptions: { componentId: 9, page: 2, perPage: 50, limit: 10 },
+      searchOptions: { componentId: 9, page: 2, perPage: 20 },
     });
     expect(listBlogPosts).toHaveBeenCalledWith(
-      expect.objectContaining({ componentId: 9, page: 2, perPage: 10 })
+      expect.objectContaining({ componentId: 9, page: 2, perPage: 20 })
     );
   });
 
@@ -74,13 +77,13 @@ describe('blogPosts action', () => {
     expect(out.ok).toBe(false);
   });
 
-  it('search treats missing data as empty payload', async () => {
+  it('search treats missing data as empty payload with count 0', async () => {
     listBlogPosts.mockResolvedValueOnce({ data: undefined });
     const out = await run({ action: 'search', searchOptions: { componentId: 1 } });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out).toMatchObject({ ok: true, error: null });
-    expect(Object.keys(out).sort()).toEqual(['error', 'ok']);
+    expect(out.count).toBe(0);
+    expect(out.has_more).toBe(false);
   });
 
   it('search defaults missing searchOptions', async () => {
@@ -122,7 +125,7 @@ describe('blogPosts action', () => {
     const search = await loadDynamicProps(blogPosts.props.searchOptions, {
       action: 'search',
     });
-    expect(Object.keys(search)).toEqual(['componentId', 'page', 'perPage', 'limit']);
+    expect(Object.keys(search)).toEqual(['componentId', 'page', 'perPage']);
     expect(await loadDynamicProps(blogPosts.props.searchOptions, { action: 'read' })).toEqual({});
 
     const read = await loadDynamicProps(blogPosts.props.readOptions, { action: 'read' });

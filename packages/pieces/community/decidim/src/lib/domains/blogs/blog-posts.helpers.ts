@@ -5,6 +5,7 @@ import type {
 } from '@octree/decidim-sdk';
 import { bearerAuthorization } from '../../runtime/authMode';
 import { asBlogsApiBlogRequest, asBlogsApiBlogsRequest } from '../../runtime/sdk-casts';
+import { computeHasMore } from '../components/search-component.helpers';
 
 export { bearerAuthorization } from '../../runtime/authMode';
 
@@ -52,15 +53,9 @@ export function buildBlogsListRequest(args: {
 }): { request: BlogsApiListBlogPostsRequest; effectivePerPage: number } {
   const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
   const componentId = parseRequiredPositiveInt('Component ID', args.searchOptions['componentId']);
-  const limit = parseOptionalPositiveInt('Limit', args.searchOptions['limit']);
-  const rawPerPage = args.searchOptions['perPage'];
-  const cappedPerPage =
-    limit === undefined
-      ? rawPerPage
-      : Math.min(limit, parseOptionalPositiveInt('Items per page', rawPerPage) ?? limit);
   const { page, effectivePerPage } = normalizePagePerPage(
     args.searchOptions['page'],
-    cappedPerPage
+    args.searchOptions['perPage']
   );
 
   const request = asBlogsApiBlogsRequest({
@@ -73,11 +68,23 @@ export function buildBlogsListRequest(args: {
   return { request, effectivePerPage };
 }
 
-export function blogSearchPayload(body: unknown): Record<string, unknown> {
-  if (body !== null && typeof body === 'object' && !Array.isArray(body)) {
-    return Object.fromEntries(Object.entries(body));
-  }
-  return {};
+export function blogSearchPayload(args: {
+  body: unknown;
+  effectivePerPage: number;
+}): Record<string, unknown> {
+  const base = plainObject(args.body);
+  const list = Array.isArray(base['data']) ? base['data'] : [];
+  const meta = plainObject(base['meta']);
+  const links = plainObject(base['links']);
+
+  const count = parseOptionalNonNegativeInt(meta['count']) ?? list.length;
+  const has_more = Boolean(links['next']) || computeHasMore(list.length, args.effectivePerPage);
+
+  return {
+    ...base,
+    count,
+    has_more,
+  };
 }
 
 export function buildBlogReadRequest(args: {
@@ -91,4 +98,18 @@ export function buildBlogReadRequest(args: {
     id,
     authorization: auth,
   });
+}
+
+function plainObject(value: unknown): Record<string, unknown> {
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    return Object.fromEntries(Object.entries(value));
+  }
+  return {};
+}
+
+function parseOptionalNonNegativeInt(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.trunc(n);
 }

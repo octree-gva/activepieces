@@ -19,7 +19,6 @@ import {
   decidimComponentIdProp,
   pageProp,
   perPageProp,
-  limitProp,
   userAccessTokenProp,
 } from '../../props';
 import {
@@ -60,7 +59,6 @@ export const blogPosts = createAction({
           componentId: decidimComponentIdProp(true),
           page: pageProp(false),
           perPage: perPageProp(false),
-          limit: limitProp(false),
         };
       },
     }),
@@ -103,16 +101,20 @@ export const blogPosts = createAction({
           componentId: z.number().int().positive(),
           page: z.number().int().min(1).optional(),
           perPage: z.number().int().min(1).max(100).optional(),
-          limit: z.number().int().min(1).max(100).optional(),
         });
 
-        const { request } = buildBlogsListRequest({
+        const { request, effectivePerPage } = buildBlogsListRequest({
           accessToken,
           searchOptions,
         });
 
         const result = await blogsApi.listBlogPosts(asBlogsApiBlogsRequest(request));
-        return response(blogSearchPayload(result.data));
+        return response(
+          blogSearchPayload({
+            body: result.data,
+            effectivePerPage,
+          })
+        );
       }
 
       if (action === 'read') {

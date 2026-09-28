@@ -95,15 +95,6 @@ describe('buildBlogsListRequest', () => {
     expect(request).toMatchObject({ page: 3, perPage: 20, componentId: 9 });
   });
 
-  it('caps perPage with limit', () => {
-    const { request, effectivePerPage } = buildBlogsListRequest({
-      accessToken: 't',
-      searchOptions: { componentId: 9, perPage: 50, limit: 7 },
-    });
-    expect(effectivePerPage).toBe(7);
-    expect(request).toMatchObject({ perPage: 7 });
-  });
-
   it('requires componentId', () => {
     expect(() =>
       buildBlogsListRequest({
@@ -115,16 +106,52 @@ describe('buildBlogsListRequest', () => {
 });
 
 describe('blogSearchPayload', () => {
-  it('copies object bodies', () => {
-    expect(blogSearchPayload({ data: [1], meta: { page: 1 } })).toEqual({
-      data: [1],
-      meta: { page: 1 },
+  it('uses meta.count and links.next from the body', () => {
+    expect(
+      blogSearchPayload({
+        body: {
+          data: [{ id: 1 }],
+          meta: { count: 9 },
+          links: { next: '/blogs?page=2' },
+        },
+        effectivePerPage: 50,
+      })
+    ).toEqual({
+      data: [{ id: 1 }],
+      meta: { count: 9 },
+      links: { next: '/blogs?page=2' },
+      count: 9,
+      has_more: true,
     });
   });
 
-  it('returns empty for non-objects', () => {
-    expect(blogSearchPayload(undefined)).toEqual({});
-    expect(blogSearchPayload([])).toEqual({});
+  it('falls back to page length and computeHasMore', () => {
+    expect(
+      blogSearchPayload({
+        body: { data: [{ id: 1 }, { id: 2 }] },
+        effectivePerPage: 2,
+      })
+    ).toEqual({
+      data: [{ id: 1 }, { id: 2 }],
+      count: 2,
+      has_more: true,
+    });
+    expect(
+      blogSearchPayload({
+        body: { data: [{ id: 1 }] },
+        effectivePerPage: 50,
+      })
+    ).toEqual({
+      data: [{ id: 1 }],
+      count: 1,
+      has_more: false,
+    });
+    expect(
+      blogSearchPayload({
+        body: undefined,
+        effectivePerPage: 50,
+      })
+    ).toEqual({ count: 0, has_more: false });
   });
 });
 

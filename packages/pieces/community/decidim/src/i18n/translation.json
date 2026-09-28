@@ -63,8 +63,6 @@
   "1-based page index": "1-based page index",
   "Items per page": "Items per page",
   "max 100": "max 100",
-  "Limit": "Limit",
-  "Max items to return (caps items per page)": "Max items to return (caps items per page)",
   "Component ID": "Component ID",
   "Numeric id of a component (e.g. blogs, proposals).": "Numeric id of a component (e.g. blogs, proposals).",
   "Search Options": "Search Options",

@@ -1,5 +1,6 @@
 import {
   bearerAuthorization,
+  blogSearchPayload,
   buildBlogReadRequest,
   buildBlogsListRequest,
   normalizePagePerPage,
@@ -85,6 +86,24 @@ describe('buildBlogsListRequest', () => {
     });
   });
 
+  it('forwards page and perPage', () => {
+    const { request, effectivePerPage } = buildBlogsListRequest({
+      accessToken: 't',
+      searchOptions: { componentId: 9, page: 3, perPage: 20 },
+    });
+    expect(effectivePerPage).toBe(20);
+    expect(request).toMatchObject({ page: 3, perPage: 20, componentId: 9 });
+  });
+
+  it('caps perPage with limit', () => {
+    const { request, effectivePerPage } = buildBlogsListRequest({
+      accessToken: 't',
+      searchOptions: { componentId: 9, perPage: 50, limit: 7 },
+    });
+    expect(effectivePerPage).toBe(7);
+    expect(request).toMatchObject({ perPage: 7 });
+  });
+
   it('requires componentId', () => {
     expect(() =>
       buildBlogsListRequest({
@@ -92,6 +111,20 @@ describe('buildBlogsListRequest', () => {
         searchOptions: {},
       })
     ).toThrow('Component ID is required');
+  });
+});
+
+describe('blogSearchPayload', () => {
+  it('copies object bodies', () => {
+    expect(blogSearchPayload({ data: [1], meta: { page: 1 } })).toEqual({
+      data: [1],
+      meta: { page: 1 },
+    });
+  });
+
+  it('returns empty for non-objects', () => {
+    expect(blogSearchPayload(undefined)).toEqual({});
+    expect(blogSearchPayload([])).toEqual({});
   });
 });
 

@@ -17,10 +17,16 @@ import {
   hostProp,
   blogPostIdProp,
   decidimComponentIdProp,
+  pageProp,
+  perPageProp,
+  limitProp,
   userAccessTokenProp,
 } from '../../props';
-import { buildBlogReadRequest, buildBlogsListRequest } from './blog-posts.helpers';
-import { computeHasMore } from '../components/search-component.helpers';
+import {
+  blogSearchPayload,
+  buildBlogReadRequest,
+  buildBlogsListRequest,
+} from './blog-posts.helpers';
 
 export const blogPosts = createAction({
   name: 'blogPosts',
@@ -52,6 +58,9 @@ export const blogPosts = createAction({
         if (action !== 'search') return {};
         return {
           componentId: decidimComponentIdProp(true),
+          page: pageProp(false),
+          perPage: perPageProp(false),
+          limit: limitProp(false),
         };
       },
     }),
@@ -92,23 +101,18 @@ export const blogPosts = createAction({
         assertProp(searchOptions['componentId'], 'Component ID is required for Search');
         await propsValidation.validateZod(searchOptions, {
           componentId: z.number().int().positive(),
+          page: z.number().int().min(1).optional(),
+          perPage: z.number().int().min(1).max(100).optional(),
+          limit: z.number().int().min(1).max(100).optional(),
         });
 
-        const { request, effectivePerPage } = buildBlogsListRequest({
+        const { request } = buildBlogsListRequest({
           accessToken,
           searchOptions,
         });
 
         const result = await blogsApi.listBlogPosts(asBlogsApiBlogsRequest(request));
-        const posts =
-          (result.data as { data?: unknown[] } | undefined)?.data ?? [];
-        const list = Array.isArray(posts) ? posts : [];
-        const has_more = computeHasMore(list.length, effectivePerPage);
-        return response({
-          posts: list,
-          count: list.length,
-          has_more,
-        });
+        return response(blogSearchPayload(result.data));
       }
 
       if (action === 'read') {

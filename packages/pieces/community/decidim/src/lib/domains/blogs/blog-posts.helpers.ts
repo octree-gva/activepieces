@@ -52,7 +52,16 @@ export function buildBlogsListRequest(args: {
 }): { request: BlogsApiListBlogPostsRequest; effectivePerPage: number } {
   const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
   const componentId = parseRequiredPositiveInt('Component ID', args.searchOptions['componentId']);
-  const { page, effectivePerPage } = normalizePagePerPage(undefined, undefined);
+  const limit = parseOptionalPositiveInt('Limit', args.searchOptions['limit']);
+  const rawPerPage = args.searchOptions['perPage'];
+  const cappedPerPage =
+    limit === undefined
+      ? rawPerPage
+      : Math.min(limit, parseOptionalPositiveInt('Items per page', rawPerPage) ?? limit);
+  const { page, effectivePerPage } = normalizePagePerPage(
+    args.searchOptions['page'],
+    cappedPerPage
+  );
 
   const request = asBlogsApiBlogsRequest({
     authorization: auth,
@@ -62,6 +71,13 @@ export function buildBlogsListRequest(args: {
   });
 
   return { request, effectivePerPage };
+}
+
+export function blogSearchPayload(body: unknown): Record<string, unknown> {
+  if (body !== null && typeof body === 'object' && !Array.isArray(body)) {
+    return Object.fromEntries(Object.entries(body));
+  }
+  return {};
 }
 
 export function buildBlogReadRequest(args: {

@@ -144,6 +144,14 @@ export function perPageProp(required = false) {
   });
 }
 
+export function limitProp(required = false) {
+  return Property.Number({
+    displayName: 'Limit',
+    required,
+    description: 'Max items to return (caps items per page)',
+  });
+}
+
 export function spaceSearchPageProp(required = false) {
   return Property.Number({
     displayName: 'Page',

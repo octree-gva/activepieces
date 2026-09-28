@@ -44,16 +44,28 @@ describe('blogPosts action', () => {
   });
 
   it('search lists posts by component_id', async () => {
-    listBlogPosts.mockResolvedValueOnce({ data: { data: [{ id: 1 }] } });
+    listBlogPosts.mockResolvedValueOnce({ data: { data: [{ id: 1 }], meta: { page: 1 } } });
     const out = await run({
       action: 'search',
       searchOptions: { componentId: 9 },
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.posts).toEqual([{ id: 1 }]);
+    expect(out.data).toEqual([{ id: 1 }]);
+    expect(out.meta).toEqual({ page: 1 });
     expect(listBlogPosts).toHaveBeenCalledWith(
       expect.objectContaining({ componentId: 9 })
+    );
+  });
+
+  it('search forwards page, perPage and limit cap', async () => {
+    listBlogPosts.mockResolvedValueOnce({ data: { data: [] } });
+    await run({
+      action: 'search',
+      searchOptions: { componentId: 9, page: 2, perPage: 50, limit: 10 },
+    });
+    expect(listBlogPosts).toHaveBeenCalledWith(
+      expect.objectContaining({ componentId: 9, page: 2, perPage: 10 })
     );
   });
 
@@ -62,12 +74,13 @@ describe('blogPosts action', () => {
     expect(out.ok).toBe(false);
   });
 
-  it('search treats missing data as empty', async () => {
-    listBlogPosts.mockResolvedValueOnce({ data: {} });
+  it('search treats missing data as empty payload', async () => {
+    listBlogPosts.mockResolvedValueOnce({ data: undefined });
     const out = await run({ action: 'search', searchOptions: { componentId: 1 } });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.posts).toEqual([]);
+    expect(out).toMatchObject({ ok: true, error: null });
+    expect(Object.keys(out).sort()).toEqual(['error', 'ok']);
   });
 
   it('search defaults missing searchOptions', async () => {
@@ -105,12 +118,11 @@ describe('blogPosts action', () => {
     expect(out.ok).toBe(false);
   });
 
-  it('exposes componentId only for search and blogPostId only for read', async () => {
+  it('exposes search fields only for search and blogPostId only for read', async () => {
     const search = await loadDynamicProps(blogPosts.props.searchOptions, {
       action: 'search',
     });
-    expect(search).toHaveProperty('componentId');
-    expect(Object.keys(search)).toEqual(['componentId']);
+    expect(Object.keys(search)).toEqual(['componentId', 'page', 'perPage', 'limit']);
     expect(await loadDynamicProps(blogPosts.props.searchOptions, { action: 'read' })).toEqual({});
 
     const read = await loadDynamicProps(blogPosts.props.readOptions, { action: 'read' });

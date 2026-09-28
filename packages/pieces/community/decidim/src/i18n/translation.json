@@ -58,5 +58,15 @@
   "Meetings Reminder": "Meetings Reminder",
   "Proposal Published": "Proposal Published",
   "Trigger when a reminder of meetings is triggered": "Trigger when a reminder of meetings is triggered",
-  "A proposal is published": "A proposal is published"
+  "A proposal is published": "A proposal is published",
+  "Page number": "Page number",
+  "1-based page index": "1-based page index",
+  "Items per page": "Items per page",
+  "max 100": "max 100",
+  "Limit": "Limit",
+  "Max items to return (caps items per page)": "Max items to return (caps items per page)",
+  "Component ID": "Component ID",
+  "Numeric id of a component (e.g. blogs, proposals).": "Numeric id of a component (e.g. blogs, proposals).",
+  "Search Options": "Search Options",
+  "Options for searching blog posts": "Options for searching blog posts"
 }

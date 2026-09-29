@@ -4,25 +4,55 @@ import type {
   ProposalsApiGetProposalRequest,
   ProposalsApiListProposalsRequest,
 } from '@octree/decidim-sdk';
-import { parseRequiredPositiveInt } from '../blogs/blog-posts.helpers';
+import {
+  normalizePagePerPage,
+  parseOptionalPositiveInt,
+  resolveListOrder,
+} from '../blogs/blog-posts.helpers';
 import { bearerAuthorization } from '../../runtime/authMode';
+import { computeHasMore } from '../components/search-component.helpers';
 
 export function buildProposalsListRequest(args: {
   accessToken: string;
   searchOptions: Record<string, unknown>;
 }): { request: ProposalsApiListProposalsRequest; effectivePerPage: number } {
   const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
-  const componentId = parseRequiredPositiveInt('Component ID', args.searchOptions['componentId']);
-  const effectivePerPage = 50;
+  const componentId = parseOptionalPositiveInt('Component ID', args.searchOptions['componentId']);
+  const { page, effectivePerPage } = normalizePagePerPage(
+    args.searchOptions['page'],
+    args.searchOptions['perPage']
+  );
+  const sort = resolveListOrder(args.searchOptions);
+  const unvoted = args.searchOptions['unvoted'] === true;
 
   const request: ProposalsApiListProposalsRequest = {
     authorization: auth,
-    page: 1,
+    page,
     perPage: effectivePerPage,
-    componentId,
+    ...(componentId !== undefined ? { componentId } : {}),
+    ...sort,
+    ...(unvoted ? { filterVotedWeightBlank: true } : {}),
   };
 
   return { request, effectivePerPage };
+}
+
+export function proposalSearchPayload(args: {
+  body: unknown;
+  effectivePerPage: number;
+}): { proposals: unknown[]; count: number; has_more: boolean } {
+  const base = plainObject(args.body);
+  const list = Array.isArray(base['data']) ? base['data'] : [];
+  const meta = plainObject(base['meta']);
+  const links = plainObject(base['links']);
+  const count = parseOptionalNonNegativeInt(meta['count']) ?? list.length;
+  const has_more = Boolean(links['next']) || computeHasMore(list.length, args.effectivePerPage);
+
+  return {
+    proposals: list,
+    count,
+    has_more,
+  };
 }
 
 export function buildProposalReadRequest(args: {
@@ -55,4 +85,18 @@ export function buildVoteProposalRequest(args: {
       data: { weight },
     },
   };
+}
+
+function plainObject(value: unknown): Record<string, unknown> {
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    return Object.fromEntries(Object.entries(value));
+  }
+  return {};
+}
+
+function parseOptionalNonNegativeInt(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.trunc(n);
 }

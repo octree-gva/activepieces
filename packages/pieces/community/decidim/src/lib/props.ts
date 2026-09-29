@@ -409,10 +409,17 @@ export function updateOrganizationPayloadProp(required = true) {
 }
 
 export function blogOrderProp(required = false) {
-  return Property.ShortText({
-    displayName: 'Order by',
+  return Property.StaticDropdown({
+    displayName: 'Sort',
     required,
-    description: 'Server-supported columns: published_at, rand',
+    description: 'Published at ascending/descending, or random',
+    options: {
+      options: [
+        { label: 'Published at (ascending)', value: 'published_at:asc' },
+        { label: 'Published at (descending)', value: 'published_at:desc' },
+        { label: 'Random', value: 'rand' },
+      ],
+    },
   });
 }
 
@@ -427,6 +434,16 @@ export function blogOrderDirectionProp(required = false) {
         { label: 'Descending', value: 'desc' },
       ],
     },
+  });
+}
+
+export function unvotedProp(required = false) {
+  return Property.Checkbox({
+    displayName: 'Unvoted only',
+    required,
+    description:
+      'When on, only proposals the current user has not voted on (filter[voted_weight_blank])',
+    defaultValue: false,
   });
 }
 

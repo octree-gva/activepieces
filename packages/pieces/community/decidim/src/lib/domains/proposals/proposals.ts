@@ -11,16 +11,20 @@ import { getErrorMessage } from '../../runtime/errors';
 import { createProposalsApi } from '../../runtime/clients';
 import {
   hostProp,
+  blogOrderProp,
   decidimComponentIdProp,
+  pageProp,
+  perPageProp,
   proposalIdProp,
+  unvotedProp,
   userAccessTokenProp,
   voteWeightProp,
 } from '../../props';
-import { computeHasMore } from '../components/search-component.helpers';
 import {
   buildProposalReadRequest,
   buildProposalsListRequest,
   buildVoteProposalRequest,
+  proposalSearchPayload,
 } from './proposals.helpers';
 
 export const proposals = createAction({
@@ -54,7 +58,11 @@ export const proposals = createAction({
       props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
         if (action !== 'search') return {};
         return {
-          componentId: decidimComponentIdProp(true),
+          componentId: decidimComponentIdProp(false),
+          page: pageProp(false),
+          perPage: perPageProp(false),
+          order: blogOrderProp(false),
+          unvoted: unvotedProp(false),
         };
       },
     }),
@@ -107,13 +115,12 @@ export const proposals = createAction({
         });
 
         const result = await api.listProposals(request);
-
-        const list = (result.data as { data?: unknown[] })?.data ?? [];
-        const arr = Array.isArray(list) ? list : [];
+        const payload = proposalSearchPayload({
+          body: result.data,
+          effectivePerPage,
+        });
         return response({
-          proposals: arr,
-          count: arr.length,
-          has_more: computeHasMore(arr.length, effectivePerPage),
+          ...payload,
           auth_mode: resolved.mode,
         });
       }

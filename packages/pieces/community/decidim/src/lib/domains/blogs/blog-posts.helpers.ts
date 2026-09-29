@@ -16,6 +16,8 @@ const spaceManifestEnum = z.enum([
   'initiatives',
 ]);
 
+const listSortEnum = z.enum(['published_at:asc', 'published_at:desc', 'rand']);
+
 export function normalizePagePerPage(
   page: unknown,
   perPage: unknown
@@ -47,22 +49,55 @@ export function parseRequiredPositiveInt(label: string, value: unknown): number 
   return n;
 }
 
+export function resolveListOrder(searchOptions: Record<string, unknown>): {
+  order?: 'published_at' | 'rand';
+  orderDirection?: 'asc' | 'desc';
+} {
+  const raw = searchOptions['order'];
+  if (raw === undefined || raw === null || raw === '') {
+    const direction = searchOptions['orderDirection'];
+    if (direction === 'asc' || direction === 'desc') {
+      return { orderDirection: direction };
+    }
+    return {};
+  }
+
+  if (raw === 'published_at' || raw === 'rand') {
+    const direction = searchOptions['orderDirection'];
+    return {
+      order: raw,
+      ...(direction === 'asc' || direction === 'desc' ? { orderDirection: direction } : {}),
+    };
+  }
+
+  const value = listSortEnum.parse(raw);
+  if (value === 'rand') {
+    return { order: 'rand' };
+  }
+  if (value === 'published_at:asc') {
+    return { order: 'published_at', orderDirection: 'asc' };
+  }
+  return { order: 'published_at', orderDirection: 'desc' };
+}
+
 export function buildBlogsListRequest(args: {
   accessToken: string;
   searchOptions: Record<string, unknown>;
 }): { request: BlogsApiListBlogPostsRequest; effectivePerPage: number } {
   const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
-  const componentId = parseRequiredPositiveInt('Component ID', args.searchOptions['componentId']);
+  const componentId = parseOptionalPositiveInt('Component ID', args.searchOptions['componentId']);
   const { page, effectivePerPage } = normalizePagePerPage(
     args.searchOptions['page'],
     args.searchOptions['perPage']
   );
+  const sort = resolveListOrder(args.searchOptions);
 
   const request = asBlogsApiBlogsRequest({
     authorization: auth,
     page,
     perPage: effectivePerPage,
-    componentId,
+    ...(componentId !== undefined ? { componentId } : {}),
+    ...sort,
   });
 
   return { request, effectivePerPage };

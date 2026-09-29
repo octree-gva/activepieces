@@ -95,13 +95,32 @@ describe('buildBlogsListRequest', () => {
     expect(request).toMatchObject({ page: 3, perPage: 20, componentId: 9 });
   });
 
-  it('requires componentId', () => {
-    expect(() =>
+  it('allows missing componentId', () => {
+    const { request } = buildBlogsListRequest({
+      accessToken: 't',
+      searchOptions: {},
+    });
+    expect(request).toMatchObject({
+      authorization: 'Bearer t',
+      page: 1,
+      perPage: 50,
+    });
+    expect(request.componentId).toBeUndefined();
+  });
+
+  it('maps consolidated sort to order and orderDirection', () => {
+    expect(
       buildBlogsListRequest({
         accessToken: 't',
-        searchOptions: {},
-      })
-    ).toThrow('Component ID is required');
+        searchOptions: { order: 'published_at:desc' },
+      }).request
+    ).toMatchObject({ order: 'published_at', orderDirection: 'desc' });
+    expect(
+      buildBlogsListRequest({
+        accessToken: 't',
+        searchOptions: { order: 'rand' },
+      }).request
+    ).toMatchObject({ order: 'rand' });
   });
 });
 

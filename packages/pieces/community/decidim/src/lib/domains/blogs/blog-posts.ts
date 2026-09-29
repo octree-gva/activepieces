@@ -16,6 +16,7 @@ import { createBlogsApi } from '../../runtime/clients';
 import {
   hostProp,
   blogPostIdProp,
+  blogOrderProp,
   decidimComponentIdProp,
   pageProp,
   perPageProp,
@@ -56,9 +57,10 @@ export const blogPosts = createAction({
       props: async ({ action }: Record<string, unknown>): Promise<InputPropertyMap> => {
         if (action !== 'search') return {};
         return {
-          componentId: decidimComponentIdProp(true),
+          componentId: decidimComponentIdProp(false),
           page: pageProp(false),
           perPage: perPageProp(false),
+          order: blogOrderProp(false),
         };
       },
     }),
@@ -96,11 +98,11 @@ export const blogPosts = createAction({
       if (action === 'search') {
         const searchOptions =
           (context.propsValue['searchOptions'] as Record<string, unknown>) || {};
-        assertProp(searchOptions['componentId'], 'Component ID is required for Search');
         await propsValidation.validateZod(searchOptions, {
-          componentId: z.number().int().positive(),
+          componentId: z.number().int().positive().optional(),
           page: z.number().int().min(1).optional(),
           perPage: z.number().int().min(1).max(100).optional(),
+          order: z.enum(['published_at:asc', 'published_at:desc', 'rand']).optional(),
         });
 
         const { request, effectivePerPage } = buildBlogsListRequest({

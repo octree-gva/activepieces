@@ -72,9 +72,13 @@ describe('blogPosts action', () => {
     );
   });
 
-  it('search requires componentId', async () => {
+  it('search allows missing componentId', async () => {
+    listBlogPosts.mockResolvedValueOnce({ data: { data: [] } });
     const out = await run({ action: 'search', searchOptions: {} });
-    expect(out.ok).toBe(false);
+    expect(out.ok).toBe(true);
+    expect(listBlogPosts).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 1, perPage: 50 })
+    );
   });
 
   it('search treats missing data as empty payload with count 0', async () => {
@@ -87,8 +91,20 @@ describe('blogPosts action', () => {
   });
 
   it('search defaults missing searchOptions', async () => {
+    listBlogPosts.mockResolvedValueOnce({ data: { data: [] } });
     const out = await run({ action: 'search' });
-    expect(out.ok).toBe(false);
+    expect(out.ok).toBe(true);
+  });
+
+  it('search forwards consolidated sort', async () => {
+    listBlogPosts.mockResolvedValueOnce({ data: { data: [] } });
+    await run({
+      action: 'search',
+      searchOptions: { order: 'published_at:asc' },
+    });
+    expect(listBlogPosts).toHaveBeenCalledWith(
+      expect.objectContaining({ order: 'published_at', orderDirection: 'asc' })
+    );
   });
 
   it('read requires blogPostId', async () => {
@@ -125,7 +141,7 @@ describe('blogPosts action', () => {
     const search = await loadDynamicProps(blogPosts.props.searchOptions, {
       action: 'search',
     });
-    expect(Object.keys(search)).toEqual(['componentId', 'page', 'perPage']);
+    expect(Object.keys(search)).toEqual(['componentId', 'page', 'perPage', 'order']);
     expect(await loadDynamicProps(blogPosts.props.searchOptions, { action: 'read' })).toEqual({});
 
     const read = await loadDynamicProps(blogPosts.props.readOptions, { action: 'read' });

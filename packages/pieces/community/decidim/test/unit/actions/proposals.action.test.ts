@@ -60,9 +60,36 @@ describe('proposals action', () => {
     );
   });
 
-  it('search requires componentId', async () => {
+  it('search allows missing componentId', async () => {
+    listProposals.mockResolvedValueOnce({ data: { data: [] } });
     const out = await run({ action: 'search' });
-    expect(out.ok).toBe(false);
+    expect(out.ok).toBe(true);
+    expect(listProposals).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 1, perPage: 50 })
+    );
+  });
+
+  it('search forwards page, sort, and unvoted', async () => {
+    listProposals.mockResolvedValueOnce({ data: { data: [] } });
+    await run({
+      action: 'search',
+      searchOptions: {
+        componentId: 1,
+        page: 2,
+        perPage: 20,
+        order: 'rand',
+        unvoted: true,
+      },
+    });
+    expect(listProposals).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentId: 1,
+        page: 2,
+        perPage: 20,
+        order: 'rand',
+        filterVotedWeightBlank: true,
+      })
+    );
   });
 
   it('search treats missing data as empty', async () => {
@@ -74,6 +101,22 @@ describe('proposals action', () => {
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
     expect(out.proposals).toEqual([]);
+  });
+
+  it('search uses links.next for has_more', async () => {
+    listProposals.mockResolvedValueOnce({
+      data: {
+        data: [{ id: '1' }],
+        links: { next: '/proposals?page=2' },
+      },
+    });
+    const out = await run({
+      action: 'search',
+      searchOptions: { componentId: 1 },
+    });
+    expect(out.ok).toBe(true);
+    if (!out.ok) throw new Error('expected success');
+    expect(out.has_more).toBe(true);
   });
 
   it('read requires proposalId', async () => {
@@ -139,11 +182,17 @@ describe('proposals action', () => {
     expect(out.ok).toBe(false);
   });
 
-  it('exposes one search field', async () => {
+  it('exposes search fields for search', async () => {
     const search = await loadDynamicProps(proposals.props.searchOptions, {
       action: 'search',
     });
-    expect(Object.keys(search)).toEqual(['componentId']);
+    expect(Object.keys(search)).toEqual([
+      'componentId',
+      'page',
+      'perPage',
+      'order',
+      'unvoted',
+    ]);
     expect(await loadDynamicProps(proposals.props.searchOptions, { action: 'read' })).toEqual({});
     expect(
       Object.keys(await loadDynamicProps(proposals.props.readOptions, { action: 'read' }))

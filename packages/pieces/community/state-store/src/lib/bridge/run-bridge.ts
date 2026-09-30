@@ -4,7 +4,11 @@ import { z } from 'zod';
 import { webhookDelivery } from './webhook-delivery';
 import { getBridgePort } from '../common/bridge-url';
 import { webhookRegistry, WebhookSubscriber } from '../common/webhook-registry';
-import { getEventsKey, parseConversationEvent } from '../utils/validation';
+import {
+  getEventsKey,
+  getNamespaceFromEventsKey,
+  parseConversationEvent,
+} from '../utils/validation';
 
 const subscribeBodySchema = z.object({
   url: z.string().min(1),
@@ -136,11 +140,10 @@ async function pollNamespaces({
   if (!result) {
     return;
   }
-  for (let index = 0; index < result.length; index += 1) {
-    const [, entries] = result[index];
+  for (const [streamKey, entries] of result) {
     await processStreamEntries({
       redis,
-      namespace: namespaces[index],
+      namespace: getNamespaceFromEventsKey(streamKey),
       entries,
     });
   }

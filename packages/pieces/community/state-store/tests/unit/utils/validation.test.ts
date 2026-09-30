@@ -5,6 +5,7 @@ import {
   getSchemaKey,
   getConversationKey,
   getEventsKey,
+  getNamespaceFromEventsKey,
   getAllowedNextStates,
   getFsmFromAuth,
   listFsmStates,
@@ -47,6 +48,16 @@ describe('validation', () => {
 
     it('should handle empty namespace', () => {
       expect(getEventsKey('')).toBe(':events');
+    });
+  });
+
+  describe('getNamespaceFromEventsKey', () => {
+    it('strips the :events suffix', () => {
+      expect(getNamespaceFromEventsKey('chat:chatbo:events')).toBe('chat:chatbo');
+    });
+
+    it('returns the key unchanged when suffix is missing', () => {
+      expect(getNamespaceFromEventsKey('chat:chatbo')).toBe('chat:chatbo');
     });
   });
 

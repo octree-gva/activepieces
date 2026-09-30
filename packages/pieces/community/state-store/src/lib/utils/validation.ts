@@ -224,3 +224,11 @@ export function getConversationKey(namespace: string, conversationId: string): s
 export function getEventsKey(namespace: string): string {
   return `${namespace}:events`;
 }
+
+export function getNamespaceFromEventsKey(eventsKey: string): string {
+  const suffix = ':events';
+  if (!eventsKey.endsWith(suffix)) {
+    return eventsKey;
+  }
+  return eventsKey.slice(0, -suffix.length);
+}

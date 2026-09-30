@@ -10,6 +10,7 @@ import {
   getFsmFromAuth,
   parseConversation,
 } from '../utils/validation';
+import { webhookRegistry } from '../common/webhook-registry';
 import { getConversationActionOutputSchema } from '../output-schemas';
 
 export const getConversationAction = createAction({
@@ -58,24 +59,35 @@ export const getConversationAction = createAction({
       const setResult = await client.set(conversationKey, JSON.stringify(newConversation), 'NX');
 
       if (setResult === 'OK') {
-        const eventsKey = getEventsKey(namespace);
-        const event: ConversationEvent = {
+        const watchedStates = await webhookRegistry.listWatchedStates({
+          redis: client,
           namespace,
-          conversation_id,
-          previous: null,
-          current: newConversation,
-          at: new Date().toISOString(),
-        };
+        });
+        const shouldStream = webhookRegistry.wouldMatchEnterOnly({
+          previousState: null,
+          currentState: newConversation.state,
+          watchedStates,
+        });
+        if (shouldStream) {
+          const eventsKey = getEventsKey(namespace);
+          const event: ConversationEvent = {
+            namespace,
+            conversation_id,
+            previous: null,
+            current: newConversation,
+            at: new Date().toISOString(),
+          };
 
-        await client.xadd(
-          eventsKey,
-          'MAXLEN',
-          '~',
-          '10000',
-          '*',
-          'payload',
-          JSON.stringify(event)
-        );
+          await client.xadd(
+            eventsKey,
+            'MAXLEN',
+            '~',
+            '10000',
+            '*',
+            'payload',
+            JSON.stringify(event)
+          );
+        }
 
         return {
           ok: true,

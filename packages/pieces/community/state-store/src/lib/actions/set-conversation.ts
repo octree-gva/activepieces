@@ -15,6 +15,7 @@ import {
   validateTransition,
 } from '../utils/validation';
 import { stateDropdownProp } from '../common/state-dropdown';
+import { webhookRegistry } from '../common/webhook-registry';
 import { setConversationActionOutputSchema } from '../output-schemas';
 
 export const setConversationAction = createAction({
@@ -113,23 +114,34 @@ export const setConversationAction = createAction({
           current: newConversation,
         })
       ) {
-        const event: ConversationEvent = {
+        const watchedStates = await webhookRegistry.listWatchedStates({
+          redis: client,
           namespace,
-          conversation_id,
-          previous: previousConversation,
-          current: newConversation,
-          at: new Date().toISOString(),
-        };
+        });
+        const shouldStream = webhookRegistry.wouldMatchEnterOnly({
+          previousState: previousConversation?.state,
+          currentState: newConversation.state,
+          watchedStates,
+        });
+        if (shouldStream) {
+          const event: ConversationEvent = {
+            namespace,
+            conversation_id,
+            previous: previousConversation,
+            current: newConversation,
+            at: new Date().toISOString(),
+          };
 
-        await client.xadd(
-          eventsKey,
-          'MAXLEN',
-          '~',
-          '10000',
-          '*',
-          'payload',
-          JSON.stringify(event)
-        );
+          await client.xadd(
+            eventsKey,
+            'MAXLEN',
+            '~',
+            '10000',
+            '*',
+            'payload',
+            JSON.stringify(event)
+          );
+        }
       }
 
       return {

@@ -22,17 +22,17 @@ export const conversationChangedWebhookTrigger = createTrigger({
   name: 'conversation_changed_webhook',
   auth: stateStoreAuth,
   displayName: 'On State Changed (Webhook)',
-  description: 'Same events, pushed by the Redis watcher.',
+  description: 'Fires when a conversation enters the selected state (Redis watcher).',
   classification: 'READ',
   aiMetadata: {
     description:
-      'Webhook trigger for FSM state-change events delivered by the Redis watcher. Enable the flow to HTTP-subscribe; optional state filter limits which new states fire.',
+      'Webhook trigger for FSM enter-state events delivered by the Redis watcher. Requires a State Filter. Enable the flow to HTTP-subscribe.',
   },
   outputSchema: conversationChangedTriggerOutputSchema,
   props: {
     setupInstructions: Property.MarkDown({
       value:
-        'Enabling this flow registers it with the Redis watcher for the connection namespace and optional State Filter.',
+        'Enabling this flow registers it with the Redis watcher for the connection namespace and required State Filter (enter that state only).',
     }),
     watcherStatus: Property.DynamicProperties({
       displayName: 'Watcher status',
@@ -71,9 +71,9 @@ Then enable this flow. Set **Watcher URL** on the connection if the watcher list
       },
     }),
     state_filter: stateDropdownProp({
-      required: false,
+      required: true,
       displayName: 'State Filter',
-      description: 'If set, only events whose new state matches.',
+      description: 'Required. Fires only when a conversation enters this state.',
     }),
   },
   type: TriggerStrategy.WEBHOOK,
@@ -86,7 +86,10 @@ Then enable this flow. Set **Watcher URL** on the connection if the watcher list
   },
   async onEnable(context) {
     const namespace = context.auth.props.namespace;
-    const stateFilter = resolvePropString(context.propsValue.state_filter) ?? null;
+    const stateFilter = resolvePropString(context.propsValue.state_filter);
+    if (!stateFilter || stateFilter.trim() === '') {
+      throw new Error('State Filter is required to register the webhook trigger');
+    }
     const resolvedBridgeUrl = bridgeUrl.resolve({ auth: context.auth });
     const response = await httpClient.sendRequest<{ id: string }>({
       method: HttpMethod.POST,
@@ -100,14 +103,17 @@ Then enable this flow. Set **Watcher URL** on the connection if the watcher list
     await context.store.put(SUBSCRIBER_STORE_KEY, response.body.id);
   },
   async onDisable(context) {
-    const subscriberId = await context.store.get<string>(SUBSCRIBER_STORE_KEY);
-    if (!subscriberId) {
-      return;
-    }
     const resolvedBridgeUrl = bridgeUrl.resolve({ auth: context.auth });
+    const subscriberId = await context.store.get<string>(SUBSCRIBER_STORE_KEY);
+    if (subscriberId) {
+      await httpClient.sendRequest({
+        method: HttpMethod.DELETE,
+        url: `${resolvedBridgeUrl}/subscribers/${encodeURIComponent(subscriberId)}`,
+      });
+    }
     await httpClient.sendRequest({
       method: HttpMethod.DELETE,
-      url: `${resolvedBridgeUrl}/subscribers/${encodeURIComponent(subscriberId)}`,
+      url: `${resolvedBridgeUrl}/subscribers?url=${encodeURIComponent(context.webhookUrl)}`,
     });
   },
   async run(context) {

@@ -84,14 +84,14 @@ export const conversationChangedTrigger = createTrigger({
   classification: 'READ',
   aiMetadata: {
     description:
-      'Polling trigger for FSM state-change events in the connection namespace. Optional state filter keeps only events whose new state matches.',
+      'Polling trigger for FSM state-change events in the connection namespace. Requires a State Filter for the new state.',
   },
   outputSchema: conversationChangedTriggerOutputSchema,
   props: {
     state_filter: stateDropdownProp({
-      required: false,
+      required: true,
       displayName: 'State Filter',
-      description: 'If set, only events whose new state matches.',
+      description: 'Required. Only events whose new state matches.',
     }),
   },
   sampleData: {

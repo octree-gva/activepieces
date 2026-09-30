@@ -41,7 +41,7 @@ describe('conversationChangedWebhookTrigger', () => {
 
     await conversationChangedWebhookTrigger.onEnable({
       auth: authProps('http://watcher:3848/') as never,
-      propsValue: { state_filter: undefined },
+      propsValue: { state_filter: { value: 'PROPOSE' } },
       webhookUrl: 'http://ap/hooks/1',
       store,
     } as never);
@@ -52,18 +52,79 @@ describe('conversationChangedWebhookTrigger', () => {
         body: {
           url: 'http://ap/hooks/1',
           namespace: 'orders',
-          stateFilter: null,
+          stateFilter: 'PROPOSE',
         },
       })
     );
     expect(store.put).toHaveBeenCalledWith('subscriberId', 'sub-1');
   });
 
+  it('rejects enable without state filter', async () => {
+    await expect(
+      conversationChangedWebhookTrigger.onEnable({
+        auth: authProps('http://watcher:3848/') as never,
+        propsValue: { state_filter: undefined },
+        webhookUrl: 'http://ap/hooks/1',
+        store: { put: jest.fn(), get: jest.fn(), delete: jest.fn() },
+      } as never)
+    ).rejects.toThrow(/State Filter is required/);
+  });
+
+  it('onDisable deletes by id and by url', async () => {
+    (httpClient.sendRequest as jest.Mock).mockResolvedValue({ body: {} });
+    const store = {
+      put: jest.fn(),
+      get: jest.fn().mockResolvedValue('sub-1'),
+      delete: jest.fn(),
+    };
+
+    await conversationChangedWebhookTrigger.onDisable({
+      auth: authProps('http://watcher:3848/') as never,
+      propsValue: { state_filter: { value: 'PROPOSE' } },
+      webhookUrl: 'http://ap/hooks/1',
+      store,
+    } as never);
+
+    expect(httpClient.sendRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'http://watcher:3848/subscribers/sub-1',
+      })
+    );
+    expect(httpClient.sendRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'http://watcher:3848/subscribers?url=http%3A%2F%2Fap%2Fhooks%2F1',
+      })
+    );
+  });
+
+  it('onDisable still deletes by url when subscriber id is missing', async () => {
+    (httpClient.sendRequest as jest.Mock).mockResolvedValue({ body: {} });
+    const store = {
+      put: jest.fn(),
+      get: jest.fn().mockResolvedValue(null),
+      delete: jest.fn(),
+    };
+
+    await conversationChangedWebhookTrigger.onDisable({
+      auth: authProps('http://watcher:3848/') as never,
+      propsValue: { state_filter: { value: 'PROPOSE' } },
+      webhookUrl: 'http://ap/hooks/1',
+      store,
+    } as never);
+
+    expect(httpClient.sendRequest).toHaveBeenCalledTimes(1);
+    expect(httpClient.sendRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'http://watcher:3848/subscribers?url=http%3A%2F%2Fap%2Fhooks%2F1',
+      })
+    );
+  });
+
   it('run emits data-only changes and skips no-ops', async () => {
     const run = conversationChangedWebhookTrigger.run as (ctx: unknown) => Promise<unknown[]>;
 
     const dataOnly = await run({
-      propsValue: { state_filter: undefined },
+      propsValue: { state_filter: { value: 'PROPOSE' } },
       payload: {
         body: {
           namespace: 'orders',
@@ -77,7 +138,7 @@ describe('conversationChangedWebhookTrigger', () => {
     expect(dataOnly).toHaveLength(1);
 
     const noop = await run({
-      propsValue: { state_filter: undefined },
+      propsValue: { state_filter: { value: 'PROPOSE' } },
       payload: {
         body: {
           namespace: 'orders',

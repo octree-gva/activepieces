@@ -32,6 +32,7 @@ describe('setConversationAction', () => {
     set: jest.Mock;
     xadd: jest.Mock;
     quit: jest.Mock;
+    smembers: jest.Mock;
   };
 
   beforeEach(() => {
@@ -41,14 +42,16 @@ describe('setConversationAction', () => {
       set: jest.fn().mockResolvedValue('OK'),
       xadd: jest.fn().mockResolvedValue('1-0'),
       quit: jest.fn().mockResolvedValue('OK'),
+      smembers: jest.fn().mockResolvedValue([]),
     };
     (redisConnect as jest.Mock).mockResolvedValue(mockClient);
   });
 
-  it('merges data by default when staying in the same state', async () => {
+  it('merges data by default when staying in the same state without xadd', async () => {
     mockClient.get.mockResolvedValueOnce(
       JSON.stringify({ state: 'PROPOSE', data: { title: 'Old' } })
     );
+    mockClient.smembers.mockResolvedValueOnce(['PROPOSE']);
 
     const context = createMockActionContext({
       auth: authProps() as never,
@@ -75,7 +78,49 @@ describe('setConversationAction', () => {
       'test:namespace:conversation:user-1',
       JSON.stringify({ state: 'PROPOSE', data: { title: 'Old', body: 'New' } })
     );
+    expect(mockClient.xadd).not.toHaveBeenCalled();
+  });
+
+  it('xadds when entering a watched state', async () => {
+    mockClient.get.mockResolvedValueOnce(
+      JSON.stringify({ state: 'START', data: {} })
+    );
+    mockClient.smembers.mockResolvedValueOnce(['PROPOSE']);
+
+    const context = createMockActionContext({
+      auth: authProps() as never,
+      propsValue: {
+        conversation_id: 'user-1',
+        state: 'PROPOSE',
+        data: {},
+        replace_data: false,
+        jump: false,
+      },
+    });
+
+    await (setConversationAction.run as (ctx: unknown) => Promise<unknown>)(context);
     expect(mockClient.xadd).toHaveBeenCalled();
+  });
+
+  it('skips xadd when entering an unwatched state', async () => {
+    mockClient.get.mockResolvedValueOnce(
+      JSON.stringify({ state: 'START', data: {} })
+    );
+    mockClient.smembers.mockResolvedValueOnce(['OTHER']);
+
+    const context = createMockActionContext({
+      auth: authProps() as never,
+      propsValue: {
+        conversation_id: 'user-1',
+        state: 'PROPOSE',
+        data: {},
+        replace_data: false,
+        jump: false,
+      },
+    });
+
+    await (setConversationAction.run as (ctx: unknown) => Promise<unknown>)(context);
+    expect(mockClient.xadd).not.toHaveBeenCalled();
   });
 
   it('allows same-state patch when FSM has no self-loop', async () => {
@@ -213,6 +258,7 @@ describe('setConversationAction', () => {
 
   it('creates from FSM initial when conversation is missing then transitions', async () => {
     mockClient.get.mockResolvedValueOnce(null);
+    mockClient.smembers.mockResolvedValueOnce(['PROPOSE']);
 
     const context = createMockActionContext({
       auth: authProps() as never,

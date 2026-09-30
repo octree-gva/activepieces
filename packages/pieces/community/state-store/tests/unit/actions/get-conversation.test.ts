@@ -12,6 +12,7 @@ describe('getConversationAction', () => {
     set: jest.Mock;
     xadd: jest.Mock;
     quit: jest.Mock;
+    smembers: jest.Mock;
   };
 
   beforeEach(() => {
@@ -21,6 +22,7 @@ describe('getConversationAction', () => {
       set: jest.fn(),
       xadd: jest.fn(),
       quit: jest.fn().mockResolvedValue('OK'),
+      smembers: jest.fn().mockResolvedValue([]),
     };
     (redisConnect as jest.Mock).mockResolvedValue(mockClient);
   });
@@ -61,6 +63,7 @@ describe('getConversationAction', () => {
   it('should create new conversation with unknown state when not found and no FSM', async () => {
     mockClient.get.mockResolvedValueOnce(null);
     mockClient.set.mockResolvedValueOnce('OK');
+    mockClient.smembers.mockResolvedValueOnce([UNKNOWN_STATE]);
 
     const context = createMockActionContext({
       auth: {
@@ -90,9 +93,29 @@ describe('getConversationAction', () => {
     expect(mockClient.xadd).toHaveBeenCalled();
   });
 
+  it('should skip xadd on create when initial state is unwatched', async () => {
+    mockClient.get.mockResolvedValueOnce(null);
+    mockClient.set.mockResolvedValueOnce('OK');
+    mockClient.smembers.mockResolvedValueOnce([]);
+
+    const context = createMockActionContext({
+      auth: {
+        type: AppConnectionType.CUSTOM_AUTH,
+        props: { url: 'redis://localhost:6379', namespace: 'test:namespace' },
+      } as never,
+      propsValue: {
+        conversation_id: 'conv-123',
+      },
+    });
+
+    await (getConversationAction.run as (ctx: unknown) => Promise<unknown>)(context);
+    expect(mockClient.xadd).not.toHaveBeenCalled();
+  });
+
   it('should use initial state from FSM when creating new conversation', async () => {
     mockClient.get.mockResolvedValueOnce(null);
     mockClient.set.mockResolvedValueOnce('OK');
+    mockClient.smembers.mockResolvedValueOnce(['initial_state']);
 
     const context = createMockActionContext({
       auth: {
@@ -120,6 +143,7 @@ describe('getConversationAction', () => {
       },
       allowed_next_states: ['next'],
     });
+    expect(mockClient.xadd).toHaveBeenCalled();
   });
 
   it('should handle race condition when another process creates conversation', async () => {

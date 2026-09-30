@@ -9,8 +9,10 @@ import { getEventsKey, parseConversationEvent } from '../utils/validation';
 const subscribeBodySchema = z.object({
   url: z.string().min(1),
   namespace: z.string().min(1),
-  stateFilter: z.string().nullable().optional(),
+  stateFilter: z.string().min(1),
 });
+
+const ORPHAN_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 
 export type RunBridgeParams = {
   redisUrl: string;
@@ -38,10 +40,12 @@ function sendJson(
 async function dispatchPayload({
   redis,
   namespace,
+  streamId,
   payload,
 }: {
   redis: Redis;
   namespace: string;
+  streamId: string;
   payload: string;
 }): Promise<void> {
   const event = parseConversationEvent(payload);
@@ -51,10 +55,14 @@ async function dispatchPayload({
   const subscribers = await webhookRegistry.listByNamespace({ redis, namespace });
   const matched = webhookRegistry.matchSubscribers({
     subscribers,
-    state: event.current.state,
+    previousState: event.previous?.state,
+    currentState: event.current.state,
   });
   for (const subscriber of matched) {
     void webhookDelivery.deliverWithRetries({
+      redis,
+      subscriberId: subscriber.id,
+      streamId,
       url: subscriber.url,
       payload,
     });
@@ -82,7 +90,7 @@ async function processStreamEntries({
     if (typeof payload !== 'string') {
       continue;
     }
-    await dispatchPayload({ redis, namespace, payload });
+    await dispatchPayload({ redis, namespace, streamId: id, payload });
   }
   if (lastId) {
     await redis.set(cursorKey, lastId);
@@ -116,6 +124,29 @@ async function pollNamespaces(redis: Redis): Promise<void> {
   }
 }
 
+async function probeSubscriberUrl(url: string): Promise<number | null> {
+  const rewritten = webhookDelivery.rewriteWebhookUrl(url);
+  try {
+    const response = await fetch(rewritten, { method: 'GET' });
+    return response.status;
+  } catch {
+    return null;
+  }
+}
+
+async function dropOrphanSubscribers({ redis }: { redis: Redis }): Promise<number> {
+  const subscribers = await webhookRegistry.listAll({ redis });
+  let removed = 0;
+  for (const subscriber of subscribers) {
+    const status = await probeSubscriberUrl(subscriber.url);
+    if (status === 404) {
+      await webhookRegistry.unsubscribe({ redis, id: subscriber.id });
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 function createRequestHandler(redis: Redis) {
   return async (
     request: http.IncomingMessage,
@@ -135,7 +166,7 @@ function createRequestHandler(redis: Redis) {
           input: {
             url: body.url,
             namespace: body.namespace,
-            stateFilter: body.stateFilter ?? null,
+            stateFilter: body.stateFilter,
           },
         });
         sendJson(response, 201, { id: subscriber.id });
@@ -143,6 +174,19 @@ function createRequestHandler(redis: Redis) {
         console.error('[watcher] POST /subscribers failed:', err);
         sendJson(response, 400, { error: 'Invalid subscribe request' });
       }
+      return;
+    }
+    if (request.method === 'DELETE' && url.pathname === '/subscribers') {
+      const targetUrl = url.searchParams.get('url');
+      if (!targetUrl || targetUrl.trim() === '') {
+        sendJson(response, 400, { error: 'url query parameter required' });
+        return;
+      }
+      const removed = await webhookRegistry.unsubscribeByUrl({
+        redis,
+        url: targetUrl,
+      });
+      sendJson(response, 200, { ok: true, removed });
       return;
     }
     const deleteMatch = url.pathname.match(/^\/subscribers\/([^/]+)$/);
@@ -163,6 +207,15 @@ export async function runBridge({ redisUrl, listenPort }: RunBridgeParams): Prom
   await redis.ping();
   console.log('[watcher] Redis connected');
 
+  const duplicatesRemoved = await webhookRegistry.gcDuplicateSubscribers({ redis });
+  if (duplicatesRemoved > 0) {
+    console.log('[watcher] Removed duplicate subscribers:', duplicatesRemoved);
+  }
+  const orphansRemoved = await dropOrphanSubscribers({ redis });
+  if (orphansRemoved > 0) {
+    console.log('[watcher] Removed orphan subscribers:', orphansRemoved);
+  }
+
   const server = http.createServer((request, response) => {
     createRequestHandler(redis)(request, response).catch((err) => {
       console.error('[watcher] Request error:', err);
@@ -178,6 +231,16 @@ export async function runBridge({ redisUrl, listenPort }: RunBridgeParams): Prom
       resolve();
     });
   });
+
+  setInterval(() => {
+    void dropOrphanSubscribers({ redis })
+      .then((removed) => {
+        if (removed > 0) {
+          console.log('[watcher] Periodic orphan cleanup removed:', removed);
+        }
+      })
+      .catch((err) => console.error('[watcher] Orphan cleanup failed:', err));
+  }, ORPHAN_RECONCILE_INTERVAL_MS);
 
   while (true) {
     try {

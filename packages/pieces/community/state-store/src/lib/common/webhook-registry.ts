@@ -95,18 +95,13 @@ async function listWatchedStates({
   return redis.smembers(getWatchedStatesKey(namespace));
 }
 
-function wouldMatchEnterOnly({
-  previousState,
+function wouldMatchWatchedState({
   currentState,
   watchedStates,
 }: {
-  previousState: string | null | undefined;
   currentState: string;
   watchedStates: string[];
 }): boolean {
-  if (previousState === currentState) {
-    return false;
-  }
   return watchedStates.includes(currentState);
 }
 
@@ -232,16 +227,11 @@ async function listByNamespace({
 
 function matchSubscribers({
   subscribers,
-  previousState,
   currentState,
 }: {
   subscribers: WebhookSubscriber[];
-  previousState: string | null | undefined;
   currentState: string;
 }): WebhookSubscriber[] {
-  if (previousState === currentState) {
-    return [];
-  }
   return subscribers.filter(
     (subscriber) => subscriber.stateFilter === currentState
   );
@@ -264,6 +254,6 @@ export const webhookRegistry = {
   getDeliveredKey,
   listWatchedStates,
   rebuildWatchedStates,
-  wouldMatchEnterOnly,
+  wouldMatchWatchedState,
   gcDuplicateSubscribers,
 };

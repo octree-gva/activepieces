@@ -232,50 +232,44 @@ describe('webhookRegistry', () => {
       },
     ];
 
-    it('matches enter into filter only', () => {
+    it('matches subscribers watching the current state', () => {
       const matched = webhookRegistry.matchSubscribers({
         subscribers,
-        previousState: 'START',
         currentState: 'MENU',
       });
       expect(matched.map((s) => s.id)).toEqual(['2']);
     });
 
-    it('does not match same-state data merges', () => {
+    it('matches same-state data updates when filter equals current', () => {
       const matched = webhookRegistry.matchSubscribers({
         subscribers,
-        previousState: 'MENU',
         currentState: 'MENU',
+      });
+      expect(matched.map((s) => s.id)).toEqual(['2']);
+    });
+
+    it('matches no one for an unwatched state', () => {
+      const matched = webhookRegistry.matchSubscribers({
+        subscribers,
+        currentState: 'OTHER',
       });
       expect(matched).toEqual([]);
     });
   });
 
-  describe('wouldMatchEnterOnly', () => {
-    it('returns false for same-state updates', () => {
+  describe('wouldMatchWatchedState', () => {
+    it('returns true when current state is watched', () => {
       expect(
-        webhookRegistry.wouldMatchEnterOnly({
-          previousState: 'MENU',
-          currentState: 'MENU',
-          watchedStates: ['MENU'],
-        })
-      ).toBe(false);
-    });
-
-    it('returns true when entering a watched state', () => {
-      expect(
-        webhookRegistry.wouldMatchEnterOnly({
-          previousState: 'START',
+        webhookRegistry.wouldMatchWatchedState({
           currentState: 'MENU',
           watchedStates: ['MENU'],
         })
       ).toBe(true);
     });
 
-    it('returns false when entering an unwatched state', () => {
+    it('returns false when current state is unwatched', () => {
       expect(
-        webhookRegistry.wouldMatchEnterOnly({
-          previousState: 'START',
+        webhookRegistry.wouldMatchWatchedState({
           currentState: 'MENU',
           watchedStates: ['OTHER'],
         })

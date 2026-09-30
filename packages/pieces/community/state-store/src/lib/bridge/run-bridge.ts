@@ -55,7 +55,6 @@ async function dispatchPayload({
   const subscribers = await webhookRegistry.listByNamespace({ redis, namespace });
   const matched = webhookRegistry.matchSubscribers({
     subscribers,
-    previousState: event.previous?.state,
     currentState: event.current.state,
   });
   for (const subscriber of matched) {

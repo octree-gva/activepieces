@@ -47,7 +47,7 @@ describe('setConversationAction', () => {
     (redisConnect as jest.Mock).mockResolvedValue(mockClient);
   });
 
-  it('merges data by default when staying in the same state without xadd', async () => {
+  it('merges data by default when staying in the same state and xadds when watched', async () => {
     mockClient.get.mockResolvedValueOnce(
       JSON.stringify({ state: 'PROPOSE', data: { title: 'Old' } })
     );
@@ -78,6 +78,27 @@ describe('setConversationAction', () => {
       'test:namespace:conversation:user-1',
       JSON.stringify({ state: 'PROPOSE', data: { title: 'Old', body: 'New' } })
     );
+    expect(mockClient.xadd).toHaveBeenCalled();
+  });
+
+  it('skips xadd on same-state data change when unwatched', async () => {
+    mockClient.get.mockResolvedValueOnce(
+      JSON.stringify({ state: 'PROPOSE', data: { title: 'Old' } })
+    );
+    mockClient.smembers.mockResolvedValueOnce(['OTHER']);
+
+    const context = createMockActionContext({
+      auth: authProps() as never,
+      propsValue: {
+        conversation_id: 'user-1',
+        state: 'PROPOSE',
+        data: { body: 'New' },
+        replace_data: false,
+        jump: false,
+      },
+    });
+
+    await (setConversationAction.run as (ctx: unknown) => Promise<unknown>)(context);
     expect(mockClient.xadd).not.toHaveBeenCalled();
   });
 

@@ -118,8 +118,7 @@ export const setConversationAction = createAction({
           redis: client,
           namespace,
         });
-        const shouldStream = webhookRegistry.wouldMatchEnterOnly({
-          previousState: previousConversation?.state,
+        const shouldStream = webhookRegistry.wouldMatchWatchedState({
           currentState: newConversation.state,
           watchedStates,
         });

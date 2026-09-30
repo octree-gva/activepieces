@@ -11,6 +11,8 @@
     "build": "tsc -p tsconfig.lib.json && cp package.json dist/",
     "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts' 'bin/**/*.ts'",
     "test": "jest --config jest.config.ts",
+    "test:e2e": "jest --config jest.e2e.config.ts --runInBand",
+    "test:e2e:docker": "docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e",
     "bridge": "ts-node bin/redis-webhook-bridge.ts"
   },
   "dependencies": {

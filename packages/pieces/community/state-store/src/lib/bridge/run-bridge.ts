@@ -19,6 +19,16 @@ export type RunBridgeParams = {
   listenPort?: number;
 };
 
+export type StartBridgeHttpServerParams = {
+  redis: Redis;
+  listenPort?: number;
+};
+
+export type StartBridgeHttpServerResult = {
+  port: number;
+  close: () => Promise<void>;
+};
+
 function readBody(request: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -57,15 +67,17 @@ async function dispatchPayload({
     subscribers,
     currentState: event.current.state,
   });
-  for (const subscriber of matched) {
-    void webhookDelivery.deliverWithRetries({
-      redis,
-      subscriberId: subscriber.id,
-      streamId,
-      url: subscriber.url,
-      payload,
-    });
-  }
+  await Promise.all(
+    matched.map((subscriber) =>
+      webhookDelivery.deliverWithRetries({
+        redis,
+        subscriberId: subscriber.id,
+        streamId,
+        url: subscriber.url,
+        payload,
+      })
+    )
+  );
 }
 
 async function processStreamEntries({
@@ -97,7 +109,15 @@ async function processStreamEntries({
   return lastId;
 }
 
-async function pollNamespaces(redis: Redis): Promise<void> {
+async function pollNamespaces({
+  redis,
+  blockMs,
+  defaultStartId,
+}: {
+  redis: Redis;
+  blockMs: number;
+  defaultStartId: string;
+}): Promise<void> {
   const namespaces = await webhookRegistry.listNamespaces({ redis });
   if (namespaces.length === 0) {
     return;
@@ -108,8 +128,11 @@ async function pollNamespaces(redis: Redis): Promise<void> {
       redis.get(webhookRegistry.getCursorKey(namespace))
     )
   );
-  const startIds = cursors.map((cursor) => cursor ?? '$');
-  const result = await redis.xread('BLOCK', 1000, 'STREAMS', ...streamKeys, ...startIds);
+  const startIds = cursors.map((cursor) => cursor ?? defaultStartId);
+  const result =
+    blockMs > 0
+      ? await redis.xread('BLOCK', blockMs, 'STREAMS', ...streamKeys, ...startIds)
+      : await redis.xread('COUNT', 100, 'STREAMS', ...streamKeys, ...startIds);
   if (!result) {
     return;
   }
@@ -121,6 +144,18 @@ async function pollNamespaces(redis: Redis): Promise<void> {
       entries,
     });
   }
+}
+
+export async function pollNamespacesOnce({
+  redis,
+}: {
+  redis: Redis;
+}): Promise<void> {
+  await pollNamespaces({
+    redis,
+    blockMs: 0,
+    defaultStartId: '0-0',
+  });
 }
 
 async function probeSubscriberUrl(url: string): Promise<number | null> {
@@ -199,8 +234,44 @@ function createRequestHandler(redis: Redis) {
   };
 }
 
-export async function runBridge({ redisUrl, listenPort }: RunBridgeParams): Promise<void> {
+export async function startBridgeHttpServer({
+  redis,
+  listenPort,
+}: StartBridgeHttpServerParams): Promise<StartBridgeHttpServerResult> {
   const port = listenPort ?? getBridgePort();
+  const server = http.createServer((request, response) => {
+    createRequestHandler(redis)(request, response).catch((err) => {
+      console.error('[watcher] Request error:', err);
+      if (!response.headersSent) {
+        sendJson(response, 500, { error: 'Internal error' });
+      }
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '0.0.0.0', () => {
+      console.log('[watcher] Listening on', port);
+      resolve();
+    });
+  });
+
+  return {
+    port,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      }),
+  };
+}
+
+export async function runBridge({ redisUrl, listenPort }: RunBridgeParams): Promise<void> {
   const redis = new Redis(redisUrl, { maxRetriesPerRequest: null });
   redis.on('error', (err) => console.error('[watcher] Redis error:', err));
   await redis.ping();
@@ -215,21 +286,7 @@ export async function runBridge({ redisUrl, listenPort }: RunBridgeParams): Prom
     console.log('[watcher] Removed orphan subscribers:', orphansRemoved);
   }
 
-  const server = http.createServer((request, response) => {
-    createRequestHandler(redis)(request, response).catch((err) => {
-      console.error('[watcher] Request error:', err);
-      if (!response.headersSent) {
-        sendJson(response, 500, { error: 'Internal error' });
-      }
-    });
-  });
-
-  await new Promise<void>((resolve) => {
-    server.listen(port, '0.0.0.0', () => {
-      console.log('[watcher] Listening on', port);
-      resolve();
-    });
-  });
+  await startBridgeHttpServer({ redis, listenPort });
 
   setInterval(() => {
     void dropOrphanSubscribers({ redis })
@@ -243,7 +300,11 @@ export async function runBridge({ redisUrl, listenPort }: RunBridgeParams): Prom
 
   while (true) {
     try {
-      await pollNamespaces(redis);
+      await pollNamespaces({
+        redis,
+        blockMs: 1000,
+        defaultStartId: '$',
+      });
     } catch (err) {
       console.error('[watcher] Poll error:', err);
       await new Promise((resolve) => setTimeout(resolve, 1000));

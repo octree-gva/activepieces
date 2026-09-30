@@ -132,6 +132,21 @@ npx turbo run test --filter=@activepieces/piece-state-store
 cd packages/pieces/community/state-store && npm test
 ```
 
+### E2E (Docker Compose)
+
+One command from the piece directory (Redis + webhook listener + bridge + subscriber register + Jest scenarios A–D):
+
+```bash
+cd packages/pieces/community/state-store
+npm run test:e2e:docker
+```
+
+Equivalent:
+
+```bash
+docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e
+```
+
 Build / lint:
 
 ```bash

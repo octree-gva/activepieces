@@ -1,0 +1,101 @@
+# State-store E2E: redis + webhook listener + bridge (HTTP) + e2e (register + jest)
+# Requires host deps installed (bun install at monorepo root).
+# npm run test:e2e:docker
+
+services:
+  redis:
+    image: redis:7-alpine3.18
+    command:
+      - redis-server
+      - --loglevel
+      - warning
+      - --requirepass
+      - e2e_redis_password
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'e2e_redis_password', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  webhook-listener:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    volumes:
+      - ../../../../:/usr/src/app
+    working_dir: /usr/src/app/packages/pieces/community/state-store
+    command:
+      - npx
+      - ts-node
+      - tests/e2e/webhook-listener/server.ts
+    environment:
+      - E2E_WEBHOOK_LISTENER_PORT=8090
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8090/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    volumes:
+      - ../../../../:/usr/src/app
+    working_dir: /usr/src/app/packages/pieces/community/state-store
+    command:
+      - npx
+      - ts-node
+      - bin/bridge-http-only.ts
+    environment:
+      - AP_REDIS_URL=redis://:e2e_redis_password@redis:6379
+      - AP_STATE_STORE_BRIDGE_PORT=3847
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3847/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    volumes:
+      - ../../../../:/usr/src/app
+    working_dir: /usr/src/app/packages/pieces/community/state-store
+    command:
+      - sh
+      - -c
+      - npx ts-node tests/e2e/register-subscribers.ts && npm run test:e2e -- --forceExit
+    environment:
+      - AP_REDIS_URL=redis://:e2e_redis_password@redis:6379
+      - AP_STATE_STORE_REDIS_URL=redis://:e2e_redis_password@redis:6379
+      - AP_STATE_STORE_BRIDGE_URL=http://bridge:3847
+      - E2E_WEBHOOK_LISTENER_URL=http://webhook-listener:8090
+      - E2E_NAMESPACE=e2e:compose
+    restart: 'no'
+    depends_on:
+      redis:
+        condition: service_healthy
+      webhook-listener:
+        condition: service_healthy
+      bridge:
+        condition: service_healthy

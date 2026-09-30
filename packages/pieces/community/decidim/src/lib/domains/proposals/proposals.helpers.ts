@@ -10,7 +10,6 @@ import {
   resolveListOrder,
 } from '../blogs/blog-posts.helpers';
 import { bearerAuthorization } from '../../runtime/authMode';
-import { computeHasMore } from '../components/search-component.helpers';
 
 export function buildProposalsListRequest(args: {
   accessToken: string;
@@ -35,24 +34,6 @@ export function buildProposalsListRequest(args: {
   };
 
   return { request, effectivePerPage };
-}
-
-export function proposalSearchPayload(args: {
-  body: unknown;
-  effectivePerPage: number;
-}): { proposals: unknown[]; count: number; has_more: boolean } {
-  const base = plainObject(args.body);
-  const list = Array.isArray(base['data']) ? base['data'] : [];
-  const meta = plainObject(base['meta']);
-  const links = plainObject(base['links']);
-  const count = parseOptionalNonNegativeInt(meta['count']) ?? list.length;
-  const has_more = Boolean(links['next']) || computeHasMore(list.length, args.effectivePerPage);
-
-  return {
-    proposals: list,
-    count,
-    has_more,
-  };
 }
 
 export function buildProposalReadRequest(args: {
@@ -85,18 +66,4 @@ export function buildVoteProposalRequest(args: {
       data: { weight },
     },
   };
-}
-
-function plainObject(value: unknown): Record<string, unknown> {
-  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-    return Object.fromEntries(Object.entries(value));
-  }
-  return {};
-}
-
-function parseOptionalNonNegativeInt(value: unknown): number | undefined {
-  if (value === undefined || value === null || value === '') return undefined;
-  const n = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(n) || n < 0) return undefined;
-  return Math.trunc(n);
 }

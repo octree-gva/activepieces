@@ -83,7 +83,7 @@ describe('draftProposals action', () => {
     expect(out.ok).toBe(false);
   });
 
-  it('search returns unpublished drafts for a component', async () => {
+  it('search returns listProposals body as-is', async () => {
     listProposals.mockResolvedValueOnce({
       data: {
         data: [
@@ -98,11 +98,13 @@ describe('draftProposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.drafts).toEqual([{ id: '1', meta: { published: false } }]);
-    expect(out.count).toBe(1);
+    expect(out.data).toEqual([
+      { id: '1', meta: { published: false } },
+      { id: '2', meta: { published: true } },
+    ]);
   });
 
-  it('search treats missing data as empty', async () => {
+  it('search passes through empty body', async () => {
     listProposals.mockResolvedValueOnce({ data: {} });
     const out = await run({
       action: 'search',
@@ -110,10 +112,10 @@ describe('draftProposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.drafts).toEqual([]);
+    expect(out.data).toBeUndefined();
   });
 
-  it('search treats non-array payload as empty', async () => {
+  it('search passes through non-array data as-is', async () => {
     listProposals.mockResolvedValueOnce({ data: { data: 'bad' } });
     const out = await run({
       action: 'search',
@@ -121,7 +123,7 @@ describe('draftProposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.drafts).toEqual([]);
+    expect(out.data).toBe('bad');
   });
 
   it('search requires componentId', async () => {
@@ -148,7 +150,7 @@ describe('draftProposals action', () => {
     expect(out.ok).toBe(false);
   });
 
-  it('create returns the draft id', async () => {
+  it('create returns server body as-is', async () => {
     createDraftProposal.mockResolvedValueOnce({ data: { data: { id: 'd1' } } });
     const out = await run({
       action: 'create',
@@ -156,10 +158,10 @@ describe('draftProposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.draft_proposal_id).toBe('d1');
+    expect(out.data).toEqual({ id: 'd1' });
   });
 
-  it('read loads a draft by id', async () => {
+  it('read returns server body as-is', async () => {
     getDraftProposal.mockResolvedValueOnce({ data: { data: { id: 'd1' } } });
     const out = await run({
       action: 'read',
@@ -167,18 +169,7 @@ describe('draftProposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.draft_proposal_id).toBe('d1');
-  });
-
-  it('read falls back to requested id when payload has no id', async () => {
-    getDraftProposal.mockResolvedValueOnce({ data: { data: 'x' } });
-    const out = await run({
-      action: 'read',
-      idOptions: { draftProposalId: 3 },
-    });
-    expect(out.ok).toBe(true);
-    if (!out.ok) throw new Error('expected success');
-    expect(out.draft_proposal_id).toBe('3');
+    expect(out.data).toEqual({ id: 'd1' });
   });
 
   it('update writes the body', async () => {
@@ -189,10 +180,12 @@ describe('draftProposals action', () => {
       updateOptions: { body: { title: 'T' } },
     });
     expect(out.ok).toBe(true);
+    if (!out.ok) throw new Error('expected success');
+    expect(out.data).toEqual({ id: 'd1' });
     expect(updateDraftProposal).toHaveBeenCalled();
   });
 
-  it('withdraw marks the draft withdrawn', async () => {
+  it('withdraw returns empty object when API has no body', async () => {
     withdrawDraftProposal.mockResolvedValueOnce({});
     const out = await run({
       action: 'withdraw',
@@ -200,10 +193,10 @@ describe('draftProposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.withdrew).toBe(true);
+    expect(out).toMatchObject({ ok: true, error: null });
   });
 
-  it('publish returns the proposal id', async () => {
+  it('publish returns server body as-is', async () => {
     publishDraftProposal.mockResolvedValueOnce({ data: { data: { id: 'p1' } } });
     const out = await run({
       action: 'publish',
@@ -211,18 +204,7 @@ describe('draftProposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.proposal_id).toBe('p1');
-  });
-
-  it('publish omits proposal_id when payload has no id', async () => {
-    publishDraftProposal.mockResolvedValueOnce({ data: { data: 'x' } });
-    const out = await run({
-      action: 'publish',
-      idOptions: { draftProposalId: 3 },
-    });
-    expect(out.ok).toBe(true);
-    if (!out.ok) throw new Error('expected success');
-    expect(out.proposal_id).toBeUndefined();
+    expect(out.data).toEqual({ id: 'p1' });
   });
 
   it('returns error for unknown action', async () => {

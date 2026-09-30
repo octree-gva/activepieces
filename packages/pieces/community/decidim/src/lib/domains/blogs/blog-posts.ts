@@ -23,7 +23,6 @@ import {
   userAccessTokenProp,
 } from '../../props';
 import {
-  blogSearchPayload,
   buildBlogReadRequest,
   buildBlogsListRequest,
 } from './blog-posts.helpers';
@@ -105,18 +104,13 @@ export const blogPosts = createAction({
           order: z.enum(['published_at:asc', 'published_at:desc', 'rand']).optional(),
         });
 
-        const { request, effectivePerPage } = buildBlogsListRequest({
+        const { request } = buildBlogsListRequest({
           accessToken,
           searchOptions,
         });
 
         const result = await blogsApi.listBlogPosts(asBlogsApiBlogsRequest(request));
-        return response(
-          blogSearchPayload({
-            body: result.data,
-            effectivePerPage,
-          })
-        );
+        return response(result.data as unknown as Record<string, unknown>);
       }
 
       if (action === 'read') {
@@ -133,8 +127,7 @@ export const blogPosts = createAction({
         });
 
         const result = await blogsApi.getBlogPost(asBlogsApiBlogRequest(request));
-        const data = (result.data as { data?: unknown } | undefined)?.data;
-        return response({ post: data });
+        return response(result.data as unknown as Record<string, unknown>);
       }
 
       return response({}, `Unknown action: ${String(action)}`);

@@ -2,7 +2,6 @@ import {
   buildProposalReadRequest,
   buildProposalsListRequest,
   buildVoteProposalRequest,
-  proposalSearchPayload,
 } from '../../../src/lib/domains/proposals/proposals.helpers';
 
 describe('buildProposalsListRequest', () => {
@@ -48,38 +47,6 @@ describe('buildProposalsListRequest', () => {
       order: 'published_at',
       orderDirection: 'desc',
       filterVotedWeightBlank: true,
-    });
-  });
-});
-
-describe('proposalSearchPayload', () => {
-  it('uses links.next for has_more', () => {
-    expect(
-      proposalSearchPayload({
-        body: {
-          data: [{ id: 1 }],
-          meta: { count: 9 },
-          links: { next: '/proposals?page=2' },
-        },
-        effectivePerPage: 50,
-      })
-    ).toEqual({
-      proposals: [{ id: 1 }],
-      count: 9,
-      has_more: true,
-    });
-  });
-
-  it('falls back to page length', () => {
-    expect(
-      proposalSearchPayload({
-        body: { data: [{ id: 1 }] },
-        effectivePerPage: 50,
-      })
-    ).toEqual({
-      proposals: [{ id: 1 }],
-      count: 1,
-      has_more: false,
     });
   });
 });

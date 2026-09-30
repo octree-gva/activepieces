@@ -24,7 +24,6 @@ import {
   buildProposalReadRequest,
   buildProposalsListRequest,
   buildVoteProposalRequest,
-  proposalSearchPayload,
 } from './proposals.helpers';
 
 export const proposals = createAction({
@@ -109,20 +108,13 @@ export const proposals = createAction({
 
       if (action === 'search') {
         const o = (context.propsValue.searchOptions as Record<string, unknown>) || {};
-        const { request, effectivePerPage } = buildProposalsListRequest({
+        const { request } = buildProposalsListRequest({
           accessToken: resolved.rawAccessToken,
           searchOptions: o,
         });
 
         const result = await api.listProposals(request);
-        const payload = proposalSearchPayload({
-          body: result.data,
-          effectivePerPage,
-        });
-        return response({
-          ...payload,
-          auth_mode: resolved.mode,
-        });
+        return response(result.data as unknown as Record<string, unknown>);
       }
 
       if (action === 'read') {
@@ -132,16 +124,7 @@ export const proposals = createAction({
           readOptions: o,
         });
         const result = await api.getProposal(readReq);
-        const data = (result.data as { data?: unknown })?.data;
-        const rid =
-          data && typeof data === 'object' && data !== null && 'id' in data
-            ? String((data as { id: string }).id)
-            : undefined;
-        return response({
-          proposal: data,
-          proposal_id: rid,
-          auth_mode: resolved.mode,
-        });
+        return response(result.data as unknown as Record<string, unknown>);
       }
 
       if (action === 'vote') {
@@ -151,12 +134,7 @@ export const proposals = createAction({
           voteOptions: o,
         });
         const result = await api.castProposalVote(voteReq);
-        const proposal_id = voteReq.voteProposalCreateBody.proposal_id;
-        return response({
-          data: result.data,
-          proposal_id: String(proposal_id),
-          auth_mode: resolved.mode,
-        });
+        return response(result.data as unknown as Record<string, unknown>);
       }
 
       return response({}, `Unknown action: ${String(action)}`);

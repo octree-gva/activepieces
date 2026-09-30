@@ -25,7 +25,6 @@ import {
   parseDraftProposalId,
   parseDraftUpdateBody,
   parseRequiredComponentId,
-  unpublishedDrafts,
 } from './draft-proposals.helpers';
 import { buildProposalsListRequest } from './proposals.helpers';
 
@@ -147,14 +146,7 @@ export const draftProposals = createAction({
           searchOptions: o,
         });
         const result = await proposalsApi.listProposals(request);
-        const list = (result.data as { data?: unknown[] })?.data ?? [];
-        const arr = Array.isArray(list) ? list : [];
-        const drafts = unpublishedDrafts(arr);
-        return response({
-          drafts,
-          count: drafts.length,
-          auth_mode: resolved.mode,
-        });
+        return response(result.data as unknown as Record<string, unknown>);
       }
 
       if (action === 'create') {
@@ -166,13 +158,7 @@ export const draftProposals = createAction({
           createDraftProposalPayload: buildCreateDraftProposalPayload(component_id),
         };
         const result = await api.createDraftProposal(createReq);
-        const data = (result.data as { data?: { id?: string } })?.data;
-        return response({
-          draft: data,
-          draft_proposal_id: data?.id,
-          access_token: resolved.rawAccessToken,
-          auth_mode: resolved.mode,
-        });
+        return response(result.data as unknown as Record<string, unknown>);
       }
 
       const idOpts = (context.propsValue.idOptions as Record<string, unknown>) || {};
@@ -185,14 +171,7 @@ export const draftProposals = createAction({
           authorization: authHeader,
         };
         const result = await api.getDraftProposal(readReq);
-        const data = (result.data as { data?: unknown })?.data;
-        return response({
-          draft: data,
-          draft_proposal_id: data && typeof data === 'object' && data !== null && 'id' in data
-            ? String((data as { id: string }).id)
-            : String(id),
-          auth_mode: resolved.mode,
-        });
+        return response(result.data as unknown as Record<string, unknown>);
       }
 
       if (action === 'update') {
@@ -205,11 +184,7 @@ export const draftProposals = createAction({
           updateDraftProposalPayload: { data: body },
         };
         const result = await api.updateDraftProposal(updateReq);
-        return response({
-          draft: (result.data as { data?: unknown })?.data,
-          draft_proposal_id: String(id),
-          auth_mode: resolved.mode,
-        });
+        return response(result.data as unknown as Record<string, unknown>);
       }
 
       if (action === 'withdraw') {
@@ -217,8 +192,8 @@ export const draftProposals = createAction({
           id,
           authorization: authHeader,
         };
-        await api.withdrawDraftProposal(withdrawReq);
-        return response({ withdrew: true, draft_proposal_id: String(id), auth_mode: resolved.mode });
+        const result = await api.withdrawDraftProposal(withdrawReq);
+        return response((result.data ?? {}) as unknown as Record<string, unknown>);
       }
 
       if (action === 'publish') {
@@ -227,16 +202,7 @@ export const draftProposals = createAction({
           authorization: authHeader,
         };
         const result = await api.publishDraftProposal(publishReq);
-        const data = (result.data as { data?: unknown })?.data;
-        return response({
-          proposal: data,
-          proposal_id:
-            data && typeof data === 'object' && data !== null && 'id' in data
-              ? String((data as { id: string }).id)
-              : undefined,
-          draft_proposal_id: String(id),
-          auth_mode: resolved.mode,
-        });
+        return response(result.data as unknown as Record<string, unknown>);
       }
 
       return response({}, `Unknown action: ${String(action)}`);

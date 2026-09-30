@@ -54,7 +54,7 @@ describe('proposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.proposals).toEqual([{ id: '1' }]);
+    expect(out.data).toEqual([{ id: '1' }]);
     expect(listProposals).toHaveBeenCalledWith(
       expect.objectContaining({ componentId: 9 })
     );
@@ -92,7 +92,7 @@ describe('proposals action', () => {
     );
   });
 
-  it('search treats missing data as empty', async () => {
+  it('search passes through empty body', async () => {
     listProposals.mockResolvedValueOnce({ data: {} });
     const out = await run({
       action: 'search',
@@ -100,10 +100,10 @@ describe('proposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.proposals).toEqual([]);
+    expect(out.data).toBeUndefined();
   });
 
-  it('search uses links.next for has_more', async () => {
+  it('search passes through links.next', async () => {
     listProposals.mockResolvedValueOnce({
       data: {
         data: [{ id: '1' }],
@@ -116,7 +116,7 @@ describe('proposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.has_more).toBe(true);
+    expect(out.links).toEqual({ next: '/proposals?page=2' });
   });
 
   it('read requires proposalId', async () => {
@@ -124,7 +124,7 @@ describe('proposals action', () => {
     expect(out.ok).toBe(false);
   });
 
-  it('search treats non-array payload as empty', async () => {
+  it('search passes through non-array data as-is', async () => {
     listProposals.mockResolvedValueOnce({ data: { data: 'bad' } });
     const out = await run({
       action: 'search',
@@ -132,10 +132,10 @@ describe('proposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.proposals).toEqual([]);
+    expect(out.data).toBe('bad');
   });
 
-  it('read loads one proposal by id', async () => {
+  it('read returns server body as-is', async () => {
     getProposal.mockResolvedValueOnce({ data: { data: { id: '7' } } });
     const out = await run({
       action: 'read',
@@ -143,29 +143,18 @@ describe('proposals action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.proposal_id).toBe('7');
+    expect(out.data).toEqual({ id: '7' });
   });
 
-  it('read omits proposal_id when payload has no id', async () => {
-    getProposal.mockResolvedValueOnce({ data: { data: 'x' } });
-    const out = await run({
-      action: 'read',
-      readOptions: { proposalId: 7 },
-    });
-    expect(out.ok).toBe(true);
-    if (!out.ok) throw new Error('expected success');
-    expect(out.proposal_id).toBeUndefined();
-  });
-
-  it('vote casts a vote', async () => {
-    castProposalVote.mockResolvedValueOnce({ data: { ok: true } });
+  it('vote returns server body as-is', async () => {
+    castProposalVote.mockResolvedValueOnce({ data: { data: { weight: 1 } } });
     const out = await run({
       action: 'vote',
       voteOptions: { proposalId: 5, voteWeight: 1 },
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.proposal_id).toBe('5');
+    expect(out.data).toEqual({ weight: 1 });
   });
 
   it('returns error for unknown action', async () => {

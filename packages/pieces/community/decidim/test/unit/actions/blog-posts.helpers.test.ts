@@ -1,6 +1,5 @@
 import {
   bearerAuthorization,
-  blogSearchPayload,
   buildBlogReadRequest,
   buildBlogsListRequest,
   normalizePagePerPage,
@@ -121,56 +120,6 @@ describe('buildBlogsListRequest', () => {
         searchOptions: { order: 'rand' },
       }).request
     ).toMatchObject({ order: 'rand' });
-  });
-});
-
-describe('blogSearchPayload', () => {
-  it('uses meta.count and links.next from the body', () => {
-    expect(
-      blogSearchPayload({
-        body: {
-          data: [{ id: 1 }],
-          meta: { count: 9 },
-          links: { next: '/blogs?page=2' },
-        },
-        effectivePerPage: 50,
-      })
-    ).toEqual({
-      data: [{ id: 1 }],
-      meta: { count: 9 },
-      links: { next: '/blogs?page=2' },
-      count: 9,
-      has_more: true,
-    });
-  });
-
-  it('falls back to page length and computeHasMore', () => {
-    expect(
-      blogSearchPayload({
-        body: { data: [{ id: 1 }, { id: 2 }] },
-        effectivePerPage: 2,
-      })
-    ).toEqual({
-      data: [{ id: 1 }, { id: 2 }],
-      count: 2,
-      has_more: true,
-    });
-    expect(
-      blogSearchPayload({
-        body: { data: [{ id: 1 }] },
-        effectivePerPage: 50,
-      })
-    ).toEqual({
-      data: [{ id: 1 }],
-      count: 1,
-      has_more: false,
-    });
-    expect(
-      blogSearchPayload({
-        body: undefined,
-        effectivePerPage: 50,
-      })
-    ).toEqual({ count: 0, has_more: false });
   });
 });
 

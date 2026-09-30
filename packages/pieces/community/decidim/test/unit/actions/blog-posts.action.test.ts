@@ -54,8 +54,7 @@ describe('blogPosts action', () => {
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
     expect(out.data).toEqual([{ id: 1 }, { id: 2 }]);
-    expect(out.count).toBe(2);
-    expect(out.has_more).toBe(true);
+    expect(out.meta).toEqual({ count: 2 });
     expect(listBlogPosts).toHaveBeenCalledWith(
       expect.objectContaining({ componentId: 9 })
     );
@@ -81,13 +80,12 @@ describe('blogPosts action', () => {
     );
   });
 
-  it('search treats missing data as empty payload with count 0', async () => {
+  it('search passes through undefined body as empty object', async () => {
     listBlogPosts.mockResolvedValueOnce({ data: undefined });
     const out = await run({ action: 'search', searchOptions: { componentId: 1 } });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.count).toBe(0);
-    expect(out.has_more).toBe(false);
+    expect(out.data).toBeUndefined();
   });
 
   it('search defaults missing searchOptions', async () => {
@@ -121,7 +119,7 @@ describe('blogPosts action', () => {
     expect(out.ok).toBe(false);
   });
 
-  it('read loads one post by id', async () => {
+  it('read returns server body as-is', async () => {
     getBlogPost.mockResolvedValueOnce({ data: { data: { id: 42 } } });
     const out = await run({
       action: 'read',
@@ -129,7 +127,7 @@ describe('blogPosts action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.post).toEqual({ id: 42 });
+    expect(out.data).toEqual({ id: 42 });
   });
 
   it('returns error for unknown action', async () => {

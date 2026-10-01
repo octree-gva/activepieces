@@ -39,4 +39,25 @@ describe('response', () => {
 
     expect(result).toEqual({ ...payload, ok: false, error: 'Error message' });
   });
+
+  it('should spread error details onto soft-fail payload', () => {
+    const result = response(
+      {},
+      {
+        message: 'User is blocked',
+        details: {
+          error: 'invalid_grant',
+          error_description: 'User is blocked',
+          error_code: 'blocked',
+        },
+      }
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'User is blocked',
+      error_description: 'User is blocked',
+      error_code: 'blocked',
+    });
+  });
 });

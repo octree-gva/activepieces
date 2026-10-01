@@ -7,21 +7,45 @@ function zodIssues(e: unknown): ZodIssue[] | null {
   return Array.isArray(issues) ? (issues as ZodIssue[]) : null;
 }
 
-/**
- * Turn thrown values into a single string for `response(..., error)`.
- * Axios and Zod errors get structured detail; other Errors use `.message`.
- */
-export function getErrorMessage(e: unknown): string {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function humanMessageFromBody(data: Record<string, unknown>): string | null {
+  if (typeof data.error_description === 'string' && data.error_description.length > 0) {
+    return data.error_description;
+  }
+  if (typeof data.message === 'string' && data.message.length > 0) {
+    return data.message;
+  }
+  if (typeof data.error === 'string' && data.error.length > 0) {
+    return data.error;
+  }
+  return null;
+}
+
+export function getErrorMessage(e: unknown): ErrorInfo {
   const issues = zodIssues(e);
   if (issues && issues.length > 0) {
-    return issues.map((i) => i.message).join(' ');
+    return { message: issues.map((i) => i.message).join(' ') };
   }
   if (axios.isAxiosError(e)) {
     const data = e.response?.data;
-    if (data && typeof data === 'object') {
-      return JSON.stringify(data);
+    if (isPlainObject(data)) {
+      return {
+        message: humanMessageFromBody(data) ?? e.message,
+        details: data,
+      };
     }
-    return e.message;
+    if (typeof data === 'string' && data.length > 0) {
+      return { message: data };
+    }
+    return { message: e.message };
   }
-  return e instanceof Error ? e.message : String(e);
+  return { message: e instanceof Error ? e.message : String(e) };
 }
+
+export type ErrorInfo = {
+  message: string;
+  details?: Record<string, unknown>;
+};

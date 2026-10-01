@@ -49,7 +49,7 @@ describe('handleImpersonateError', () => {
     });
   });
 
-  it('should return JSON stringified error for non-404 axios errors', () => {
+  it('should return human error and body fields for non-404 axios errors', () => {
     mockIsAxiosError.mockReturnValue(true);
 
     const errorResult = handleImpersonateError(
@@ -59,7 +59,7 @@ describe('handleImpersonateError', () => {
     const result = response(errorResult, errorResult.error);
 
     expect(result.ok).toBe(false);
-    expect(result.error).toBe(JSON.stringify({ error: 'Invalid' }));
+    expect(result.error).toBe('Invalid');
     expect(result.token).toBeNull();
     expect(result.user).toBeNull();
   });

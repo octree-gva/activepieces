@@ -209,7 +209,7 @@ describe('Impersonate Action Integration', () => {
       })) as ImpersonateResult;
 
       expect(result.ok).toBe(false);
-      expect(result.error).toBe(JSON.stringify({ error: 'Invalid request' }));
+      expect(result.error).toBe('Invalid request');
       expect(result.token).toBeNull();
       expect(result.user).toBeNull();
     });

@@ -31,6 +31,7 @@ import { decidimAccessTokenFromResponse } from '../../runtime/sdk-casts';
 import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import { assertProp } from '../../utils/assertProp';
+import { getErrorMessage } from '../../runtime/errors';
 
 export interface RegistrationOptions {
   userFullName?: string;
@@ -104,17 +105,15 @@ export async function fetchUserInfoIfNeeded(
 export function handleImpersonateError(
   error: unknown,
   registerOnMissing: boolean
-): { token: null; user: null; error: string } {
+): { token: null; user: null; error: string } & Record<string, unknown> {
   if (axios.isAxiosError(error)) {
-    const errorData = error.response?.data || error.message;
     const status = error.response?.status;
     if (status === 404 && !registerOnMissing) {
       return { token: null, user: null, error: 'User not found' };
     }
-    return { token: null, user: null, error: JSON.stringify(errorData) };
   }
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  return { token: null, user: null, error: errorMessage };
+  const { message, details } = getErrorMessage(error);
+  return { token: null, user: null, ...(details ?? {}), error: message };
 }
 
 export const impersonate = createAction({

@@ -14,7 +14,7 @@ import {
 } from '@octree/decidim-sdk';
 import { systemAccessToken } from '../../utils/systemAccessToken';
 import { introspectToken } from '../../utils/introspecToken';
-import { buildOAuthGrantParam, createImpersonateToken } from './impersonate';
+import { buildOAuthGrantParam } from './impersonate';
 import { assertProp } from '../../utils/assertProp';
 import {
   hostProp,
@@ -32,13 +32,13 @@ import {
 import axios from 'axios';
 import { getErrorMessage } from '../../runtime/errors';
 import {
+  asResponseRecord,
   asUsersApiSetUserDataRequest,
   asUsersApiUserDataRequest,
   asUsersApiUsersRequest,
   oauthTokenBodyFromResponse,
 } from '../../runtime/sdk-casts';
 import type { JsonObject } from '../../types/decidim-api';
-import type { DecidimAccessToken } from '../../../types';
 import { toExtendedDataSearchQuery } from './upsert-helpers';
 
 async function getUsersApi(
@@ -96,8 +96,9 @@ export async function searchParticipants(
     })
   );
 
-  const users = searchResult.data?.data || [];
-  return response({ users, count: users.length });
+  return response({
+    users: asResponseRecord(searchResult.data),
+  });
 }
 
 export async function createParticipant(
@@ -132,7 +133,8 @@ export async function createParticipant(
   );
 
   let decidimUserId: string;
-  let impersonateToken: DecidimAccessToken;
+  let tokenBody: Record<string, unknown>;
+  let introspectBody: Record<string, unknown> | undefined;
 
   if (searchResult.data?.data && searchResult.data.data.length > 0) {
     decidimUserId = searchResult.data.data[0].id.toString();
@@ -143,7 +145,8 @@ export async function createParticipant(
       false,
       { userFullName, email }
     );
-    impersonateToken = await createImpersonateToken(oauthApi, oauthGrantParam);
+    const tokenResponse = await oauthApi.createToken({ oauthGrantParam });
+    tokenBody = asResponseRecord(tokenResponse.data);
   } else {
     const oauthGrantParam = buildOAuthGrantParam(
       username,
@@ -156,51 +159,65 @@ export async function createParticipant(
         sendConfirmationEmailOnRegister: false,
       }
     );
-    impersonateToken = await createImpersonateToken(oauthApi, oauthGrantParam);
+    const tokenResponse = await oauthApi.createToken({ oauthGrantParam });
+    tokenBody = asResponseRecord(tokenResponse.data);
 
+    const accessToken = z
+      .string()
+      .min(1)
+      .parse(oauthTokenBodyFromResponse(tokenBody).access_token);
     const systemToken = await systemAccessToken(oauthApi, clientId, clientSecret);
-    const introspectResult = await introspectToken(
-      oauthApi,
-      impersonateToken.access_token,
-      systemToken
-    );
+    const introspectResult = await introspectToken(oauthApi, accessToken, systemToken);
 
     if (!introspectResult?.resource?.id) {
       return response({}, 'Failed to create user');
     }
 
+    introspectBody = asResponseRecord(introspectResult);
     decidimUserId = introspectResult.resource.id.toString();
   }
 
+  const payload: Record<string, unknown> = {
+    token: tokenBody,
+  };
+  if (introspectBody !== undefined) {
+    payload.introspect = introspectBody;
+  }
+
   if (extendedData) {
-    const { usersApi: userApi, authorization } = await getUsersApi(config, clientId, clientSecret, decidimUserId);
-    await userApi.setUserExtendedData(
+    const { usersApi: userApi, authorization: userAuth } = await getUsersApi(
+      config,
+      clientId,
+      clientSecret,
+      decidimUserId
+    );
+    const setResult = await userApi.setUserExtendedData(
       asUsersApiSetUserDataRequest({
-        authorization,
+        authorization: userAuth,
         userExtendedDataPayload: {
           object_path: '.',
           data: extendedData,
         },
       })
     );
+    payload.extended_data = asResponseRecord(setResult.data);
   }
 
-  let user = null;
   if (fetchUserInfo) {
-    const readResult = await readParticipant(
-      config,
-      clientId,
-      clientSecret,
-      { readOptions: { userId: decidimUserId } }
-    );
-    user = (readResult.ok && readResult.user) ? readResult.user : null;
+    const readResult = await readParticipant(config, clientId, clientSecret, {
+      readOptions: { userId: decidimUserId },
+    });
+    if (readResult.ok) {
+      if ('extended_data' in readResult) {
+        payload.extended_data = readResult.extended_data;
+      }
+      if ('users' in readResult) {
+        payload.users = readResult.users;
+      }
+    }
   }
 
-  return response({
-    token: impersonateToken,
-    userId: decidimUserId,
-    user,
-  });
+  return response(payload);
 }
 
 export async function readParticipant(
@@ -219,7 +236,7 @@ export async function readParticipant(
 
   const { usersApi, authorization } = await getUsersApi(config, clientId, clientSecret, userId);
 
-  let userData = null;
+  let extendedDataBody: unknown = null;
   try {
     const dataResult = await usersApi.getUserExtendedData(
       asUsersApiUserDataRequest({
@@ -227,10 +244,10 @@ export async function readParticipant(
         objectPath: '.',
       })
     );
-    userData = dataResult.data?.['data'] || null;
+    extendedDataBody = dataResult.data ?? null;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.status === 404) {
-      userData = null;
+      extendedDataBody = null;
     } else {
       throw error;
     }
@@ -243,12 +260,10 @@ export async function readParticipant(
       perPage: 1,
     })
   );
-  const user = userResult.data?.data?.[0] || null;
 
   return response({
-    userId,
-    data: userData,
-    user,
+    extended_data: extendedDataBody,
+    users: asResponseRecord(userResult.data),
   });
 }
 
@@ -299,10 +314,7 @@ export async function updateParticipant(
     })
   );
 
-  return response({
-    userId,
-    data: result.data?.['data'] || extendedData,
-  });
+  return response((result.data ?? {}) as unknown as Record<string, unknown>);
 }
 
 export const participantCrud = createAction({

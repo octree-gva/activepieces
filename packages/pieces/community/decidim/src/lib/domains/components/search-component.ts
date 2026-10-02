@@ -17,10 +17,7 @@ import { resolveAuthContext } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
 import { asComponentsApiSearchComponentsRequest } from '../../runtime/sdk-casts';
 import { createComponentsApi } from '../../runtime/clients';
-import {
-  buildSearchComponentsRequestParams,
-  computeHasMore,
-} from './search-component.helpers';
+import { buildSearchComponentsRequestParams } from './search-component.helpers';
 
 function validateInput(propsValue: Record<string, unknown>): void | Promise<void> {
   const { page, perPage } = propsValue;
@@ -62,7 +59,7 @@ export const searchComponent = createAction({
         resolved.baseConfiguration,
         resolved.rawAccessToken
       );
-      const { requestParams, effectivePerPage } = buildSearchComponentsRequestParams({
+      const { requestParams } = buildSearchComponentsRequestParams({
         accessToken: resolved.rawAccessToken,
         componentIds: context.propsValue['componentIds'],
         componentManifests: context.propsValue['componentManifests'],
@@ -74,17 +71,7 @@ export const searchComponent = createAction({
       const result = await componentsApi.searchComponents(
         asComponentsApiSearchComponentsRequest(requestParams)
       );
-      const components =
-        (result.data as { data?: unknown[] } | undefined)?.data ?? [];
-      const has_more = computeHasMore(
-        Array.isArray(components) ? components.length : 0,
-        effectivePerPage
-      );
-      return response({
-        components,
-        count: Array.isArray(components) ? components.length : 0,
-        has_more,
-      });
+      return response((result.data ?? {}) as unknown as Record<string, unknown>);
     } catch (e) {
       return response({}, getErrorMessage(e));
     }

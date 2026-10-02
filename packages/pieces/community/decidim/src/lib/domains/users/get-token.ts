@@ -61,7 +61,7 @@ export const getToken = createAction({
       if (grantType === 'password') {
         assertProp(nickname, 'Nickname is required');
       }
-      const accessToken = await requestAccessToken({
+      const body = await requestAccessTokenBody({
         baseUrl,
         body: oauthTokenBody({
           grantType,
@@ -71,20 +71,18 @@ export const getToken = createAction({
           nickname,
         }),
       });
-      return response({ accessToken });
+      return response((body ?? {}) as Record<string, unknown>);
     } catch (e) {
-      return response({ accessToken: null }, getErrorMessage(e));
+      return response({}, getErrorMessage(e));
     }
   },
 });
 
-async function requestAccessToken(input: {
+async function requestAccessTokenBody(input: {
   baseUrl: string;
   body: Record<string, unknown>;
-}): Promise<string> {
-  const tokenResponse = await httpClient.sendRequest<{
-    access_token?: string;
-  }>({
+}): Promise<Record<string, unknown>> {
+  const tokenResponse = await httpClient.sendRequest<Record<string, unknown>>({
     method: HttpMethod.POST,
     url: `${input.baseUrl.replace(/\/$/, '')}/oauth/token`,
     headers: {
@@ -92,11 +90,11 @@ async function requestAccessToken(input: {
     },
     body: input.body,
   });
-  const accessToken = tokenResponse.body?.access_token;
-  if (!accessToken) {
+  const body = tokenResponse.body;
+  if (!body || typeof body.access_token !== 'string' || body.access_token.length === 0) {
     throw new Error('Decidim OAuth response did not include access_token');
   }
-  return accessToken;
+  return body;
 }
 
 function oauthTokenBody(input: {

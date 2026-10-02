@@ -8,9 +8,7 @@ import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode'
 import { getErrorMessage } from '../../runtime/errors';
 import { createUsersApi } from '../../runtime/clients';
 import { hostProp, pageProp, perPageProp, userAccessTokenProp } from '../../props';
-import { computeHasMore } from '../components/search-component.helpers';
 import type { UsersApiListUsersRequest } from '@octree/decidim-sdk';
-import type { DecidimResourceList } from '../../types/decidim-api';
 
 export const searchUsers = createAction({
   name: 'usersList',
@@ -53,14 +51,7 @@ export const searchUsers = createAction({
         perPage,
       };
       const result = await api.listUsers(usersReq);
-      const list = (result.data as DecidimResourceList<unknown> | undefined)?.data ?? [];
-      const arr = Array.isArray(list) ? list : [];
-      return response({
-        users: arr,
-        count: arr.length,
-        has_more: computeHasMore(arr.length, perPage),
-        auth_mode: resolved.mode,
-      });
+      return response((result.data ?? {}) as unknown as Record<string, unknown>);
     } catch (e) {
       return response({}, getErrorMessage(e));
     }

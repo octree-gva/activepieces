@@ -35,7 +35,7 @@ describe('createMagicLink', () => {
     });
   });
 
-  it('returns normalized output fields', async () => {
+  it('returns the API body as-is', async () => {
     const result = await createMagicLink.run(
       createMockActionContext({
         auth: decidimCustomAuth,
@@ -48,9 +48,12 @@ describe('createMagicLink', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected success');
-    expect(result.token).toBe('magic-token');
-    expect(result.signInUrl).toBe('https://example.org/signin');
-    expect(result.redirectUrl).toBe('https://example.org/assemblies/42');
+    expect(result.data).toEqual({
+      attributes: { token: 'magic-token' },
+      links: { sign_in: { href: 'https://example.org/signin' } },
+    });
+    expect(result).not.toHaveProperty('signInUrl');
+    expect(result).not.toHaveProperty('magic_link');
     expect(generateMagicLinkMock).toHaveBeenCalledWith(
       expect.objectContaining({
         generateMagicLinkPayload: { data: { redirect_url: 'https://example.org/assemblies/42' } },

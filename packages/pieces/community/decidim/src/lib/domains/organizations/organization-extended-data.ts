@@ -97,12 +97,7 @@ export const organizationExtendedData = createAction({
           authorization: auth,
         };
         const result = await api.getOrganizationExtendedData(readReq);
-        return response({
-          data: (result.data as { data?: unknown })?.data,
-          organization_id: String(id),
-          object_path: objectPath,
-          auth_mode: resolved.mode,
-        });
+        return response((result.data ?? {}) as unknown as Record<string, unknown>);
       }
 
       if (action === 'update') {
@@ -118,12 +113,7 @@ export const organizationExtendedData = createAction({
           userExtendedDataPayload: { data, object_path },
         };
         const result = await api.setOrganizationExtendedData(setReq);
-        return response({
-          data: (result.data as { data?: unknown })?.data,
-          organization_id: String(id),
-          object_path,
-          auth_mode: resolved.mode,
-        });
+        return response((result.data ?? {}) as unknown as Record<string, unknown>);
       }
 
       return response({}, `Unknown action: ${String(action)}`);

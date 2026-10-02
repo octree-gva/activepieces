@@ -43,7 +43,7 @@ describe('organizations action', () => {
     getOrganization.mockReset();
   });
 
-  it('search filters by host on JSON:API attributes', async () => {
+  it('search returns API list body as-is', async () => {
     listOrganizations.mockResolvedValueOnce({
       data: {
         data: [
@@ -62,11 +62,12 @@ describe('organizations action', () => {
 
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.organizations).toEqual([
+    expect(out.data).toEqual([
+      { id: '1', attributes: { host: 'a.example.org' } },
       { id: '2', attributes: { host: 'b.example.org' } },
       { id: '3', host: 'b.example.org' },
+      'skip',
     ]);
-    expect(out.count).toBe(2);
   });
 
   it('search requires host', async () => {
@@ -74,7 +75,7 @@ describe('organizations action', () => {
     expect(out.ok).toBe(false);
   });
 
-  it('search treats missing data as empty', async () => {
+  it('search returns empty body when data key is missing', async () => {
     listOrganizations.mockResolvedValueOnce({ data: {} });
     const out = await run({
       action: 'search',
@@ -82,7 +83,7 @@ describe('organizations action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.organizations).toEqual([]);
+    expect(out).toEqual({ ok: true, error: null });
   });
 
   it('read requires organization id', async () => {
@@ -90,7 +91,7 @@ describe('organizations action', () => {
     expect(out.ok).toBe(false);
   });
 
-  it('search treats non-array payload as empty', async () => {
+  it('search returns API body as-is for non-array data', async () => {
     listOrganizations.mockResolvedValueOnce({ data: { data: 'bad' } });
     const out = await run({
       action: 'search',
@@ -98,25 +99,7 @@ describe('organizations action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.organizations).toEqual([]);
-  });
-
-  it('search skips rows whose host does not match', async () => {
-    listOrganizations.mockResolvedValueOnce({
-      data: {
-        data: [
-          { id: '1', attributes: { host: 'other.org' } },
-          { id: '2', attributes: { name: 'no-host' } },
-        ],
-      },
-    });
-    const out = await run({
-      action: 'search',
-      searchOptions: { host: 'b.example.org' },
-    });
-    expect(out.ok).toBe(true);
-    if (!out.ok) throw new Error('expected success');
-    expect(out.organizations).toEqual([]);
+    expect(out.data).toBe('bad');
   });
 
   it('search returns an error when the API throws', async () => {
@@ -138,7 +121,7 @@ describe('organizations action', () => {
     });
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.organization_id).toBe('9');
+    expect(out.data).toEqual({ id: '9', attributes: { host: 'x.org' } });
     expect(getOrganization).toHaveBeenCalledWith(
       expect.objectContaining({ id: '9', authorization: 'Bearer token' })
     );

@@ -2,14 +2,9 @@ import { vi, type Mock } from 'vitest';
 import { createParticipant } from '../../../../src/lib/domains/users/participant-crud';
 import { configuration } from '../../../../src/lib/utils/configuration';
 import type { Response } from '../../../../src/lib/utils/response';
-import type { DecidimAccessToken } from '../../../../src/types';
 import { OAuthApi, UsersApi } from '@octree/decidim-sdk';
-import {
-  createImpersonateToken,
-  buildOAuthGrantParam,
-} from '../../../../src/lib/domains/users/impersonate';
+import { buildOAuthGrantParam } from '../../../../src/lib/domains/users/impersonate';
 import { introspectToken } from '../../../../src/lib/utils/introspecToken';
-import { readParticipant } from '../../../../src/lib/domains/users/participant-crud';
 
 vi.mock('@octree/decidim-sdk', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@octree/decidim-sdk')>();
@@ -25,7 +20,6 @@ vi.mock('../../../../src/lib/utils/systemAccessToken', () => ({
 }));
 
 vi.mock('../../../../src/lib/domains/users/impersonate', () => ({
-  createImpersonateToken: vi.fn(),
   buildOAuthGrantParam: vi.fn(),
 }));
 
@@ -33,19 +27,11 @@ vi.mock('../../../../src/lib/utils/introspecToken', () => ({
   introspectToken: vi.fn(),
 }));
 
-vi.mock('../../../../src/lib/domains/users/participant-crud', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../../../src/lib/domains/users/participant-crud')>();
-  return {
-    ...actual,
-    readParticipant: vi.fn(),
-  };
-});
-
 type CreateParticipantSuccess = Response<{
-  token: DecidimAccessToken;
-  userId: string;
-  user: { id: number | string; nickname?: string } | null;
+  token: Record<string, unknown>;
+  introspect?: Record<string, unknown>;
+  extended_data?: unknown;
+  users?: Record<string, unknown>;
 }>;
 
 describe('createParticipant', () => {
@@ -58,26 +44,29 @@ describe('createParticipant', () => {
     mockUsersApi = {
       listUsers: vi.fn().mockResolvedValue({ data: { data: [] } }),
       getUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
-      setUserExtendedData: vi.fn().mockResolvedValue({ data: { data: {} } }),
+      setUserExtendedData: vi.fn().mockResolvedValue({ data: { data: { set: true } } }),
     } as unknown as UsersApi;
     mockOAuthApi = {
-      createToken: vi.fn().mockResolvedValue({ data: { access_token: 'token' } }),
+      createToken: vi.fn().mockResolvedValue({ data: { access_token: 'impersonate-token' } }),
     } as unknown as OAuthApi;
     (UsersApi as Mock).mockImplementation(() => mockUsersApi);
     (OAuthApi as Mock).mockImplementation(() => mockOAuthApi);
-    (createImpersonateToken as Mock).mockResolvedValue({ access_token: 'impersonate-token' });
     (buildOAuthGrantParam as Mock).mockReturnValue({});
   });
 
   it('should create new participant when user does not exist', async () => {
-    mockUsersApi.listUsers = vi.fn()
+    const createdUser = { id: '456', nickname: 'newuser' };
+    mockUsersApi.listUsers = vi
+      .fn()
       .mockResolvedValueOnce({ data: { data: [] } })
-      .mockResolvedValueOnce({ data: { data: [{ id: '456', nickname: 'newuser' }] } });
+      .mockResolvedValueOnce({ data: { data: [createdUser] } });
+    mockUsersApi.getUserExtendedData = vi
+      .fn()
+      .mockResolvedValue({ data: { data: { chatbotID: '31' } } });
+    mockUsersApi.setUserExtendedData = vi
+      .fn()
+      .mockResolvedValue({ data: { data: { set: true } } });
     (introspectToken as Mock).mockResolvedValue({ resource: { id: '456' } });
-    (readParticipant as Mock).mockResolvedValue({
-      ok: true,
-      user: { id: '456', nickname: 'newuser' },
-    });
 
     const result = (await createParticipant(config, 'clientId', 'clientSecret', mockOAuthApi, {
       createOptions: {
@@ -91,15 +80,23 @@ describe('createParticipant', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected success');
-    expect(result.userId).toBe('456');
     expect(result.token).toEqual({ access_token: 'impersonate-token' });
-    expect(result.user).toEqual({ id: '456', nickname: 'newuser' });
+    expect(result.introspect).toEqual({ resource: { id: '456' } });
+    expect(result.users).toEqual({ data: [createdUser] });
+    expect(result.extended_data).toEqual({ data: { chatbotID: '31' } });
+    expect(result).not.toHaveProperty('userId');
+    expect(result).not.toHaveProperty('user');
   });
 
   it('should use existing participant when user exists', async () => {
     const existingUser = { id: 123, nickname: 'existinguser' };
-    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [existingUser] } });
-    (readParticipant as Mock).mockResolvedValue({ ok: true, user: existingUser });
+    mockUsersApi.listUsers = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { data: [existingUser] } })
+      .mockResolvedValueOnce({ data: { data: [existingUser] } });
+    mockUsersApi.getUserExtendedData = vi
+      .fn()
+      .mockResolvedValue({ data: { data: {} } });
 
     const result = (await createParticipant(config, 'clientId', 'clientSecret', mockOAuthApi, {
       createOptions: {
@@ -111,7 +108,9 @@ describe('createParticipant', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected success');
-    expect(result.userId).toBe('123');
+    expect(result.token).toEqual({ access_token: 'impersonate-token' });
+    expect(result).not.toHaveProperty('introspect');
+    expect(result.users).toEqual({ data: [existingUser] });
     expect(introspectToken).not.toHaveBeenCalled();
   });
 
@@ -128,9 +127,11 @@ describe('createParticipant', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected success');
-    expect(result.userId).toBe('789');
-    expect(result.user).toBeNull();
-    expect(readParticipant).not.toHaveBeenCalled();
+    expect(result.token).toEqual({ access_token: 'impersonate-token' });
+    expect(result.introspect).toEqual({ resource: { id: '789' } });
+    expect(result).not.toHaveProperty('users');
+    expect(result).not.toHaveProperty('userId');
+    expect(mockUsersApi.getUserExtendedData).not.toHaveBeenCalled();
   });
 
   it('should return error when user creation fails', async () => {

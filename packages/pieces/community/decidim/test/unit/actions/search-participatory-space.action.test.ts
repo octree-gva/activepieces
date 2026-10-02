@@ -46,8 +46,7 @@ describe('searchParticipatorySpace action', () => {
 
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.spaces).toEqual([{ id: 1 }, { id: 2 }]);
-    expect(out.count).toBe(2);
+    expect(out.data).toEqual([{ id: 1 }, { id: 2 }]);
     expect(searchSpaces).toHaveBeenCalledTimes(1);
   });
 
@@ -72,15 +71,14 @@ describe('searchParticipatorySpace action', () => {
     );
   });
 
-  it('returns empty spaces when API returns non-array data', async () => {
+  it('returns API body as-is for non-array data', async () => {
     searchSpaces.mockResolvedValueOnce({ data: { data: 'bad' } });
 
     const out = await run({ perPage: 10 });
 
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.spaces).toEqual([]);
-    expect(out.count).toBe(0);
+    expect(out.data).toBe('bad');
   });
 
   it('searches when no filters are set', async () => {

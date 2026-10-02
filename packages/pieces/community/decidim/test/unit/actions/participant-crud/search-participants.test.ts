@@ -41,7 +41,7 @@ describe('searchParticipants', () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.users).toEqual(mockUsers);
+    expect(result.users).toEqual({ data: mockUsers });
     expect(mockUsersApi.listUsers).toHaveBeenCalledWith(
       expect.objectContaining({
         authorization: 'Bearer system-token',
@@ -90,7 +90,7 @@ describe('searchParticipants', () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.users).toEqual([]);
-    expect(result.count).toBe(0);
+    expect(result.users).toEqual({ data: [] });
+    expect(result).not.toHaveProperty('count');
   });
 });

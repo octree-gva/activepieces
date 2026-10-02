@@ -18,7 +18,7 @@ vi.mock('../../../../src/lib/utils/systemAccessToken', () => ({
   systemAccessToken: vi.fn().mockResolvedValue('system-token'),
 }));
 
-type SearchResult = Response<{ users: unknown[]; count: number }>;
+type SearchResult = Response<{ users?: Record<string, unknown> }>;
 
 const mockUsersApi = {
   listUsers: vi.fn(),
@@ -57,8 +57,7 @@ describe('Search Participants Integration', () => {
     })) as SearchResult;
 
     expect(result.ok).toBe(true);
-    expect(result.users).toEqual(mockUsers);
-    expect(result.count).toBe(2);
+    expect(result.users).toEqual({ data: mockUsers });
   });
 
   it('should return empty results when no matches found', async () => {
@@ -72,8 +71,7 @@ describe('Search Participants Integration', () => {
     })) as SearchResult;
 
     expect(result.ok).toBe(true);
-    expect(result.users).toEqual([]);
-    expect(result.count).toBe(0);
+    expect(result.users).toEqual({ data: [] });
   });
 
   it('should map extended data filter to Cont query', async () => {

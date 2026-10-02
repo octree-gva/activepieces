@@ -21,8 +21,6 @@ import {
   perPageProp,
   userAccessTokenProp,
 } from '../../props';
-import type { DecidimResourceList } from '../../types/decidim-api';
-import { computeHasMore } from './search-component.helpers';
 import {
   buildBlogComponentReadParams,
   buildBlogComponentsListParams,
@@ -134,14 +132,7 @@ export const typedComponents = createAction({
                   listOptions: o,
                 })
               );
-        const list = (result.data as DecidimResourceList<unknown> | undefined)?.data ?? [];
-        const arr = Array.isArray(list) ? list : [];
-        return response({
-          components: arr,
-          count: arr.length,
-          has_more: computeHasMore(arr.length, perPage),
-          auth_mode: resolved.mode,
-        });
+        return response((result.data ?? {}) as unknown as Record<string, unknown>);
       }
 
       if (op === 'read') {
@@ -164,12 +155,7 @@ export const typedComponents = createAction({
                   readOptions: o,
                 })
               );
-        const data = (result.data as { data?: unknown } | undefined)?.data;
-        return response({
-          component: data,
-          component_id: String(id),
-          auth_mode: resolved.mode,
-        });
+        return response((result.data ?? {}) as unknown as Record<string, unknown>);
       }
 
       return response({}, `Unknown action: ${op}`);

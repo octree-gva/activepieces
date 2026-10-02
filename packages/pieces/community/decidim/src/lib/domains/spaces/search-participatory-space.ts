@@ -16,14 +16,6 @@ import { asSpacesApiSearchSpacesRequest } from '../../runtime/sdk-casts';
 import { createSpacesApi } from '../../runtime/clients';
 import { buildSearchSpacesRequestParams } from './spaces-search-params';
 
-function readSpacesFromSearchResult(result: unknown): unknown[] {
-  if (result === null || typeof result !== 'object') return [];
-  const data = Reflect.get(result, 'data');
-  if (data === null || typeof data !== 'object') return [];
-  const list = Reflect.get(data, 'data');
-  return Array.isArray(list) ? list : [];
-}
-
 export const searchParticipatorySpace = createAction({
   auth: decidimAuth,
   name: 'searchParticipatorySpace',
@@ -69,12 +61,7 @@ export const searchParticipatorySpace = createAction({
       const result = await client.searchSpaces(
         asSpacesApiSearchSpacesRequest(requestParams)
       );
-      const spaces = readSpacesFromSearchResult(result);
-
-      return response({
-        spaces,
-        count: spaces.length,
-      });
+      return response((result.data ?? {}) as unknown as Record<string, unknown>);
     } catch (e) {
       return response({}, getErrorMessage(e));
     }

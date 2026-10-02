@@ -16,14 +16,13 @@ import {
   roleIdProp,
   userAccessTokenProp,
 } from '../../props';
-import { computeHasMore } from '../components/search-component.helpers';
 import type {
   RolesApiCreateRoleRequest,
   RolesApiDeleteRoleRequest,
   RolesApiGetRoleRequest,
   RolesApiListRolesRequest,
 } from '@octree/decidim-sdk';
-import { createRoleRequestBodyFromRecord } from '../../runtime/sdk-casts';
+import { createRoleRequestBodyFromRecord, asResponseRecord } from '../../runtime/sdk-casts';
 
 export const roles = createAction({
   name: 'roles',
@@ -116,14 +115,7 @@ export const roles = createAction({
         const perPage = z.number().int().min(1).max(100).default(50).parse(o.perPage ?? 50);
         const listReq: RolesApiListRolesRequest = { authorization: auth, page, perPage };
         const result = await api.listRoles(listReq);
-        const list = (result.data as { data?: unknown[] })?.data ?? [];
-        const arr = Array.isArray(list) ? list : [];
-        return response({
-          roles: arr,
-          count: arr.length,
-          has_more: computeHasMore(arr.length, perPage),
-          auth_mode: resolved.mode,
-        });
+        return response((result.data ?? {}) as unknown as Record<string, unknown>);
       }
 
       const idOpts = (context.propsValue.readDestroyOptions as Record<string, unknown>) || {};
@@ -133,19 +125,15 @@ export const roles = createAction({
         const id = z.string().min(1).parse(idOpts.roleId);
         const readReq: RolesApiGetRoleRequest = { id, authorization: auth };
         const result = await api.getRole(readReq);
-        return response({
-          role: (result.data as { data?: unknown })?.data,
-          role_id: id,
-          auth_mode: resolved.mode,
-        });
+        return response((result.data ?? {}) as unknown as Record<string, unknown>);
       }
 
       if (action === 'destroy') {
         assertProp(idOpts.roleId, 'Role ID required');
         const id = z.string().min(1).parse(idOpts.roleId);
         const destroyReq: RolesApiDeleteRoleRequest = { id, authorization: auth };
-        await api.deleteRole(destroyReq);
-        return response({ destroyed: true, role_id: id, auth_mode: resolved.mode });
+        const result = await api.deleteRole(destroyReq);
+        return response(asResponseRecord(result.data));
       }
 
       if (action === 'create' || action === 'addPrivateAssemblyMember') {
@@ -179,10 +167,7 @@ export const roles = createAction({
           createRoleRequest: typedBody,
         };
         const axiosResult = await api.createRole(createReq);
-        return response({
-          role: (axiosResult.data as { data?: unknown } | undefined)?.data,
-          auth_mode: resolved.mode,
-        });
+        return response(asResponseRecord(axiosResult.data));
       }
 
       return response({}, `Unknown action: ${String(action)}`);

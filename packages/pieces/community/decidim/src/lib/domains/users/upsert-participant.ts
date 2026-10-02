@@ -7,7 +7,7 @@ import { extractAuth } from '../../utils/auth';
 import { configuration } from '../../utils/configuration';
 import { response } from '../../utils/response';
 import { getErrorMessage } from '../../runtime/errors';
-import { asUsersApiUsersRequest } from '../../runtime/sdk-casts';
+import { asResponseRecord, asUsersApiUsersRequest } from '../../runtime/sdk-casts';
 import { createParticipant, updateParticipant } from './participant-crud';
 import {
   hostProp,
@@ -40,6 +40,40 @@ function upsertByProp() {
       ],
     },
   });
+}
+
+function extractUserIdFromCreateResult(createResult: Record<string, unknown>): string | null {
+  const introspect = createResult['introspect'];
+  if (introspect !== null && typeof introspect === 'object') {
+    const resource = Reflect.get(introspect, 'resource');
+    if (resource !== null && typeof resource === 'object') {
+      const id = Reflect.get(resource, 'id');
+      if (id !== undefined && id !== null && String(id).trim() !== '') {
+        return String(id);
+      }
+    }
+  }
+
+  const users = createResult['users'];
+  if (users !== null && typeof users === 'object') {
+    const data = Reflect.get(users, 'data');
+    if (Array.isArray(data) && data.length > 0) {
+      const first = data[0];
+      if (first !== null && typeof first === 'object') {
+        const id = Reflect.get(first, 'id');
+        if (id !== undefined && id !== null && String(id).trim() !== '') {
+          return String(id);
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function apiBodyFromResponse(result: Record<string, unknown>): Record<string, unknown> {
+  const { ok: _ok, error: _error, ...body } = result;
+  return body;
 }
 
 export const upsertParticipant = createAction({
@@ -135,26 +169,14 @@ export const upsertParticipant = createAction({
 
       const searchResult = await usersApi.listUsers(asUsersApiUsersRequest(searchReq));
       const existing = searchResult.data?.data?.[0] ?? null;
+      const usersBody = asResponseRecord(searchResult.data);
 
       if (existing) {
-        return response({
-          existed: true,
-          created: false,
-          matchedBy: by,
-          matchedValue,
-          user: existing,
-          userId: String(existing.id),
-        });
+        return response({ users: usersBody });
       }
 
       if (!registerOnMissing) {
-        return response({
-          existed: false,
-          created: false,
-          matchedBy: by,
-          matchedValue,
-          user: null,
-        });
+        return response({ users: usersBody });
       }
 
       const username = fallbackNickname({
@@ -182,38 +204,35 @@ export const upsertParticipant = createAction({
       if (!createResult.ok) {
         return createResult;
       }
-      const createdPayload = createResult as typeof createResult & {
-        userId: string;
-        user?: unknown | null;
-        token?: { access_token?: string };
-      };
-      if (!createdPayload.userId) {
-        return response({}, 'Upsert failed: missing userId from createParticipant');
-      }
 
-      // Ensure path-based value is present when matching by extended_data.
       if (by === 'extended_data') {
+        const userId = extractUserIdFromCreateResult(createResult);
+        if (!userId) {
+          return response(
+            {},
+            'Upsert failed: could not determine user id after create'
+          );
+        }
         const jsonPath = String(options.jsonPath);
         const value = options.value as string | number;
         const nested = buildNestedObject(jsonPath, value);
-        await updateParticipant(config, clientId, clientSecret, {
+        const updateResult = await updateParticipant(config, clientId, clientSecret, {
           updateOptions: {
-            userId: createdPayload.userId,
+            userId,
             extendedData: nested,
             dataPath: '.',
           },
         });
+        if (!updateResult.ok) {
+          return updateResult;
+        }
+        return response({
+          ...apiBodyFromResponse(createResult),
+          extended_data: apiBodyFromResponse(updateResult),
+        });
       }
 
-      return response({
-        existed: false,
-        created: true,
-        matchedBy: by,
-        matchedValue,
-        user: createdPayload.user ?? null,
-        userId: createdPayload.userId,
-        accessToken: createdPayload.token?.access_token,
-      });
+      return createResult;
     } catch (e) {
       return response({}, getErrorMessage(e));
     }

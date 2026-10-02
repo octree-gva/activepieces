@@ -18,7 +18,7 @@ vi.mock('../../../../src/lib/utils/systemAccessToken', () => ({
   systemAccessToken: vi.fn().mockResolvedValue('system-token'),
 }));
 
-type UpdateResult = Response<{ userId: string; data: unknown }>;
+type UpdateResult = Response<{ data?: unknown }>;
 
 const mockUsersApi = {
   setUserExtendedData: vi.fn(),
@@ -61,8 +61,8 @@ describe('Update Participant Integration', () => {
     })) as UpdateResult;
 
     expect(result.ok).toBe(true);
-    expect(result.userId).toBe('123');
     expect(result.data).toEqual(updatedData);
+    expect(result).not.toHaveProperty('userId');
   });
 
   it('should update data at custom path', async () => {
@@ -135,7 +135,7 @@ describe('Update Participant Integration', () => {
     expect(result.error).toBeDefined();
   });
 
-  it('should use extendedData when API response data is missing', async () => {
+  it('should use empty body when API response data is missing', async () => {
     const extendedData = { chatbotID: '31' };
     mockUsersApi.setUserExtendedData = vi.fn().mockResolvedValue({ data: null });
 
@@ -148,6 +148,7 @@ describe('Update Participant Integration', () => {
     })) as UpdateResult;
 
     expect(result.ok).toBe(true);
-    expect(result.data).toEqual(extendedData);
+    expect(result).not.toHaveProperty('data');
+    expect(result).not.toHaveProperty('userId');
   });
 });

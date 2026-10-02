@@ -38,39 +38,41 @@ describe('readParticipant', () => {
 
   it('should return participant data and user info', async () => {
     const mockUserData = { chatbotID: '31' };
-    const mockUser = { id: 123, nickname: 'testuser' };
+    const mockUsersBody = { data: [{ id: 123, nickname: 'testuser' }] };
     mockUsersApi.getUserExtendedData = vi
       .fn()
       .mockResolvedValue({ data: { data: mockUserData } });
-    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [mockUser] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: mockUsersBody });
 
     const result = await readParticipant(config, 'clientId', 'clientSecret', {
       readOptions: { userId: '123' },
     });
 
     expect(result.ok).toBe(true);
-    expect(result.userId).toBe('123');
-    expect(result.data).toEqual(mockUserData);
-    expect(result.user).toEqual(mockUser);
+    expect(result.extended_data).toEqual({ data: mockUserData });
+    expect(result.users).toEqual(mockUsersBody);
+    expect(result).not.toHaveProperty('userId');
+    expect(result).not.toHaveProperty('user');
+    expect(result).not.toHaveProperty('data');
   });
 
-  it('should return null data when userData not found (404)', async () => {
-    const mockUser = { id: 123, nickname: 'testuser' };
+  it('should return null extended_data when not found (404)', async () => {
+    const mockUsersBody = { data: [{ id: 123, nickname: 'testuser' }] };
     const axiosError = {
       response: { status: 404 },
       isAxiosError: true,
     };
     mockIsAxiosError.mockReturnValue(true);
     mockUsersApi.getUserExtendedData = vi.fn().mockRejectedValue(axiosError);
-    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [mockUser] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: mockUsersBody });
 
     const result = await readParticipant(config, 'clientId', 'clientSecret', {
       readOptions: { userId: '123' },
     });
 
     expect(result.ok).toBe(true);
-    expect(result.data).toBeNull();
-    expect(result.user).toEqual(mockUser);
+    expect(result.extended_data).toBeNull();
+    expect(result.users).toEqual(mockUsersBody);
   });
 
   it('should throw non-404 errors', async () => {

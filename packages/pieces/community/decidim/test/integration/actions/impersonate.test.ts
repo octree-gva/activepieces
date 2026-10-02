@@ -28,10 +28,12 @@ vi.mock('../../../src/lib/utils/introspecToken', () => ({
   introspectToken: vi.fn(),
 }));
 
-type ImpersonateResult = Response<{
-  token: DecidimAccessToken | null;
-  user: ResourceDetails | null;
-}>;
+type ImpersonateResult = Response<
+  DecidimAccessToken & {
+    token?: DecidimAccessToken | null;
+    user?: ResourceDetails | null;
+  }
+>;
 
 const mockOAuthApi = {
   createToken: vi.fn(),
@@ -71,12 +73,7 @@ describe('Impersonate Action Integration', () => {
       expect(result).toEqual({
         ok: true,
         error: null,
-        token: sampleDecidimAccessToken,
-        user: null,
-        access_token: sampleDecidimAccessToken.access_token,
-        token_type: sampleDecidimAccessToken.token_type,
-        expires_in: sampleDecidimAccessToken.expires_in,
-        scope: sampleDecidimAccessToken.scope,
+        ...sampleDecidimAccessToken,
       });
     });
 
@@ -110,12 +107,8 @@ describe('Impersonate Action Integration', () => {
       expect(result).toEqual({
         ok: true,
         error: null,
-        token: sampleDecidimAccessToken,
+        ...sampleDecidimAccessToken,
         user: mockUserResource,
-        access_token: sampleDecidimAccessToken.access_token,
-        token_type: sampleDecidimAccessToken.token_type,
-        expires_in: sampleDecidimAccessToken.expires_in,
-        scope: sampleDecidimAccessToken.scope,
       });
     });
 

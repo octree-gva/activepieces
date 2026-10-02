@@ -100,11 +100,7 @@ export const meExtendedData = createAction({
           objectPath: object_path,
         };
         const result = await api.getUserExtendedData(getReq);
-        return response({
-          data: (result.data as { data?: unknown })?.data,
-          object_path,
-          auth_mode: resolved.mode,
-        });
+        return response((result.data ?? {}) as unknown as Record<string, unknown>);
       }
 
       if (op === 'set') {
@@ -120,11 +116,7 @@ export const meExtendedData = createAction({
           },
         };
         const result = await api.setUserExtendedData(setReq);
-        return response({
-          data: (result.data as { data?: unknown })?.data,
-          object_path,
-          auth_mode: resolved.mode,
-        });
+        return response((result.data ?? {}) as unknown as Record<string, unknown>);
       }
 
       return response({}, `Unknown action: ${op}`);

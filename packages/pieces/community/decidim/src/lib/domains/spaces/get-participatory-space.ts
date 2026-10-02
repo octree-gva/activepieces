@@ -14,7 +14,6 @@ import type {
   SpacesApiShowInitiativeRequest,
   SpacesApiShowParticipatoryProcessRequest,
 } from '@octree/decidim-sdk';
-import type { DecidimSingleResource } from '../../types/decidim-api';
 
 export const getParticipatorySpace = createAction({
   name: 'getParticipatorySpace',
@@ -86,13 +85,7 @@ export const getParticipatorySpace = createAction({
           return response({}, `Unknown space type: ${t}`);
       }
 
-      const data = (result.data as DecidimSingleResource<unknown> | undefined)?.data;
-      return response({
-        space: data,
-        space_id: String(id),
-        space_type: t,
-        auth_mode: resolved.mode,
-      });
+      return response((result.data ?? {}) as unknown as Record<string, unknown>);
     } catch (e) {
       return response({}, getErrorMessage(e));
     }

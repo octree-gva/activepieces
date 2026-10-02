@@ -4,7 +4,7 @@
  */
 
 import type {
-  BlogsApiGetBlogPostRequest,
+  BlogsApiBlogShowPaginationRequest,
   BlogsApiListBlogPostsRequest,
   ComponentsApiSearchComponentsRequest,
   CreateRoleRequest,
@@ -51,8 +51,8 @@ export function asBlogsApiBlogsRequest(payload: unknown): BlogsApiListBlogPostsR
   return payload as BlogsApiListBlogPostsRequest;
 }
 
-export function asBlogsApiBlogRequest(payload: unknown): BlogsApiGetBlogPostRequest {
-  return payload as BlogsApiGetBlogPostRequest;
+export function asBlogsApiBlogRequest(payload: unknown): BlogsApiBlogShowPaginationRequest {
+  return payload as BlogsApiBlogShowPaginationRequest;
 }
 
 export function updateOrganizationPayloadFromRecord(
@@ -67,8 +67,9 @@ export function createRoleRequestBodyFromRecord(
   return payload as unknown as CreateRoleRequest;
 }
 
-/** JSON:API-style envelope `{ data?: { ... } }` on generateMagicLink (and similar) responses. */
-export function magicLinkResultResourceData(data: unknown): Record<string, unknown> | undefined {
-  const envelope = data as { data?: Record<string, unknown> };
-  return envelope?.data;
+export function asResponseRecord(data: unknown): Record<string, unknown> {
+  if (data !== null && typeof data === 'object' && !Array.isArray(data)) {
+    return data as Record<string, unknown>;
+  }
+  return {};
 }

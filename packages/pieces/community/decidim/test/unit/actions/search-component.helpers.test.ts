@@ -1,17 +1,4 @@
-import {
-  buildSearchComponentsRequestParams as buildComponentParams,
-  computeHasMore,
-} from '../../../src/lib/domains/components/search-component.helpers';
-
-describe('computeHasMore', () => {
-  it('is true when page is full', () => {
-    expect(computeHasMore(10, 10)).toBe(true);
-  });
-
-  it('is false when page not full', () => {
-    expect(computeHasMore(9, 10)).toBe(false);
-  });
-});
+import { buildSearchComponentsRequestParams as buildComponentParams } from '../../../src/lib/domains/components/search-component.helpers';
 
 describe('buildSearchComponentsRequestParams', () => {
   it('maps component ids to filterIdIn', () => {

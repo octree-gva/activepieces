@@ -187,10 +187,14 @@ export const impersonate = createAction({
 
     try {
       const accessToken = await createImpersonateToken(oauthApi, oauthGrantParam);
+      if (!fetchUserInfo) {
+        return response({ ...accessToken } as unknown as Record<string, unknown>);
+      }
+
       const userInfoResult = await fetchUserInfoIfNeeded(
         oauthApi,
         accessToken,
-        fetchUserInfo || false,
+        true,
         clientId,
         clientSecret
       );
@@ -199,14 +203,10 @@ export const impersonate = createAction({
         return response({ token: null, user: null }, 'User not active');
       }
 
-      const t = userInfoResult.token;
       return response({
-        ...userInfoResult,
-        access_token: t.access_token,
-        token_type: t.token_type,
-        expires_in: t.expires_in,
-        scope: t.scope,
-      });
+        ...userInfoResult.token,
+        ...(userInfoResult.user != null ? { user: userInfoResult.user } : {}),
+      } as unknown as Record<string, unknown>);
     } catch (error) {
       const errorResult = handleImpersonateError(error, registerOnMissing || false);
       return response(errorResult, errorResult.error);

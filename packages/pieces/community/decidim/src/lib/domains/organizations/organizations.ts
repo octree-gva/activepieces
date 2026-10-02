@@ -85,21 +85,14 @@ export const organizations = createAction({
         await propsValidation.validateZod(o, {
           host: z.string().min(1),
         });
-        const host = z.string().min(1).parse(o.host).trim();
+        z.string().min(1).parse(o.host);
         const listReq: OrganizationsApiListOrganizationsRequest = {
           authorization: auth,
           page: 1,
           perPage: 100,
         };
         const result = await api.listOrganizations(listReq);
-        const list = (result.data as { data?: unknown[] })?.data ?? [];
-        const arr = Array.isArray(list) ? list : [];
-        const organizations = arr.filter((row) => organizationHostEquals(row, host));
-        return response({
-          organizations,
-          count: organizations.length,
-          auth_mode: resolved.mode,
-        });
+        return response((result.data ?? {}) as unknown as Record<string, unknown>);
       }
 
       if (action === 'read') {
@@ -111,11 +104,7 @@ export const organizations = createAction({
           authorization: auth,
         };
         const result = await api.getOrganization(readReq);
-        return response({
-          organization: (result.data as { data?: unknown })?.data,
-          organization_id: id,
-          auth_mode: resolved.mode,
-        });
+        return response((result.data ?? {}) as unknown as Record<string, unknown>);
       }
 
       return response({}, `Unknown action: ${String(action)}`);
@@ -124,16 +113,3 @@ export const organizations = createAction({
     }
   },
 });
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object';
-}
-
-function organizationHostEquals(org: unknown, host: string): boolean {
-  if (!isRecord(org)) return false;
-  if (typeof org.host === 'string' && org.host === host) return true;
-  if (isRecord(org.attributes) && typeof org.attributes.host === 'string') {
-    return org.attributes.host === host;
-  }
-  return false;
-}

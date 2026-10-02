@@ -18,7 +18,6 @@ vi.mock('../../../../src/lib/utils/systemAccessToken', () => ({
 }));
 
 vi.mock('../../../../src/lib/domains/users/impersonate', () => ({
-  createImpersonateToken: vi.fn().mockResolvedValue({ access_token: 'token' }),
   buildOAuthGrantParam: vi.fn(),
 }));
 
@@ -32,10 +31,10 @@ type ParticipantCrudContext = Parameters<typeof participantCrud.run>[0];
 type ParticipantCrudRunResult = {
   ok: boolean;
   error: string | null;
-  users?: unknown[];
-  userId?: string;
+  users?: Record<string, unknown>;
   token?: unknown;
-  user?: unknown | null;
+  introspect?: unknown;
+  extended_data?: unknown;
 };
 
 const mockAuth = {
@@ -92,7 +91,7 @@ describe('participantCrud action', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected success');
-    expect(result.users).toBeDefined();
+    expect(result.users).toEqual({ data: [{ id: 1 }] });
   });
 
   it('should execute create action', async () => {

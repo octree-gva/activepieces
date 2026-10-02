@@ -42,7 +42,7 @@ describe('searchUsers action', () => {
     const out = await run();
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.users).toEqual([{ id: 1 }]);
+    expect(out.data).toEqual([{ id: 1 }]);
     expect(searchUsers.displayName).toBe('Search Users');
     expect(listUsers).toHaveBeenCalledWith(
       expect.objectContaining({ page: 1, perPage: 50 })
@@ -57,20 +57,20 @@ describe('searchUsers action', () => {
     );
   });
 
-  it('treats missing data as empty', async () => {
+  it('returns API body when data key is missing', async () => {
     listUsers.mockResolvedValueOnce({ data: {} });
     const out = await run();
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.users).toEqual([]);
+    expect(out).toEqual({ ok: true, error: null });
   });
 
-  it('treats non-array payload as empty', async () => {
+  it('returns API body as-is for non-array data', async () => {
     listUsers.mockResolvedValueOnce({ data: { data: 'bad' } });
     const out = await run();
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.users).toEqual([]);
+    expect(out.data).toBe('bad');
   });
 
   it('returns error when the API throws', async () => {

@@ -19,7 +19,10 @@ vi.mock('../../../../src/lib/utils/systemAccessToken', () => ({
   systemAccessToken: vi.fn().mockResolvedValue('system-token'),
 }));
 
-type ReadResult = Response<{ userId: string; data: unknown; user: unknown }>;
+type ReadResult = Response<{
+  extended_data: unknown;
+  users: Record<string, unknown>;
+}>;
 
 const mockUsersApi = {
   getUserExtendedData: vi.fn(),
@@ -59,12 +62,13 @@ describe('Read Participant Integration', () => {
     })) as ReadResult;
 
     expect(result.ok).toBe(true);
-    expect(result.userId).toBe('123');
-    expect(result.data).toEqual(mockUserData);
-    expect(result.user).toEqual(mockUser);
+    expect(result.extended_data).toEqual({ data: mockUserData });
+    expect(result.users).toEqual({ data: [mockUser] });
+    expect(result).not.toHaveProperty('userId');
+    expect(result).not.toHaveProperty('user');
   });
 
-  it('should return null data when userData not found (404)', async () => {
+  it('should return null extended_data when not found (404)', async () => {
     const mockUser = { id: 123, nickname: 'testuser' };
     const axiosError = {
       response: { status: 404 },
@@ -80,9 +84,8 @@ describe('Read Participant Integration', () => {
     })) as ReadResult;
 
     expect(result.ok).toBe(true);
-    expect(result.userId).toBe('123');
-    expect(result.data).toBeNull();
-    expect(result.user).toEqual(mockUser);
+    expect(result.extended_data).toBeNull();
+    expect(result.users).toEqual({ data: [mockUser] });
   });
 
   it('should throw non-404 errors', async () => {

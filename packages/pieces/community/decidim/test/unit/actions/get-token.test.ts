@@ -36,9 +36,9 @@ describe('getToken action', () => {
     sendRequest.mockReset();
   });
 
-  it('requests a client credentials token and returns accessToken', async () => {
+  it('requests a client credentials token and returns the token body', async () => {
     sendRequest.mockResolvedValueOnce({
-      body: { access_token: 'cc-token' },
+      body: { access_token: 'cc-token', token_type: 'Bearer', expires_in: 3600 },
     });
 
     const out = await run({
@@ -48,7 +48,9 @@ describe('getToken action', () => {
 
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.accessToken).toBe('cc-token');
+    expect(out.access_token).toBe('cc-token');
+    expect(out.token_type).toBe('Bearer');
+    expect(out.expires_in).toBe(3600);
     expect(sendRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         method: HttpMethod.POST,
@@ -90,7 +92,7 @@ describe('getToken action', () => {
 
   it('requests an ROPC impersonation token', async () => {
     sendRequest.mockResolvedValueOnce({
-      body: { access_token: 'ropc-token' },
+      body: { access_token: 'ropc-token', scope: 'public oauth whatsapp' },
     });
 
     const out = await run({
@@ -101,7 +103,8 @@ describe('getToken action', () => {
 
     expect(out.ok).toBe(true);
     if (!out.ok) throw new Error('expected success');
-    expect(out.accessToken).toBe('ropc-token');
+    expect(out.access_token).toBe('ropc-token');
+    expect(out.scope).toBe('public oauth whatsapp');
     expect(sendRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         url: 'https://example.decidim.com/oauth/token',
@@ -129,7 +132,7 @@ describe('getToken action', () => {
     });
     expect(out.ok).toBe(false);
     if (out.ok) throw new Error('expected failure');
-    expect(out.accessToken).toBeNull();
+    expect(out).not.toHaveProperty('accessToken');
     expect(out.error).toBe('Nickname is required');
     expect(sendRequest).not.toHaveBeenCalled();
   });
@@ -174,7 +177,7 @@ describe('getToken action', () => {
     });
     expect(out.ok).toBe(false);
     if (out.ok) throw new Error('expected failure');
-    expect(out.accessToken).toBeNull();
+    expect(out).not.toHaveProperty('access_token');
     expect(out.error).toBe('Decidim OAuth response did not include access_token');
   });
 

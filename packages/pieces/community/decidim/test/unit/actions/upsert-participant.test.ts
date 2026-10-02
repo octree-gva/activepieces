@@ -15,17 +15,16 @@ vi.mock('@octree/decidim-sdk', async (importOriginal) => {
 });
 
 type UpsertResult = Response<{
-  existed: boolean;
-  created: boolean;
-  matchedBy: string;
-  matchedValue: string;
-  userId?: string;
-  accessToken?: string;
+  users?: Record<string, unknown>;
+  token?: Record<string, unknown>;
+  introspect?: Record<string, unknown>;
+  extended_data?: Record<string, unknown>;
 }>;
 
 describe('upsertParticipant', () => {
   const mockOAuthApi = {
     createToken: vi.fn(),
+    introspectToken: vi.fn(),
   } as unknown as OAuthApi;
 
   const mockUsersApi = {
@@ -39,6 +38,9 @@ describe('upsertParticipant', () => {
     (OAuthApi as Mock).mockImplementation(() => mockOAuthApi);
     (UsersApi as Mock).mockImplementation(() => mockUsersApi);
     mockOAuthApi.createToken = vi.fn().mockResolvedValue({ data: sampleDecidimAccessToken });
+    mockOAuthApi.introspectToken = vi.fn().mockResolvedValue({
+      data: { active: true, resource: { id: 21 } },
+    });
   });
 
   function runWith(propsValue: Record<string, unknown>) {
@@ -51,9 +53,8 @@ describe('upsertParticipant', () => {
   }
 
   it('returns existing participant by nickname', async () => {
-    mockUsersApi.listUsers = vi.fn().mockResolvedValue({
-      data: { data: [{ id: 10, nickname: 'john' }] },
-    });
+    const usersBody = { data: [{ id: 10, nickname: 'john' }] };
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: usersBody });
 
     const result = await runWith({
       by: 'nickname',
@@ -62,16 +63,14 @@ describe('upsertParticipant', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected success');
-    expect(result.existed).toBe(true);
-    expect(result.created).toBe(false);
-    expect(result.userId).toBe('10');
+    expect(result.users).toEqual(usersBody);
+    expect(result).not.toHaveProperty('existed');
+    expect(result).not.toHaveProperty('created');
+    expect(result).not.toHaveProperty('userId');
   });
 
   it('creates participant by email when missing', async () => {
-    mockUsersApi.listUsers = vi
-      .fn()
-      .mockResolvedValueOnce({ data: { data: [] } })
-      .mockResolvedValueOnce({ data: { data: [{ id: 21, nickname: 'jane' }] } });
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [] } });
 
     const result = await runWith({
       by: 'email',
@@ -84,10 +83,12 @@ describe('upsertParticipant', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected success');
-    expect(result.created).toBe(true);
-    expect(result.existed).toBe(false);
-    expect(result.matchedBy).toBe('email');
-    expect(result.accessToken).toBe(sampleDecidimAccessToken.access_token);
+    expect(result.token).toEqual(sampleDecidimAccessToken);
+    expect(result.introspect).toEqual({ active: true, resource: { id: 21 } });
+    expect(result).not.toHaveProperty('existed');
+    expect(result).not.toHaveProperty('created');
+    expect(result).not.toHaveProperty('matchedBy');
+    expect(result).not.toHaveProperty('accessToken');
   });
 
   it('searches by extended_data json path', async () => {
@@ -104,6 +105,7 @@ describe('upsertParticipant', () => {
     });
 
     expect(result.ok).toBe(true);
+    expect(result.users).toEqual({ data: [{ id: 77 }] });
     expect(mockUsersApi.listUsers).toHaveBeenCalledWith(
       expect.objectContaining({
         filterExtendedDataCont: '{"phone": "+12025550123"}',

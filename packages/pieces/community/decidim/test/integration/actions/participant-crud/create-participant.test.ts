@@ -2,7 +2,6 @@ import { vi, type Mock } from 'vitest';
 import { participantCrud } from '../../../../src/lib/domains/users/participant-crud';
 import { OAuthApi, UsersApi } from '@octree/decidim-sdk';
 import { Response } from '../../../../src/lib/utils/response';
-import { DecidimAccessToken } from '../../../../src/types';
 import { createMockActionContext } from '../../../helpers/create-mock-action-context';
 import {
   decidimCustomAuth,
@@ -13,12 +12,6 @@ import * as introspectTokenModule from '../../../../src/lib/utils/introspecToken
 import type { introspectToken } from '../../../../src/lib/utils/introspecToken';
 
 type IntrospectResult = NonNullable<Awaited<ReturnType<typeof introspectToken>>>;
-
-type ParticipantUserStub = {
-  id: number | string;
-  nickname?: string;
-  email?: string;
-};
 
 vi.mock('@octree/decidim-sdk', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@octree/decidim-sdk')>();
@@ -38,9 +31,10 @@ vi.mock('../../../../src/lib/utils/introspecToken', () => ({
 }));
 
 type CreateResult = Response<{
-  token: DecidimAccessToken;
-  userId: string;
-  user: ParticipantUserStub | null;
+  token: Record<string, unknown>;
+  introspect?: Record<string, unknown>;
+  extended_data?: unknown;
+  users?: Record<string, unknown>;
 }>;
 
 const mockOAuthApi = {
@@ -81,6 +75,7 @@ describe('Create Participant Integration', () => {
       .mockResolvedValueOnce({ data: { data: [] } })
       .mockResolvedValueOnce({ data: { data: [mockUser] } });
     mockUsersApi.getUserExtendedData = vi.fn().mockResolvedValue({ data: { data: {} } });
+    mockUsersApi.setUserExtendedData = vi.fn().mockResolvedValue({ data: { data: { chatbotID: '31' } } });
     (mockOAuthApi.createToken as Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
     vi.spyOn(systemAccessTokenModule, 'systemAccessToken').mockResolvedValue('system-token');
     vi.spyOn(introspectTokenModule, 'introspectToken').mockResolvedValue({
@@ -101,15 +96,18 @@ describe('Create Participant Integration', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected success');
-    expect(result.userId).toBe('456');
-    expect(result.token).toBeDefined();
-    expect(result.user).toEqual(mockUser);
+    expect(result.token).toEqual(sampleDecidimAccessToken);
+    expect(result.introspect).toEqual({ active: true, resource: { id: '456' } });
+    expect(result.users).toEqual({ data: [mockUser] });
+    expect(result.extended_data).toEqual({ data: {} });
+    expect(result).not.toHaveProperty('userId');
+    expect(result).not.toHaveProperty('user');
   });
 
   it('should use existing participant when user exists', async () => {
     const existingUser = { id: 123, nickname: 'existinguser' };
     mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [existingUser] } });
-    mockUsersApi.getUserExtendedData = vi.fn().mockResolvedValue({ data: { data: {} } });
+    mockUsersApi.setUserExtendedData = vi.fn().mockResolvedValue({ data: { data: { chatbotID: '31' } } });
     (mockOAuthApi.createToken as Mock).mockResolvedValue({ data: sampleDecidimAccessToken });
 
     const result = await participantCrud.run(createContext({
@@ -123,7 +121,10 @@ describe('Create Participant Integration', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected success');
-    expect(result.userId).toBe('123');
+    expect(result.token).toEqual(sampleDecidimAccessToken);
+    expect(result.extended_data).toEqual({ data: { chatbotID: '31' } });
+    expect(result).not.toHaveProperty('introspect');
+    expect(result).not.toHaveProperty('userId');
   });
 
   it('should create participant without fetching user info', async () => {
@@ -145,8 +146,10 @@ describe('Create Participant Integration', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected success');
-    expect(result.userId).toBe('789');
-    expect(result.user).toBeNull();
+    expect(result.token).toEqual(sampleDecidimAccessToken);
+    expect(result.introspect).toEqual({ active: true, resource: { id: '789' } });
+    expect(result).not.toHaveProperty('users');
+    expect(result).not.toHaveProperty('user');
   });
 
   it('should return error when user creation fails', async () => {

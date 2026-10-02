@@ -6,7 +6,6 @@ import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode';
 import { getErrorMessage } from '../../runtime/errors';
-import { magicLinkResultResourceData } from '../../runtime/sdk-casts';
 import { createUsersApi } from '../../runtime/clients';
 import type { UsersApiGenerateMagicLinkRequest } from '@octree/decidim-sdk';
 import { hostProp, userAccessTokenProp } from '../../props';
@@ -101,27 +100,7 @@ export const createMagicLink = createAction({
       };
       const result = await api.generateMagicLink(magicReq);
 
-      const data = magicLinkResultResourceData(result.data);
-      const attrs =
-        data && typeof data === 'object' && data !== null && 'attributes' in data
-          ? (data as { attributes?: { token?: string; label?: string } }).attributes
-          : undefined;
-      const links =
-        data && typeof data === 'object' && data !== null && 'links' in data
-          ? (data as { links?: { sign_in?: { href?: string } } }).links
-          : undefined;
-      const token = attrs?.token;
-      const signInHref = links?.sign_in?.href;
-
-      return response({
-        magic_link: data,
-        token,
-        sign_in_url: signInHref,
-        signInUrl: signInHref,
-        ...(trimmedRedirect !== undefined ? { redirectUrl: trimmedRedirect } : {}),
-        access_token: resolved.rawAccessToken,
-        auth_mode: resolved.mode,
-      });
+      return response((result.data ?? {}) as unknown as Record<string, unknown>);
     } catch (e) {
       return response({}, getErrorMessage(e));
     }

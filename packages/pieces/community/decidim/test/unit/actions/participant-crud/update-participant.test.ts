@@ -45,8 +45,8 @@ describe('updateParticipant', () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.userId).toBe('123');
     expect(result.data).toEqual(updatedData);
+    expect(result).not.toHaveProperty('userId');
   });
 
   it('should update data at custom path', async () => {

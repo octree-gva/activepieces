@@ -2,10 +2,6 @@ import { z } from 'zod';
 import { bearerAuthorization } from '../../runtime/authMode';
 import { parseLocales } from '../../runtime/locales';
 
-export function computeHasMore(itemCount: number, effectivePerPage: number): boolean {
-  return itemCount === effectivePerPage;
-}
-
 export function buildSearchComponentsRequestParams(args: {
   accessToken: string;
   componentIds?: unknown;

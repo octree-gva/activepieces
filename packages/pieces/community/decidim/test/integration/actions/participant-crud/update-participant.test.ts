@@ -115,7 +115,7 @@ describe('Update Participant Integration', () => {
     );
   });
 
-  it('should handle API errors', async () => {
+  it('should rethrow API axios errors', async () => {
     const axiosError = {
       response: { status: 400, data: { error: 'Invalid request' } },
       message: 'Bad request',
@@ -123,16 +123,17 @@ describe('Update Participant Integration', () => {
     };
     mockUsersApi.setUserExtendedData = vi.fn().mockRejectedValue(axiosError);
 
-    const result = await participantCrud.run(createContext({
-      action: 'update',
-      updateOptions: {
-        userId: '123',
-        extendedData: { key: 'value' },
-      },
-    })) as UpdateResult;
-
-    expect(result.ok).toBe(false);
-    expect(result.error).toBeDefined();
+    await expect(
+      participantCrud.run(
+        createContext({
+          action: 'update',
+          updateOptions: {
+            userId: '123',
+            extendedData: { key: 'value' },
+          },
+        })
+      )
+    ).rejects.toBe(axiosError);
   });
 
   it('should use empty body when API response data is missing', async () => {

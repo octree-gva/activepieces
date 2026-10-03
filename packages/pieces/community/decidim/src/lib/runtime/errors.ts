@@ -45,6 +45,12 @@ export function getErrorMessage(e: unknown): ErrorInfo {
   return { message: e instanceof Error ? e.message : String(e) };
 }
 
+export function rethrowAxiosError(e: unknown): void {
+  if (axios.isAxiosError(e)) {
+    throw e;
+  }
+}
+
 export type ErrorInfo = {
   message: string;
   details?: Record<string, unknown>;

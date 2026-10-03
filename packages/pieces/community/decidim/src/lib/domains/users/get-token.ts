@@ -5,7 +5,7 @@ import { decidimAuth } from '../../../decidimAuth';
 import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import { assertProp } from '../../utils/assertProp';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { hostProp, usernameProp } from '../../props';
 
 const grantTypeSchema = z.enum(['password', 'client_credentials']);
@@ -73,6 +73,7 @@ export const getToken = createAction({
       });
       return response((body ?? {}) as Record<string, unknown>);
     } catch (e) {
+      rethrowAxiosError(e);
       return response({}, getErrorMessage(e));
     }
   },

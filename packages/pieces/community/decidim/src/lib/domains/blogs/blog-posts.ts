@@ -11,7 +11,7 @@ import { response } from '../../utils/response';
 import { asBlogsApiBlogRequest, asBlogsApiBlogsRequest } from '../../runtime/sdk-casts';
 import { assertProp } from '../../utils/assertProp';
 import { resolveAuthContext } from '../../runtime/authMode';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { createBlogsApi } from '../../runtime/clients';
 import {
   hostProp,
@@ -132,6 +132,7 @@ export const blogPosts = createAction({
 
       return response({}, `Unknown action: ${String(action)}`);
     } catch (error) {
+      rethrowAxiosError(error);
       return response({}, getErrorMessage(error));
     }
   },

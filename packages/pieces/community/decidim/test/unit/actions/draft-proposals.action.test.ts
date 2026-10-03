@@ -185,6 +185,22 @@ describe('draftProposals action', () => {
     expect(updateDraftProposal).toHaveBeenCalled();
   });
 
+  it('update rejects on axios HTTP 400', async () => {
+    const axiosError = {
+      message: 'Request failed with status code 400',
+      response: { status: 400, data: { error: 'Invalid' } },
+      isAxiosError: true,
+    };
+    updateDraftProposal.mockRejectedValueOnce(axiosError);
+    await expect(
+      run({
+        action: 'update',
+        idOptions: { draftProposalId: 3 },
+        updateOptions: { body: { title: 'T' } },
+      })
+    ).rejects.toBe(axiosError);
+  });
+
   it('withdraw returns empty object when API has no body', async () => {
     withdrawDraftProposal.mockResolvedValueOnce({});
     const out = await run({

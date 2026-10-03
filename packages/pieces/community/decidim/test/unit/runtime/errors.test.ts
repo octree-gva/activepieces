@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import axios from 'axios';
 import { vi } from 'vitest';
-import { getErrorMessage } from '../../../src/lib/runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../../src/lib/runtime/errors';
 
 describe('getErrorMessage', () => {
   it('joins Zod issue messages', () => {
@@ -41,6 +41,26 @@ describe('getErrorMessage', () => {
       },
     });
 
+    spy.mockRestore();
+  });
+});
+
+describe('rethrowAxiosError', () => {
+  it('rethrows axios errors', () => {
+    const spy = vi.spyOn(axios, 'isAxiosError').mockReturnValue(true);
+    const err = { message: 'Request failed', response: { status: 400 } };
+    expect(() => rethrowAxiosError(err)).toThrow();
+    try {
+      rethrowAxiosError(err);
+    } catch (thrown) {
+      expect(thrown).toBe(err);
+    }
+    spy.mockRestore();
+  });
+
+  it('does not throw for non-axios errors', () => {
+    const spy = vi.spyOn(axios, 'isAxiosError').mockReturnValue(false);
+    expect(() => rethrowAxiosError(new Error('validation'))).not.toThrow();
     spy.mockRestore();
   });
 });

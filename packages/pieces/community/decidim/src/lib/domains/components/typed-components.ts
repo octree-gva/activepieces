@@ -10,7 +10,7 @@ import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import { assertProp } from '../../utils/assertProp';
 import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { createComponentsApi } from '../../runtime/clients';
 import {
   hostProp,
@@ -160,6 +160,7 @@ export const typedComponents = createAction({
 
       return response({}, `Unknown action: ${op}`);
     } catch (e) {
+      rethrowAxiosError(e);
       return response({}, getErrorMessage(e));
     }
   },

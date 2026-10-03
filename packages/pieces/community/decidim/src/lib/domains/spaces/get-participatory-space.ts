@@ -4,7 +4,7 @@ import { decidimAuth } from '../../../decidimAuth';
 import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { createSpacesApi } from '../../runtime/clients';
 import { hostProp, localesProp, userAccessTokenProp } from '../../props';
 import { parseLocales } from '../../runtime/locales';
@@ -87,6 +87,7 @@ export const getParticipatorySpace = createAction({
 
       return response((result.data ?? {}) as unknown as Record<string, unknown>);
     } catch (e) {
+      rethrowAxiosError(e);
       return response({}, getErrorMessage(e));
     }
   },

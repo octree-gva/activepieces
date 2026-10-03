@@ -9,7 +9,7 @@ import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import { assertProp } from '../../utils/assertProp';
 import { resolveAuthContext, bearerAuthorization } from '../../runtime/authMode';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { createDraftProposalsApi, createProposalsApi } from '../../runtime/clients';
 import { hostProp, decidimComponentIdProp, draftProposalIdProp, userAccessTokenProp } from '../../props';
 import type {
@@ -207,6 +207,7 @@ export const draftProposals = createAction({
 
       return response({}, `Unknown action: ${String(action)}`);
     } catch (e) {
+      rethrowAxiosError(e);
       return response({}, getErrorMessage(e));
     }
   },

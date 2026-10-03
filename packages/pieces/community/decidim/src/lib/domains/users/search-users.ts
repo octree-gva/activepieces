@@ -5,7 +5,7 @@ import { decidimAuth } from '../../../decidimAuth';
 import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { createUsersApi } from '../../runtime/clients';
 import { hostProp, pageProp, perPageProp, userAccessTokenProp } from '../../props';
 import type { UsersApiListUsersRequest } from '@octree/decidim-sdk';
@@ -53,6 +53,7 @@ export const searchUsers = createAction({
       const result = await api.listUsers(usersReq);
       return response((result.data ?? {}) as unknown as Record<string, unknown>);
     } catch (e) {
+      rethrowAxiosError(e);
       return response({}, getErrorMessage(e));
     }
   },

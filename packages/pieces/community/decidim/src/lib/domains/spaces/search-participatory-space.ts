@@ -11,7 +11,7 @@ import {
   spaceSearchPerPageProp,
 } from '../../props';
 import { resolveAuthContext } from '../../runtime/authMode';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { asSpacesApiSearchSpacesRequest } from '../../runtime/sdk-casts';
 import { createSpacesApi } from '../../runtime/clients';
 import { buildSearchSpacesRequestParams } from './spaces-search-params';
@@ -63,6 +63,7 @@ export const searchParticipatorySpace = createAction({
       );
       return response((result.data ?? {}) as unknown as Record<string, unknown>);
     } catch (e) {
+      rethrowAxiosError(e);
       return response({}, getErrorMessage(e));
     }
   },

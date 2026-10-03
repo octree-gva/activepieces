@@ -95,7 +95,7 @@ describe('Search Participants Integration', () => {
     );
   });
 
-  it('should handle API errors', async () => {
+  it('should rethrow API axios errors', async () => {
     const axiosError = {
       response: { status: 500, data: { error: 'Server error' } },
       message: 'Internal server error',
@@ -103,14 +103,15 @@ describe('Search Participants Integration', () => {
     };
     mockUsersApi.listUsers = vi.fn().mockRejectedValue(axiosError);
 
-    const result = await participantCrud.run(createContext({
-      action: 'search',
-      searchOptions: {
-        nicknames: [{ value: 'alice' }],
-      },
-    })) as SearchResult;
-
-    expect(result.ok).toBe(false);
-    expect(result.error).toBeDefined();
+    await expect(
+      participantCrud.run(
+        createContext({
+          action: 'search',
+          searchOptions: {
+            nicknames: [{ value: 'alice' }],
+          },
+        })
+      )
+    ).rejects.toBe(axiosError);
   });
 });

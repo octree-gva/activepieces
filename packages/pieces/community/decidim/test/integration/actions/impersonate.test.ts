@@ -186,7 +186,7 @@ describe('Impersonate Action Integration', () => {
       });
     });
 
-    it('should return error details for non-404 axios errors', async () => {
+    it('should rethrow non-404 axios errors', async () => {
       const axiosError = {
         response: { status: 400, data: { error: 'Invalid request' } },
         message: 'Bad request',
@@ -195,16 +195,15 @@ describe('Impersonate Action Integration', () => {
       vi.spyOn(axios, 'isAxiosError').mockReturnValue(true);
       (mockOAuthApi.createToken as Mock).mockRejectedValue(axiosError);
 
-      const result = await impersonate.run(createContext({
-        username: 'testuser',
-        fetchUserInfo: false,
-        registerOnMissing: false,
-      })) as ImpersonateResult;
-
-      expect(result.ok).toBe(false);
-      expect(result.error).toBe('Invalid request');
-      expect(result.token).toBeNull();
-      expect(result.user).toBeNull();
+      await expect(
+        impersonate.run(
+          createContext({
+            username: 'testuser',
+            fetchUserInfo: false,
+            registerOnMissing: false,
+          })
+        )
+      ).rejects.toBe(axiosError);
     });
 
     it('should handle non-axios errors', async () => {

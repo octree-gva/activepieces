@@ -7,7 +7,7 @@ import { decidimAuth } from '../../../decidimAuth';
 import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import { resolveAuthContext } from '../../runtime/authMode';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { createProposalsApi } from '../../runtime/clients';
 import {
   hostProp,
@@ -139,6 +139,7 @@ export const proposals = createAction({
 
       return response({}, `Unknown action: ${String(action)}`);
     } catch (e) {
+      rethrowAxiosError(e);
       return response({}, getErrorMessage(e));
     }
   },

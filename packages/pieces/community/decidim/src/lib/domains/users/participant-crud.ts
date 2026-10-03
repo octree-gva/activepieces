@@ -30,7 +30,7 @@ import {
   fetchUserInfoProp,
 } from '../../props';
 import axios from 'axios';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import {
   asResponseRecord,
   asUsersApiSetUserDataRequest,
@@ -452,6 +452,7 @@ export const participantCrud = createAction({
           return response({}, `Unknown action: ${action}`);
       }
     } catch (error) {
+      rethrowAxiosError(error);
       return response({}, getErrorMessage(error));
     }
   },

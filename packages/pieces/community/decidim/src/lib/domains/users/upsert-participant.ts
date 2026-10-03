@@ -6,7 +6,7 @@ import { decidimAuth } from '../../../decidimAuth';
 import { extractAuth } from '../../utils/auth';
 import { configuration } from '../../utils/configuration';
 import { response } from '../../utils/response';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { asResponseRecord, asUsersApiUsersRequest } from '../../runtime/sdk-casts';
 import { createParticipant, updateParticipant } from './participant-crud';
 import {
@@ -234,6 +234,7 @@ export const upsertParticipant = createAction({
 
       return createResult;
     } catch (e) {
+      rethrowAxiosError(e);
       return response({}, getErrorMessage(e));
     }
   },

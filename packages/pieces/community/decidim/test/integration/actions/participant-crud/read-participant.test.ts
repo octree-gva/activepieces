@@ -96,29 +96,32 @@ describe('Read Participant Integration', () => {
     vi.spyOn(axios, 'isAxiosError').mockReturnValue(true);
     mockUsersApi.getUserExtendedData = vi.fn().mockRejectedValue(axiosError);
 
-    const result = await participantCrud.run(createContext({
-      action: 'read',
-      readOptions: { userId: '123' },
-    })) as ReadResult;
-
-    expect(result.ok).toBe(false);
-    expect(result.error).toBeDefined();
+    await expect(
+      participantCrud.run(
+        createContext({
+          action: 'read',
+          readOptions: { userId: '123' },
+        })
+      )
+    ).rejects.toBe(axiosError);
   });
 
-  it('should handle API errors', async () => {
+  it('should rethrow API axios errors', async () => {
     const axiosError = {
       response: { status: 500, data: { error: 'Internal server error' } },
       message: 'Server error',
       isAxiosError: true,
     };
+    mockUsersApi.getUserExtendedData = vi.fn().mockResolvedValue({ data: {} });
     mockUsersApi.listUsers = vi.fn().mockRejectedValue(axiosError);
 
-    const result = await participantCrud.run(createContext({
-      action: 'read',
-      readOptions: { userId: '123' },
-    })) as ReadResult;
-
-    expect(result.ok).toBe(false);
-    expect(result.error).toBeDefined();
+    await expect(
+      participantCrud.run(
+        createContext({
+          action: 'read',
+          readOptions: { userId: '123' },
+        })
+      )
+    ).rejects.toBe(axiosError);
   });
 });

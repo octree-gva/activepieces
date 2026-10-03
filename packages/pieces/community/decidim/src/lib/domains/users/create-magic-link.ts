@@ -5,7 +5,7 @@ import { decidimAuth } from '../../../decidimAuth';
 import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import { bearerAuthorization, resolveAuthContext } from '../../runtime/authMode';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { createUsersApi } from '../../runtime/clients';
 import type { UsersApiGenerateMagicLinkRequest } from '@octree/decidim-sdk';
 import { hostProp, userAccessTokenProp } from '../../props';
@@ -102,6 +102,7 @@ export const createMagicLink = createAction({
 
       return response((result.data ?? {}) as unknown as Record<string, unknown>);
     } catch (e) {
+      rethrowAxiosError(e);
       return response({}, getErrorMessage(e));
     }
   },

@@ -14,7 +14,7 @@ import {
   userAccessTokenProp,
 } from '../../props';
 import { resolveAuthContext } from '../../runtime/authMode';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { asComponentsApiSearchComponentsRequest } from '../../runtime/sdk-casts';
 import { createComponentsApi } from '../../runtime/clients';
 import { buildSearchComponentsRequestParams } from './search-component.helpers';
@@ -73,6 +73,7 @@ export const searchComponent = createAction({
       );
       return response((result.data ?? {}) as unknown as Record<string, unknown>);
     } catch (e) {
+      rethrowAxiosError(e);
       return response({}, getErrorMessage(e));
     }
   },

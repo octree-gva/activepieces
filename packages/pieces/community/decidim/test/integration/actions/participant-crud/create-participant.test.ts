@@ -169,7 +169,7 @@ describe('Create Participant Integration', () => {
     expect(result.error).toBe('Failed to create user');
   });
 
-  it('should handle API errors', async () => {
+  it('should rethrow API axios errors', async () => {
     const axiosError = {
       response: { status: 400, data: { error: 'Invalid request' } },
       message: 'Bad request',
@@ -177,14 +177,15 @@ describe('Create Participant Integration', () => {
     };
     mockUsersApi.listUsers = vi.fn().mockRejectedValue(axiosError);
 
-    const result = await participantCrud.run(createContext({
-      action: 'create',
-      createOptions: {
-        username: 'testuser',
-      },
-    })) as CreateResult;
-
-    expect(result.ok).toBe(false);
-    expect(result.error).toBeDefined();
+    await expect(
+      participantCrud.run(
+        createContext({
+          action: 'create',
+          createOptions: {
+            username: 'testuser',
+          },
+        })
+      )
+    ).rejects.toBe(axiosError);
   });
 });

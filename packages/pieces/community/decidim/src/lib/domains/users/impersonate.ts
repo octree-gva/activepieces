@@ -31,7 +31,7 @@ import { decidimAccessTokenFromResponse } from '../../runtime/sdk-casts';
 import { extractAuth } from '../../utils/auth';
 import { response } from '../../utils/response';
 import { assertProp } from '../../utils/assertProp';
-import { getErrorMessage } from '../../runtime/errors';
+import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 
 export interface RegistrationOptions {
   userFullName?: string;
@@ -208,6 +208,13 @@ export const impersonate = createAction({
         ...(userInfoResult.user != null ? { user: userInfoResult.user } : {}),
       } as unknown as Record<string, unknown>);
     } catch (error) {
+      const softMissing =
+        axios.isAxiosError(error) &&
+        error.response?.status === 404 &&
+        !(registerOnMissing || false);
+      if (!softMissing) {
+        rethrowAxiosError(error);
+      }
       const errorResult = handleImpersonateError(error, registerOnMissing || false);
       return response(errorResult, errorResult.error);
     }

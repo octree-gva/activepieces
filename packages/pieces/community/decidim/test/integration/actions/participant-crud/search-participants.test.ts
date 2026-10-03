@@ -103,15 +103,27 @@ describe('Search Participants Integration', () => {
     };
     mockUsersApi.listUsers = vi.fn().mockRejectedValue(axiosError);
 
-    await expect(
-      participantCrud.run(
+    try {
+      await participantCrud.run(
         createContext({
           action: 'search',
           searchOptions: {
             nicknames: [{ value: 'alice' }],
           },
         })
-      )
-    ).rejects.toBe(axiosError);
+      );
+      expect.fail('expected throw');
+    } catch (thrown) {
+      expect(thrown).toMatchObject({
+        __apErrorVersion: 1,
+        status: 500,
+        error: 'Server error',
+        error_description: 'Server error',
+        error_details: [],
+      });
+      const roundTrip = JSON.parse(JSON.stringify(thrown));
+      expect(roundTrip.error_details).toEqual([]);
+      expect(roundTrip.error).toBe('Server error');
+    }
   });
 });

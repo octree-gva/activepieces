@@ -192,13 +192,25 @@ describe('draftProposals action', () => {
       isAxiosError: true,
     };
     updateDraftProposal.mockRejectedValueOnce(axiosError);
-    await expect(
-      run({
+    try {
+      await run({
         action: 'update',
         idOptions: { draftProposalId: 3 },
         updateOptions: { body: { title: 'T' } },
-      })
-    ).rejects.toBe(axiosError);
+      });
+      expect.fail('expected throw');
+    } catch (thrown) {
+      expect(thrown).toMatchObject({
+        __apErrorVersion: 1,
+        status: 400,
+        error: 'Invalid',
+        error_description: 'Invalid',
+        error_details: [],
+      });
+      const roundTrip = JSON.parse(JSON.stringify(thrown));
+      expect(roundTrip.error_details).toEqual([]);
+      expect(roundTrip.error).toBe('Invalid');
+    }
   });
 
   it('withdraw returns empty object when API has no body', async () => {

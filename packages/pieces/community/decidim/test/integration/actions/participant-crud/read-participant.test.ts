@@ -96,14 +96,26 @@ describe('Read Participant Integration', () => {
     vi.spyOn(axios, 'isAxiosError').mockReturnValue(true);
     mockUsersApi.getUserExtendedData = vi.fn().mockRejectedValue(axiosError);
 
-    await expect(
-      participantCrud.run(
+    try {
+      await participantCrud.run(
         createContext({
           action: 'read',
           readOptions: { userId: '123' },
         })
-      )
-    ).rejects.toBe(axiosError);
+      );
+      expect.fail('expected throw');
+    } catch (thrown) {
+      expect(thrown).toMatchObject({
+        __apErrorVersion: 1,
+        status: 500,
+        error: 'Server error',
+        error_description: 'Server error',
+        error_details: [],
+      });
+      const roundTrip = JSON.parse(JSON.stringify(thrown));
+      expect(roundTrip.error_details).toEqual([]);
+      expect(roundTrip.error).toBe('Server error');
+    }
   });
 
   it('should rethrow API axios errors', async () => {
@@ -115,13 +127,25 @@ describe('Read Participant Integration', () => {
     mockUsersApi.getUserExtendedData = vi.fn().mockResolvedValue({ data: {} });
     mockUsersApi.listUsers = vi.fn().mockRejectedValue(axiosError);
 
-    await expect(
-      participantCrud.run(
+    try {
+      await participantCrud.run(
         createContext({
           action: 'read',
           readOptions: { userId: '123' },
         })
-      )
-    ).rejects.toBe(axiosError);
+      );
+      expect.fail('expected throw');
+    } catch (thrown) {
+      expect(thrown).toMatchObject({
+        __apErrorVersion: 1,
+        status: 500,
+        error: 'Internal server error',
+        error_description: 'Internal server error',
+        error_details: [],
+      });
+      const roundTrip = JSON.parse(JSON.stringify(thrown));
+      expect(roundTrip.error_details).toEqual([]);
+      expect(roundTrip.error).toBe('Internal server error');
+    }
   });
 });

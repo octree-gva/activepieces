@@ -123,8 +123,8 @@ describe('Update Participant Integration', () => {
     };
     mockUsersApi.setUserExtendedData = vi.fn().mockRejectedValue(axiosError);
 
-    await expect(
-      participantCrud.run(
+    try {
+      await participantCrud.run(
         createContext({
           action: 'update',
           updateOptions: {
@@ -132,8 +132,20 @@ describe('Update Participant Integration', () => {
             extendedData: { key: 'value' },
           },
         })
-      )
-    ).rejects.toBe(axiosError);
+      );
+      expect.fail('expected throw');
+    } catch (thrown) {
+      expect(thrown).toMatchObject({
+        __apErrorVersion: 1,
+        status: 400,
+        error: 'Invalid request',
+        error_description: 'Invalid request',
+        error_details: [],
+      });
+      const roundTrip = JSON.parse(JSON.stringify(thrown));
+      expect(roundTrip.error_details).toEqual([]);
+      expect(roundTrip.error).toBe('Invalid request');
+    }
   });
 
   it('should use empty body when API response data is missing', async () => {

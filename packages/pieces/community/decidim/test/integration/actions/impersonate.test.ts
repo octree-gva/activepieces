@@ -195,15 +195,27 @@ describe('Impersonate Action Integration', () => {
       vi.spyOn(axios, 'isAxiosError').mockReturnValue(true);
       (mockOAuthApi.createToken as Mock).mockRejectedValue(axiosError);
 
-      await expect(
-        impersonate.run(
+      try {
+        await impersonate.run(
           createContext({
             username: 'testuser',
             fetchUserInfo: false,
             registerOnMissing: false,
           })
-        )
-      ).rejects.toBe(axiosError);
+        );
+        expect.fail('expected throw');
+      } catch (thrown) {
+        expect(thrown).toMatchObject({
+          __apErrorVersion: 1,
+          status: 400,
+          error: 'Invalid request',
+          error_description: 'Invalid request',
+          error_details: [],
+        });
+        const roundTrip = JSON.parse(JSON.stringify(thrown));
+        expect(roundTrip.error_details).toEqual([]);
+        expect(roundTrip.error).toBe('Invalid request');
+      }
     });
 
     it('should handle non-axios errors', async () => {

@@ -115,11 +115,13 @@ export async function createParticipant(
     userFullName: z.string().optional(),
     email: z.string().min(1, 'Email must not be empty').email('Invalid email format').optional(),
     extendedData: z.record(z.string(), z.unknown()).optional(),
+    locale: z.string().min(2).optional(),
   });
 
   const username = createOptions['username'] as string;
   const userFullName = createOptions['userFullName'] as string | undefined;
   const email = createOptions['email'] as string | undefined;
+  const locale = typeof createOptions['locale'] === 'string' ? createOptions['locale'] : undefined;
   const extendedData = createOptions['extendedData'] as JsonObject | undefined;
   const fetchUserInfo = (createOptions['fetchUserInfo'] as boolean) || false;
 
@@ -143,7 +145,7 @@ export async function createParticipant(
       clientId,
       clientSecret,
       false,
-      { userFullName, email }
+      { userFullName, email, locale }
     );
     const tokenResponse = await oauthApi.createToken({ oauthGrantParam });
     tokenBody = asResponseRecord(tokenResponse.data);
@@ -156,6 +158,7 @@ export async function createParticipant(
       {
         userFullName,
         email,
+        locale,
         sendConfirmationEmailOnRegister: false,
       }
     );

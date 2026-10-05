@@ -37,6 +37,7 @@ export interface RegistrationOptions {
   userFullName?: string;
   email?: string;
   sendConfirmationEmailOnRegister?: boolean;
+  locale?: string;
 }
 
 export interface ImpersonateProps {
@@ -53,19 +54,51 @@ export function buildOAuthGrantParam(
   registerOnMissing: boolean,
   registrationOptions: RegistrationOptions
 ): PasswordGrantImpersonate {
+  const meta = impersonationMeta(registerOnMissing, registrationOptions);
   return {
     grant_type: PasswordGrantImpersonateGrantTypeEnum.Password,
     auth_type: PasswordGrantImpersonateAuthTypeEnum.Impersonate,
     username,
-    meta: {
-      register_on_missing: registerOnMissing,
-      skip_confirmation_on_register: !registrationOptions.sendConfirmationEmailOnRegister,
-      name: registrationOptions.userFullName || undefined,
-      email: registrationOptions.email || undefined,
-    },
+    meta,
     scope: PasswordGrantImpersonateScopeEnum.Oauth,
     client_id: clientId,
     client_secret: clientSecret,
+  };
+}
+
+export function buildParticipantLocaleGrant({
+  userId,
+  locale,
+  clientId,
+  clientSecret,
+}: {
+  userId: string;
+  locale: string;
+  clientId: string;
+  clientSecret: string;
+}): PasswordGrantImpersonate {
+  const meta = impersonationMeta(false, { locale });
+  return {
+    grant_type: PasswordGrantImpersonateGrantTypeEnum.Password,
+    auth_type: PasswordGrantImpersonateAuthTypeEnum.Impersonate,
+    id: userId,
+    meta,
+    scope: PasswordGrantImpersonateScopeEnum.Oauth,
+    client_id: clientId,
+    client_secret: clientSecret,
+  };
+}
+
+function impersonationMeta(
+  registerOnMissing: boolean,
+  registrationOptions: RegistrationOptions
+) {
+  return {
+    register_on_missing: registerOnMissing,
+    skip_confirmation_on_register: !registrationOptions.sendConfirmationEmailOnRegister,
+    name: registrationOptions.userFullName || undefined,
+    email: registrationOptions.email || undefined,
+    ...(registrationOptions.locale ? { locale: registrationOptions.locale } : {}),
   };
 }
 

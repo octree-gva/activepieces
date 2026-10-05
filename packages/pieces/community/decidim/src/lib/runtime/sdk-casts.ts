@@ -4,7 +4,7 @@
  */
 
 import type {
-  BlogsApiBlogShowPaginationRequest,
+  BlogsApiGetBlogPostRequest,
   BlogsApiListBlogPostsRequest,
   ComponentsApiSearchComponentsRequest,
   CreateRoleRequest,
@@ -51,8 +51,8 @@ export function asBlogsApiBlogsRequest(payload: unknown): BlogsApiListBlogPostsR
   return payload as BlogsApiListBlogPostsRequest;
 }
 
-export function asBlogsApiBlogRequest(payload: unknown): BlogsApiBlogShowPaginationRequest {
-  return payload as BlogsApiBlogShowPaginationRequest;
+export function asBlogsApiBlogRequest(payload: unknown): BlogsApiGetBlogPostRequest {
+  return payload as BlogsApiGetBlogPostRequest;
 }
 
 export function updateOrganizationPayloadFromRecord(

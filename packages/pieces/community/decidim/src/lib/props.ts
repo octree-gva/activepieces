@@ -112,6 +112,15 @@ export function dataPathProp(required = false) {
   });
 }
 
+export function localeProp(required = false) {
+  return Property.ShortText({
+    displayName: 'Locale',
+    required,
+    description:
+      'Language code for this participant (for example fr). Saved when the participant is created or already exists.',
+  });
+}
+
 export function localesProp(required = false) {
   return Property.Array({
     displayName: 'Languages',

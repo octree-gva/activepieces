@@ -91,6 +91,54 @@ describe('upsertParticipant', () => {
     expect(result).not.toHaveProperty('accessToken');
   });
 
+  it('updates locale when the participant already exists', async () => {
+    const usersBody = { data: [{ id: 10, nickname: 'john' }] };
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: usersBody });
+
+    const result = await runWith({
+      by: 'nickname',
+      options: { nickname: 'john', locale: 'fr' },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mockOAuthApi.createToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        oauthGrantParam: expect.objectContaining({
+          id: '10',
+          meta: expect.objectContaining({ locale: 'fr' }),
+        }),
+      })
+    );
+    expect(mockUsersApi.listUsers).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends locale when creating a missing participant', async () => {
+    mockUsersApi.listUsers = vi.fn().mockResolvedValue({ data: { data: [] } });
+
+    const result = await runWith({
+      by: 'email',
+      options: {
+        email: 'jane@example.com',
+        registerOnMissing: true,
+        fetchUserInfo: false,
+        locale: 'fr',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mockOAuthApi.createToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        oauthGrantParam: expect.objectContaining({
+          username: expect.any(String),
+          meta: expect.objectContaining({
+            locale: 'fr',
+            register_on_missing: true,
+          }),
+        }),
+      })
+    );
+  });
+
   it('searches by extended_data json path', async () => {
     mockUsersApi.listUsers = vi.fn().mockResolvedValue({
       data: { data: [{ id: 77 }] },

@@ -6,9 +6,9 @@ import {
 } from '../../helpers/create-mock-action-context';
 import { decidimCustomAuth } from '../../helpers/decidim-test-fixtures';
 
-const { listBlogPosts, blogShowPagination } = vi.hoisted(() => ({
+const { listBlogPosts, getBlogPost } = vi.hoisted(() => ({
   listBlogPosts: vi.fn(),
-  blogShowPagination: vi.fn(),
+  getBlogPost: vi.fn(),
 }));
 
 vi.mock('../../../src/lib/runtime/authMode', () => ({
@@ -23,7 +23,7 @@ vi.mock('../../../src/lib/runtime/authMode', () => ({
 vi.mock('../../../src/lib/runtime/clients', () => ({
   createBlogsApi: vi.fn().mockReturnValue({
     listBlogPosts,
-    blogShowPagination,
+    getBlogPost,
   }),
 }));
 
@@ -40,7 +40,7 @@ describe('blogPosts action', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listBlogPosts.mockReset();
-    blogShowPagination.mockReset();
+    getBlogPost.mockReset();
   });
 
   it('search lists posts by component_id', async () => {
@@ -120,7 +120,7 @@ describe('blogPosts action', () => {
   });
 
   it('read returns server body as-is', async () => {
-    blogShowPagination.mockResolvedValueOnce({ data: { data: { id: 42 } } });
+    getBlogPost.mockResolvedValueOnce({ data: { data: { id: 42 } } });
     const out = await run({
       action: 'read',
       readOptions: { blogPostId: 42 },

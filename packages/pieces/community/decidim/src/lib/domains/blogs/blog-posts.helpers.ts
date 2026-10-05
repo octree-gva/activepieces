@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type {
-  BlogsApiBlogShowPaginationRequest,
+  BlogsApiGetBlogPostRequest,
   BlogsApiListBlogPostsRequest,
 } from '@octree/decidim-sdk';
 import { bearerAuthorization } from '../../runtime/authMode';
@@ -105,7 +105,7 @@ export function buildBlogsListRequest(args: {
 export function buildBlogReadRequest(args: {
   accessToken: string;
   readOptions: Record<string, unknown>;
-}): BlogsApiBlogShowPaginationRequest {
+}): BlogsApiGetBlogPostRequest {
   const auth = bearerAuthorization(z.string().min(1).parse(args.accessToken));
   const id = z.number().int().positive('Blog post ID must be > 0').parse(args.readOptions['blogPostId']);
 

@@ -8,6 +8,7 @@ import { configuration } from '../../utils/configuration';
 import { response } from '../../utils/response';
 import { getErrorMessage, rethrowAxiosError } from '../../runtime/errors';
 import { asResponseRecord, asUsersApiUsersRequest } from '../../runtime/sdk-casts';
+import { buildParticipantLocaleGrant } from './impersonate';
 import { createParticipant, updateParticipant } from './participant-crud';
 import {
   hostProp,
@@ -15,6 +16,7 @@ import {
   extendedDataProp,
   fetchUserInfoProp,
   registerOnMissingProp,
+  localeProp,
   userFullNameProp,
   usernameProp,
 } from '../../props';
@@ -71,6 +73,18 @@ function extractUserIdFromCreateResult(createResult: Record<string, unknown>): s
   return null;
 }
 
+function optionalTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function userIdFromListRow(row: { id: unknown }): string | undefined {
+  if (row.id === undefined || row.id === null) return undefined;
+  const id = String(row.id).trim();
+  return id.length > 0 ? id : undefined;
+}
+
 function apiBodyFromResponse(result: Record<string, unknown>): Record<string, unknown> {
   const { ok: _ok, error: _error, ...body } = result;
   return body;
@@ -97,6 +111,7 @@ export const upsertParticipant = createAction({
           userFullName: userFullNameProp(false),
           email: emailProp(false),
           nickname: usernameProp(false),
+          locale: localeProp(false),
           extendedData: extendedDataProp(false),
           registerOnMissing: registerOnMissingProp(false),
           fetchUserInfo: fetchUserInfoProp(false),
@@ -141,6 +156,7 @@ export const upsertParticipant = createAction({
       const email = (options.email as string | undefined)?.trim();
       const nickname = (options.nickname as string | undefined)?.trim();
       const extendedData = (options.extendedData as Record<string, unknown> | undefined) || {};
+      const locale = optionalTrimmedString(options.locale);
 
       const searchReq: Record<string, unknown> = {
         authorization,
@@ -172,7 +188,23 @@ export const upsertParticipant = createAction({
       const usersBody = asResponseRecord(searchResult.data);
 
       if (existing) {
-        return response({ users: usersBody });
+        if (!locale) {
+          return response({ users: usersBody });
+        }
+        const userId = userIdFromListRow(existing);
+        if (!userId) {
+          return response({}, 'Upsert failed: could not determine user id');
+        }
+        await oauthApi.createToken({
+          oauthGrantParam: buildParticipantLocaleGrant({
+            userId,
+            locale,
+            clientId,
+            clientSecret,
+          }),
+        });
+        const refreshed = await usersApi.listUsers(asUsersApiUsersRequest(searchReq));
+        return response({ users: asResponseRecord(refreshed.data) });
       }
 
       if (!registerOnMissing) {
@@ -197,6 +229,7 @@ export const upsertParticipant = createAction({
             email,
             extendedData,
             fetchUserInfo,
+            locale,
           },
         }
       );

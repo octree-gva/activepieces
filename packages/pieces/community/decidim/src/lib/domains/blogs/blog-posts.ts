@@ -126,7 +126,7 @@ export const blogPosts = createAction({
           readOptions,
         });
 
-        const result = await blogsApi.blogShowPagination(asBlogsApiBlogRequest(request));
+        const result = await blogsApi.getBlogPost(asBlogsApiBlogRequest(request));
         return response(result.data as unknown as Record<string, unknown>);
       }
 
